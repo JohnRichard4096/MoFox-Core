@@ -113,8 +113,10 @@ class HeartFChatting:
         
         self.focus_energy = 1
         self.no_reply_consecutive = 0
-        # 最近三次no_reply的新消息兴趣度记录
-        self.recent_interest_records: deque = deque(maxlen=3)
+        
+        # 能量值日志时间控制
+        self.last_energy_log_time = 0  # 上次记录能量值日志的时间
+        self.energy_log_interval = 90  # 能量值日志间隔（秒）
 
     async def start(self):
         """检查是否需要启动主循环，如果未激活则启动。"""
@@ -162,6 +164,45 @@ class HeartFChatting:
         self.history_loop.append(self._current_cycle_detail)
         self._current_cycle_detail.timers = cycle_timers
         self._current_cycle_detail.end_time = time.time()
+
+    def _handle_energy_completion(self, task: asyncio.Task):
+        """处理能量循环任务的完成"""
+        if task.cancelled():
+            logger.info(f"{self.log_prefix} 能量循环任务被取消")
+        elif task.exception():
+            logger.error(f"{self.log_prefix} 能量循环任务发生异常: {task.exception()}")
+
+    def _should_log_energy(self) -> bool:
+        """判断是否应该记录能量值日志（基于时间间隔控制）"""
+        current_time = time.time()
+        if current_time - self.last_energy_log_time >= self.energy_log_interval:
+            self.last_energy_log_time = current_time
+            return True
+        return False
+
+    def _log_energy_change(self, action: str, reason: str = ""):
+        """记录能量值变化日志（受时间间隔控制）"""
+        if self._should_log_energy():
+            if reason:
+                logger.info(f"{self.log_prefix} {action}，{reason}，当前能量值：{self.energy_value:.1f}")
+            else:
+                logger.info(f"{self.log_prefix} {action}，当前能量值：{self.energy_value:.1f}")
+        else:
+            # 仍然以debug级别记录，便于调试
+            if reason:
+                logger.debug(f"{self.log_prefix} {action}，{reason}，当前能量值：{self.energy_value:.1f}")
+            else:
+                logger.debug(f"{self.log_prefix} {action}，当前能量值：{self.energy_value:.1f}")
+
+    async def _energy_loop(self):
+        while self.running:
+            await asyncio.sleep(10)
+            if self.loop_mode == ChatMode.NORMAL:
+                self.energy_value -= 0.3
+                self.energy_value = max(self.energy_value, 0.3)
+            if self.loop_mode == ChatMode.FOCUS:
+                self.energy_value -= 0.6
+                self.energy_value = max(self.energy_value, 0.3)
 
     def print_cycle_info(self, cycle_timers):
         # 记录循环信息和计时器结果
@@ -285,9 +326,56 @@ class HeartFChatting:
         # 统一的消息处理逻辑
         should_process,interest_value = await self._should_process_messages(recent_messages_dict)
         
-        if should_process:
+        if self.loop_mode == ChatMode.FOCUS:
+            
+            if self.last_action == "no_reply":
+                if not await self._execute_no_reply(recent_messages_dict):
+                    self.energy_value -= 0.3 / global_config.chat.focus_value
+                    self._log_energy_change("能量值减少")
+                    await asyncio.sleep(0.5)
+                    return True
+            
             self.last_read_time = time.time()
-            await self._observe(interest_value = interest_value)
+            
+            if await self._observe():
+                self.energy_value += 1 / global_config.chat.focus_value
+                self._log_energy_change("能量值增加")
+
+            if self.energy_value <= 1:
+                self.energy_value = 1
+                self.loop_mode = ChatMode.NORMAL
+                return True
+
+            return True
+        elif self.loop_mode == ChatMode.NORMAL:
+            if global_config.chat.focus_value != 0:
+                if new_message_count > 3 / pow(global_config.chat.focus_value, 0.5):
+                    self.loop_mode = ChatMode.FOCUS
+                    self.energy_value = (
+                        10 + (new_message_count / (3 / pow(global_config.chat.focus_value, 0.5))) * 10
+                    )
+                    return True
+
+                if self.energy_value >= 30:
+                    self.loop_mode = ChatMode.FOCUS
+                    return True
+
+            if new_message_count >= self.focus_energy:
+                earliest_messages_data = recent_messages_dict[0]
+                self.last_read_time = earliest_messages_data.get("time")
+
+                if_think = await self.normal_response(earliest_messages_data)
+                if if_think:
+                    factor = max(global_config.chat.focus_value, 0.1)
+                    self.energy_value *= 1.1 * factor
+                    self._log_energy_change("进行了思考，能量值按倍数增加")
+                else:
+                    self.energy_value += 0.1 * global_config.chat.focus_value
+                    self._log_energy_change("没有进行思考，能量值线性增加")
+
+                # 这个可以保持debug级别，因为它是总结性信息
+                logger.debug(f"{self.log_prefix} 当前能量值：{self.energy_value:.1f}")
+                return True
 
         else:
             # Normal模式：消息数量不足，等待

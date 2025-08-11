@@ -15,7 +15,7 @@ retry_interval = 10                     # 重试间隔时间（单位：秒）
 [[api_providers]] # SiliconFlow的API服务商配置
 name = "SiliconFlow"
 base_url = "https://api.siliconflow.cn/v1"
-api_key = "your-siliconflow-api-key"
+api_key = "your-siliconflow-api-key-here"
 client_type = "openai"
 max_retry = 2
 timeout = 30
