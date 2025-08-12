@@ -475,8 +475,8 @@ async def adapter_command_to_stream(
         logger.debug(f"[SendAPI] 已发送适配器命令，等待响应...")
 
         # 等待适配器响应
-        response = await wait_adapter_response(message_id, timeout)
-        
+        response = asyncio.create_task(wait_adapter_response(message_id, timeout))
+
         logger.debug(f"[SendAPI] 收到适配器响应: {response}")
         
         return response
