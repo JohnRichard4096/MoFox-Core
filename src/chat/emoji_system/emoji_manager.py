@@ -206,10 +206,11 @@ class MaiEmoji:
             # 2. 删除数据库记录
             try:
                 will_delete_emoji = session.execute(select(Emoji).where(Emoji.emoji_hash == self.hash)).scalar_one_or_none()
-                result = will_delete_emoji.delete_instance()  # Returns the number of rows deleted.
-            except Emoji.DoesNotExist:  # type: ignore
-                logger.warning(f"[删除] 数据库中未找到哈希值为 {self.hash} 的表情包记录。")
-                result = 0  # Indicate no DB record was deleted
+                if will_delete_emoji is None:
+                    logger.warning(f"[删除] 数据库中未找到哈希值为 {self.hash} 的表情包记录。")
+                    result = 0  # Indicate no DB record was deleted
+                else:
+                    result = will_delete_emoji.delete_instance()  # Returns the number of rows deleted.
 
             if result > 0:
                 logger.info(f"[删除] 表情包数据库记录 {self.filename} (Hash: {self.hash})")
@@ -420,11 +421,12 @@ class EmojiManager:
         """记录表情使用次数"""
         try:
             emoji_update = session.execute(select(Emoji).where(Emoji.emoji_hash == emoji_hash)).scalar_one_or_none()
-            emoji_update.usage_count += 1
-            emoji_update.last_used_time = time.time()  # Update last used time
-            emoji_update.save()  # Persist changes to DB
-        except Emoji.DoesNotExist:  # type: ignore
-            logger.error(f"记录表情使用失败: 未找到 hash 为 {emoji_hash} 的表情包")
+            if emoji_update is None:
+                logger.error(f"记录表情使用失败: 未找到 hash 为 {emoji_hash} 的表情包")
+            else:
+                emoji_update.usage_count += 1
+                emoji_update.last_used_time = time.time()  # Update last used time
+                emoji_update.save()  # Persist changes to DB
         except Exception as e:
             logger.error(f"记录表情使用失败: {str(e)}")
 
