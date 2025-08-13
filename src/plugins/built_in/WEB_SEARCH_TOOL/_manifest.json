@@ -12,8 +12,8 @@
   "host_application": {
     "min_version": "0.10.0"
   },
-  "homepage_url": "https://github.com/MaiBot-Plus/mmc",
-  "repository_url": "https://github.com/MaiBot-Plus/mmc",
+  "homepage_url": "https://github.com/MaiBot-Plus/MaiMbot-Pro-Max",
+  "repository_url": "https://github.com/MaiBot-Plus/MaiMbot-Pro-Max",
   "keywords": ["web_search", "url_parser"],
   "categories": ["web_search", "url_parser"],
   
