@@ -366,7 +366,7 @@ async def custom_to_stream(
 async def adapter_command_to_stream(
     action: str,
     params: dict,
-    platform: str,
+    platform: Optional[str] = None,
     stream_id: Optional[str] = None,
     timeout: float = 30.0,
     storage_message: bool = False
@@ -386,6 +386,9 @@ async def adapter_command_to_stream(
         dict: 适配器返回的响应，格式为 {"status": "ok/failed", "data": {...}, "message": "..."}
                如果发送失败则返回 {"status": "error", "message": "错误信息"}
     """
+    if not stream_id and not platform:
+        raise ValueError("必须提供stream_id或platform参数")
+    
     try:
 
         logger.debug(f"[SendAPI] 向适配器发送命令: {action}")
