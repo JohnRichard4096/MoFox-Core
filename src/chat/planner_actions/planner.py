@@ -274,21 +274,20 @@ class ActionPlanner:
         actions.append({
             "action_type": action,
             "reasoning": reasoning,
-            "action_data": action_data,
-            "action_message": target_message,
-            "available_actions": available_actions  # 添加这个字段
-        })
-        
-        if action != "reply" and is_parallel:
-            actions.append({
-                "action_type": "reply",
-                "action_message": target_message,
-                "available_actions": available_actions
-            })
-            
-        return actions,target_message
-    
-    
+            "timestamp": time.time(),
+            "is_parallel": is_parallel,
+        }
+
+        # 只有在成功完成决策后才更新已读时间戳，确保新消息判断的准确性
+        self.last_obs_time_mark = time.time()
+
+        return (
+            {
+                "action_result": action_result,
+                "action_prompt": prompt,
+            },
+            target_message,
+        )
 
     async def build_planner_prompt(
         self,
@@ -326,15 +325,8 @@ class ActionPlanner:
             )
 
             actions_before_now_block = f"你刚刚选择并执行过的action是：\n{actions_before_now_block}"
-            if refresh_time:
-                self.last_obs_time_mark = time.time()
-            
-            mentioned_bonus = ""
-            if global_config.chat.mentioned_bot_inevitable_reply:
-                mentioned_bonus = "\n- 有人提到你"
-            if global_config.chat.at_bot_inevitable_reply:
-                mentioned_bonus = "\n- 有人提到你，或者at你"
-            
+
+            # 注意：不在这里更新last_obs_time_mark，应该在plan成功后再更新，避免异常情况下错误更新时间戳
 
             if mode == ChatMode.FOCUS:
                 no_action_block = """
