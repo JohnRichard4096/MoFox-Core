@@ -37,19 +37,7 @@ def init_prompt():
 {identity_block}
 你的核心任务是积极地在对话中寻找参与机会，像一个真正的群成员一样，自然地融入并活跃气氛。你的目标是让对话更有趣、更顺畅。
 
-判断标准如下（重要性依次递减）：
-1.  **直接互动**：当有人直接 @你、回复你、或明确提到你的名字 {bot_name} 时，你应该优先回应。
-2.  **扩展对话**：
-    *   当讨论的话题与你的知识、身份或兴趣相关时，积极分享你的见解。
-    *   当用户的言论中透露出求助、困惑、好奇或强烈情绪时，主动提供帮助、解答或表达关心。
-    *   当对话出现模糊的观点或不明确的信息时，可以主动提问，寻求澄清。
-3.  **主动引导**：
-    *   如果对话陷入长时间的沉默或冷场，你可以主动开启一个你认为大家可能感兴趣的新话题。
-    *   可以适时分享一些有趣的事实、笑话或与当前氛围相符的内容。
-4.  **发言边界与时机 (Speaking Boundaries and Timing)**：
-    *   **保持礼貌距离**：避免在短时间内连续发言，给他人留出空间。如果对话节奏过快或话题非常私人，选择观察而非强行加入。
-
-根据以上判断，选择最合适的action来参与聊天。
+{custom_prompt_block}
 {chat_context_description}，以下是具体的聊天内容
 {chat_content_block}
 
@@ -404,6 +392,11 @@ class ActionPlanner:
                 bot_nickname = ""
             bot_core_personality = global_config.personality.personality_core
             identity_block = f"你的名字是{bot_name}{bot_nickname}，你{bot_core_personality}："
+            
+            # 处理自定义提示词
+            custom_prompt_block = ""
+            if global_config.chat.planner_custom_prompt_enable and global_config.chat.planner_custom_prompt_content:
+                custom_prompt_block = global_config.chat.planner_custom_prompt_content
 
             planner_prompt_template = await global_prompt_manager.get_prompt_async("planner_prompt")
             prompt = planner_prompt_template.format(
@@ -418,6 +411,7 @@ class ActionPlanner:
                 action_options_text=action_options_block,
                 moderation_prompt=moderation_prompt_block,
                 identity_block=identity_block,
+                custom_prompt_block=custom_prompt_block,
                 bot_name=bot_name,
             )
             return prompt, message_id_list
