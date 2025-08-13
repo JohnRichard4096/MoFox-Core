@@ -185,7 +185,27 @@ class URLParserTool(BaseTool):
         使用本地库(httpx, BeautifulSoup)解析URL，并调用LLM进行总结。
         """
         try:
-            async with httpx.AsyncClient(timeout=15.0, follow_redirects=True) as client:
+            # 读取代理配置
+            enable_proxy = self.get_config("proxy.enable_proxy", False)
+            proxies = None
+            
+            if enable_proxy:
+                http_proxy = self.get_config("proxy.http_proxy", None)
+                https_proxy = self.get_config("proxy.https_proxy", None)
+                
+                if http_proxy or https_proxy:
+                    proxies = {}
+                    if http_proxy:
+                        proxies["http://"] = http_proxy
+                    if https_proxy:
+                        proxies["https://"] = https_proxy
+                    logger.info(f"使用代理配置: {proxies}")
+            
+            client_kwargs = {"timeout": 15.0, "follow_redirects": True}
+            if proxies:
+                client_kwargs["proxies"] = proxies
+            
+            async with httpx.AsyncClient(**client_kwargs) as client:
                 response = await client.get(url)
                 response.raise_for_status()
 
@@ -377,7 +397,7 @@ class WEBSEARCHPLUGIN(BasePlugin):
     config_file_name: str = "config.toml"  # 配置文件名
 
     # 配置节描述
-    config_section_descriptions = {"plugin": "插件基本信息", "exa": "EXA相关配置", "components": "组件设置"}
+    config_section_descriptions = {"plugin": "插件基本信息", "exa": "EXA相关配置", "proxy": "链接本地解析代理配置", "components": "组件设置"}
 
     # 配置Schema定义
     config_schema: dict = {
@@ -388,6 +408,11 @@ class WEBSEARCHPLUGIN(BasePlugin):
         },
         "exa":{
             "api_key":ConfigField(type=str, default="None", description="exa的API密钥")
+        },
+        "proxy": {
+            "http_proxy": ConfigField(type=str, default=None, description="HTTP代理地址，格式如: http://proxy.example.com:8080"),
+            "https_proxy": ConfigField(type=str, default=None, description="HTTPS代理地址，格式如: http://proxy.example.com:8080"),
+            "enable_proxy": ConfigField(type=bool, default=False, description="是否启用代理")
         },
         "components":{
             "enable_web_search_tool":ConfigField(type=bool, default=True, description="是否启用联网搜索tool"),
