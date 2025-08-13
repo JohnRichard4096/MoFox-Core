@@ -48,39 +48,12 @@ class DependencyConfig:
         return ""
     
     @property
-    def use_proxy(self) -> bool:
-        """是否使用网络代理"""
-        config = self._get_config()
-        if config and hasattr(config, 'dependency_management'):
-            return config.dependency_management.use_proxy
-        return False
-    
-    @property
-    def proxy_url(self) -> str:
-        """网络代理URL"""
-        config = self._get_config()
-        if config and hasattr(config, 'dependency_management'):
-            return config.dependency_management.proxy_url
-        return ""
-    
-    @property
     def install_timeout(self) -> int:
         """安装超时时间（秒）"""
         config = self._get_config()
         if config and hasattr(config, 'dependency_management'):
             return config.dependency_management.auto_install_timeout
         return 300
-    
-    @property
-    def pip_options(self) -> list:
-        """pip安装选项"""
-        config = self._get_config()
-        if config and hasattr(config, 'dependency_management'):
-            return config.dependency_management.pip_options
-        return [
-            "--no-warn-script-location",
-            "--disable-pip-version-check"
-        ]
     
 
     

@@ -266,15 +266,6 @@ auto_install_timeout = 300
 use_mirror = true
 mirror_url = "https://pypi.tuna.tsinghua.edu.cn/simple" # PyPI镜像源URL，如: "https://pypi.tuna.tsinghua.edu.cn/simple" 
 
-# 是否使用网络代理（高级选项）
-use_proxy = false
-proxy_url = "" # 网络代理URL，如: "http://proxy.example.com:8080"
-
-# pip安装选项
-pip_options = [
-    "--no-warn-script-location",
-    "--disable-pip-version-check"
-]
 
 # 安装前是否提示用户（暂未实现）
 prompt_before_install = false
