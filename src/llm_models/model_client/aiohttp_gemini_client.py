@@ -346,18 +346,8 @@ class AiohttpGeminiClient(BaseClient):
         if api_provider.base_url:
             self.base_url = api_provider.base_url.rstrip('/')
     
-    async def _get_session(self) -> aiohttp.ClientSession:
-        """获取或创建aiohttp会话"""
-        if self.session is None or self.session.closed:
-            timeout = aiohttp.ClientTimeout(total=300)  # 5分钟超时
-            self.session = aiohttp.ClientSession(
-                timeout=timeout,
-                headers={
-                    "Content-Type": "application/json",
-                    "User-Agent": "MMC-AioHTTP-Gemini-Client/1.0"
-                }
-            )
-        return self.session
+
+    # 移除全局 session，全部请求都用 with aiohttp.ClientSession() as session:
     
     async def _make_request(
         self,
@@ -366,27 +356,32 @@ class AiohttpGeminiClient(BaseClient):
         data: dict | None = None,
         stream: bool = False
     ) -> aiohttp.ClientResponse:
-        """发起HTTP请求"""
-        session = await self._get_session()
+        """发起HTTP请求（每次都用 with aiohttp.ClientSession() as session）"""
         url = f"{self.base_url}/{endpoint}?key={self.api_key}"
-        
+        timeout = aiohttp.ClientTimeout(total=300)
         try:
-            if method.upper() == "POST":
-                response = await session.post(
-                    url,
-                    json=data,
-                    headers={"Accept": "text/event-stream" if stream else "application/json"}
-                )
-            else:
-                response = await session.get(url)
-            
-            # 检查HTTP状态码
-            if response.status >= 400:
-                error_text = await response.text()
-                raise RespNotOkException(response.status, error_text)
-            
-            return response
-            
+            async with aiohttp.ClientSession(
+                timeout=timeout,
+                headers={
+                    "Content-Type": "application/json",
+                    "User-Agent": "MMC-AioHTTP-Gemini-Client/1.0"
+                }
+            ) as session:
+                if method.upper() == "POST":
+                    response = await session.post(
+                        url,
+                        json=data,
+                        headers={"Accept": "text/event-stream" if stream else "application/json"}
+                    )
+                else:
+                    response = await session.get(url)
+
+                # 检查HTTP状态码
+                if response.status >= 400:
+                    error_text = await response.text()
+                    raise RespNotOkException(response.status, error_text)
+
+                return response
         except aiohttp.ClientError as e:
             raise NetworkConnectionError() from e
     
@@ -561,16 +556,4 @@ class AiohttpGeminiClient(BaseClient):
         """
         return ["png", "jpg", "jpeg", "webp", "heic", "heif"]
     
-    async def __aenter__(self):
-        """异步上下文管理器入口"""
-        return self
-    
-    async def __aexit__(self, exc_type, exc_val, exc_tb):
-        """异步上下文管理器出口"""
-        if self.session and not self.session.closed:
-            await self.session.close()
-    
-    def __del__(self):
-        """析构函数，确保会话被正确关闭"""
-        if hasattr(self, 'session') and self.session and not self.session.closed:
-            asyncio.create_task(self.session.close())
+    # 移除 __aenter__、__aexit__、__del__，不再持有全局 session
