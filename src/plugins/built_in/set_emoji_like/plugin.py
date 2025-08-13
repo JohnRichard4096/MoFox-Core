@@ -1,0 +1,201 @@
+import re
+from typing import List, Tuple, Type
+import difflib
+
+from src.plugin_system import (
+    BasePlugin,
+    register_plugin,
+    BaseAction,
+    ComponentInfo,
+    ActionActivationType,
+    ConfigField,
+    database_api,
+)
+from src.common.database.sqlalchemy_models import Messages, PersonInfo
+from src.common.logger import get_logger
+from src.plugin_system.apis import send_api
+from .qq_emoji_list import qq_face
+
+logger = get_logger("set_emoji_like_plugin")
+
+
+def get_emoji_id(emoji_input: str) -> str | None:
+    """根据输入获取表情ID"""
+    # 如果输入本身就是数字ID，直接返回
+    if emoji_input.isdigit() or (isinstance(emoji_input, str) and emoji_input.startswith("😊")):
+        if emoji_input in qq_face:
+            return emoji_input
+    
+    # 尝试从 "[表情：xxx]" 格式中提取
+    match = re.search(r"\[表情：(.+?)\]", emoji_input)
+    if match:
+        emoji_name = match.group(1).strip()
+    else:
+        emoji_name = emoji_input.strip()
+
+    # 遍历查找
+    for key, value in qq_face.items():
+        # value 的格式是 "[表情：xxx]"
+        if f"[表情：{emoji_name}]" == value:
+            return key
+            
+    return None
+
+
+# ===== Action组件 =====
+class SetEmojiLikeAction(BaseAction):
+    """设置消息表情回应"""
+
+    # === 基本信息（必须填写）===
+    action_name = "set_emoji_like"
+    action_description = "为消息设置表情回应/贴表情"
+    activation_type = ActionActivationType.ALWAYS  # 消息接收时激活(?)
+    parallel_action = True
+
+    # === 功能描述（必须填写）===
+    # 从 qq_face 字典中提取所有表情名称用于提示
+    emoji_options = []
+    for name in qq_face.values():
+        match = re.search(r"\[表情：(.+?)\]", name)
+        if match:
+            emoji_options.append(match.group(1))
+    
+    action_parameters = {
+        "emoji": f"要回应的表情,必须从以下表情中选择: {', '.join(emoji_options)}",
+        "set": "是否设置回应 (True/False)",
+    }
+    action_require = ["当需要对消息贴表情时使用","当你想回应某条消息但又不想发文字时使用","不要连续发送，如果你已经贴表情包，就不要选择此动作","当你想用贴表情回应某条消息时使用"]
+    llm_judge_prompt = """
+    判定是否需要使用贴表情动作的条件：
+    1. 用户明确要求使用贴表情包
+    2. 这是一个适合表达强烈情绪的场合
+    3. 不要发送太多表情包，如果你已经发送过多个表情包则回答"否"
+    
+    请回答"是"或"否"。
+    """
+    associated_types = ["text"]
+
+    async def execute(self) -> Tuple[bool, str]:
+        """执行设置表情回应的动作"""
+        message_id = None
+        if self.has_action_message:
+            logger.debug(str(self.action_message))
+            if isinstance(self.action_message, dict):
+                message_id = self.action_message.get("message_id")
+            logger.info(f"获取到的消息ID: {message_id}")
+        else:
+            logger.error("未提供消息ID")
+            await self.store_action_info(
+                action_build_into_prompt=True,
+                action_prompt_display=f"执行了set_emoji_like动作：{self.action_name},失败: 未提供消息ID",
+                action_done=False
+            )
+            return False, "未提供消息ID"
+        
+        emoji_input = self.action_data.get("emoji")
+        set_like = self.action_data.get("set", True)
+
+        if not emoji_input:
+            logger.error("未提供表情")
+            return False, "未提供表情"
+        logger.info(f"设置表情回应: {emoji_input}, 是否设置: {set_like}")
+
+        emoji_id = get_emoji_id(emoji_input)
+        if not emoji_id:
+            logger.error(f"找不到表情: '{emoji_input}'。请从可用列表中选择。")
+            await self.store_action_info(
+                action_build_into_prompt=True,
+                action_prompt_display=f"执行了set_emoji_like动作：{self.action_name},失败: 找不到表情: '{emoji_input}'",
+                action_done=False
+            )
+            return False, f"找不到表情: '{emoji_input}'。请从可用列表中选择。"
+
+        # 4. 使用适配器API发送命令
+        if not message_id:
+            logger.error("未提供消息ID")
+            await self.store_action_info(
+                action_build_into_prompt=True,
+                action_prompt_display=f"执行了set_emoji_like动作：{self.action_name},失败: 未提供消息ID",
+                action_done=False
+            )
+            return False, "未提供消息ID"
+
+        try:
+            # 使用适配器API发送贴表情命令
+            response = await send_api.adapter_command_to_stream(
+                action="set_msg_emoji_like",
+                params={
+                    "message_id": message_id, 
+                    "emoji_id": emoji_id,
+                    "set": set_like
+                },
+                stream_id=self.chat_stream.stream_id if self.chat_stream else None,
+                timeout=30.0,
+                storage_message=False
+            )
+            
+            if response["status"] == "ok":
+                logger.info(f"设置表情回应成功: {response}")
+                await self.store_action_info(
+                    action_build_into_prompt=True,
+                    action_prompt_display=f"执行了set_emoji_like动作,{emoji_input},设置表情回应: {emoji_id}, 是否设置: {set_like}",
+                    action_done=True
+                )
+                return True, f"成功设置表情回应: {response.get('message', '成功')}"
+            else:
+                error_msg = response.get('message', '未知错误')
+                logger.error(f"设置表情回应失败: {error_msg}")
+                await self.store_action_info(
+                    action_build_into_prompt=True,
+                    action_prompt_display=f"执行了set_emoji_like动作：{self.action_name},失败: {error_msg}",
+                    action_done=False
+                )
+                return False, f"设置表情回应失败: {error_msg}"
+                
+        except Exception as e:
+            logger.error(f"设置表情回应失败: {e}")
+            await self.store_action_info(
+                action_build_into_prompt=True,
+                action_prompt_display=f"执行了set_emoji_like动作：{self.action_name},失败: {e}",
+                action_done=False
+            )
+            return False, f"设置表情回应失败: {e}"
+
+
+# ===== 插件注册 =====
+@register_plugin
+class SetEmojiLikePlugin(BasePlugin):
+    """设置消息表情回应插件"""
+
+    # 插件基本信息
+    plugin_name: str = "set_emoji_like"  # 内部标识符
+    enable_plugin: bool = True
+    dependencies: List[str] = []  # 插件依赖列表
+    python_dependencies: List[str] = []  # Python包依赖列表，现在使用内置API
+    config_file_name: str = "config.toml"  # 配置文件名
+
+    # 配置节描述
+    config_section_descriptions = {
+        "plugin": "插件基本信息",
+        "components": "插件组件"
+    }
+
+    # 配置Schema定义
+    config_schema: dict = {
+        "plugin": {
+            "name": ConfigField(type=str, default="set_emoji_like", description="插件名称"),
+            "version": ConfigField(type=str, default="1.0.0", description="插件版本"),
+            "enabled": ConfigField(type=bool, default=True, description="是否启用插件"),
+            "config_version": ConfigField(type=str, default="1.1", description="配置版本"),
+        },
+        "components": {
+            "action_set_emoji_like": ConfigField(type=bool, default=True, description="是否启用设置表情回应功能"),
+        }
+    }
+
+    def get_plugin_components(self) -> List[Tuple[ComponentInfo, Type]]:
+        if self.get_config("components.action_set_emoji_like"):
+            return [
+                (SetEmojiLikeAction.get_action_info(), SetEmojiLikeAction),
+            ]
+        return []
