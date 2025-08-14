@@ -41,6 +41,7 @@ from src.config.official_configs import (
     ExaConfig,
     WebSearchConfig,
     TavilyConfig,
+    MCPSSEConfig,
 )
 
 from .api_ada_configs import (
@@ -375,6 +376,7 @@ class Config(ConfigBase):
     exa: ExaConfig = field(default_factory=lambda: ExaConfig())
     web_search: WebSearchConfig = field(default_factory=lambda: WebSearchConfig())
     tavily: TavilyConfig = field(default_factory=lambda: TavilyConfig())
+    mcp_sse: MCPSSEConfig = field(default_factory=lambda: MCPSSEConfig())
 
 
 @dataclass

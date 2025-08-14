@@ -1,5 +1,5 @@
 [inner]
-version = "6.3.5"
+version = "6.3.6"
 
 #----以下是给开发人员阅读的，如果你只是部署了麦麦，不需要阅读----
 #如果你想要修改配置文件，请递增version的值
@@ -348,3 +348,41 @@ enable_url_tool = true # 是否启用URL解析tool
 # 搜索引擎配置
 enabled_engines = ["ddg"] # 启用的搜索引擎列表，可选: "exa", "tavily", "ddg"
 search_strategy = "single" # 搜索策略: "single"(使用第一个可用引擎), "parallel"(并行使用所有启用的引擎), "fallback"(按顺序尝试，失败则尝试下一个)
+
+# MCP Server-Sent Events 客户端配置
+[mcp_sse]
+enable = false # 是否启用 MCP SSE 客户端
+server_url = "http://localhost:8080/events" # MCP 服务器 SSE 端点 URL，例如: "http://localhost:8080/events"
+auth_key = "" # MCP 服务器认证密钥
+
+# 连接配置
+connection_timeout = 30 # 连接超时时间（秒）
+read_timeout = 60 # 读取超时时间（秒）
+
+# 重连配置
+enable_reconnect = true # 是否启用自动重连
+max_reconnect_attempts = 10 # 最大重连尝试次数，-1 表示无限重连
+initial_reconnect_delay = 1.0 # 初始重连延迟时间（秒）
+max_reconnect_delay = 60.0 # 最大重连延迟时间（秒）
+reconnect_backoff_factor = 2.0 # 重连延迟指数退避因子
+
+# 事件处理配置
+event_buffer_size = 1000 # 事件缓冲区大小
+enable_event_logging = true # 是否启用事件日志记录
+
+# 订阅配置
+subscribed_events = [] # 订阅的事件类型列表，空列表表示订阅所有事件
+# 示例: subscribed_events = ["chat.message", "user.login", "system.status"]
+
+# 高级配置
+user_agent = "MaiBot-MCP-SSE-Client/1.0" # 用户代理字符串
+
+# SSL 配置
+verify_ssl = true # 是否验证 SSL 证书
+ssl_cert_path = "" # SSL 客户端证书路径（可选）
+ssl_key_path = "" # SSL 客户端密钥路径（可选）
+
+# 自定义 HTTP 头部（可选）
+# [mcp_sse.custom_headers]
+# "X-Custom-Header" = "custom-value"
+# "X-API-Version" = "v1"

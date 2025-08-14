@@ -457,6 +457,11 @@ MODULE_COLORS = {
     "web_surfing_tool": "\033[38;5;130m",  # 棕色
     "tts": "\033[38;5;136m",  # 浅棕色
     
+    # MCP SSE
+    "mcp_sse_manager": "\033[38;5;202m",  # 橙红色
+    "mcp_event_handler": "\033[38;5;208m",  # 橙色
+    "mcp_sse_client": "\033[38;5;214m",  # 橙黄色
+
     # mais4u系统扩展
     "s4u_config": "\033[38;5;18m",  # 深蓝色
     "action": "\033[38;5;52m",  # 深红色（mais4u的action）
@@ -539,6 +544,10 @@ MODULE_ALIASES = {
     "web_surfing_tool": "网络搜索",
     "tts": "语音合成",
     
+    # MCP SSE
+    "mcp_sse_manager": "MCP管理器",
+    "mcp_event_handler": "MCP事件处",
+    "mcp_sse_client": "MCP客户端",
     # mais4u系统扩展
     "s4u_config": "直播配置",
     "action": "直播动作",

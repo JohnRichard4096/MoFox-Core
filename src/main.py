@@ -30,6 +30,10 @@ from src.common.message import get_global_api
 if global_config.memory.enable_memory:
     from src.chat.memory_system.Hippocampus import hippocampus_manager
 
+# 条件导入 MCP SSE 系统
+if global_config.mcp_sse.enable:
+    from src.mcp import initialize_mcp_sse_manager, start_mcp_sse_manager, stop_mcp_sse_manager
+
 # 插件系统现在使用统一的插件加载器
 
 install(extra_lines=3)
@@ -44,6 +48,12 @@ class MainSystem:
             self.hippocampus_manager = hippocampus_manager
         else:
             self.hippocampus_manager = None
+
+        # 根据配置条件性地初始化 MCP SSE 系统
+        if global_config.mcp_sse.enable:
+            self.mcp_sse_manager = initialize_mcp_sse_manager(global_config.mcp_sse)
+        else:
+            self.mcp_sse_manager = None
 
         self.individuality: Individuality = get_individuality()
 
@@ -72,6 +82,14 @@ class MainSystem:
             logger.info("🛑 插件热重载系统已停止")
         except Exception as e:
             logger.error(f"停止热重载系统时出错: {e}")
+
+        # 停止 MCP SSE 系统
+        if global_config.mcp_sse.enable and self.mcp_sse_manager:
+            try:
+                asyncio.create_task(stop_mcp_sse_manager())
+                logger.info("🛑 MCP SSE 系统已停止")
+            except Exception as e:
+                logger.error(f"停止 MCP SSE 系统时出错: {e}")
 
     async def initialize(self):
         """初始化系统组件"""
@@ -152,6 +170,19 @@ MaiMbot-Pro-Max(第三方改版)
             logger.info("日程表功能已启用，正在初始化管理器...")
             await schedule_manager.load_or_generate_today_schedule()
             logger.info("日程表管理器初始化成功。")
+
+        # 根据配置条件性地启动 MCP SSE 系统
+        if global_config.mcp_sse.enable:
+            if self.mcp_sse_manager:
+                try:
+                    await start_mcp_sse_manager()
+                    logger.info("MCP SSE 系统初始化成功")
+                except Exception as e:
+                    logger.error(f"MCP SSE 系统初始化失败: {e}")
+            else:
+                logger.warning("MCP SSE 系统已启用但管理器未初始化")
+        else:
+            logger.info("MCP SSE 系统已禁用，跳过初始化")
 
         try:
             init_time = int(1000 * (time.time() - init_start_time))
