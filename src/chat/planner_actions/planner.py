@@ -266,8 +266,6 @@ class ActionPlanner:
             "is_parallel": is_parallel,
         }
 
-        # 只有在成功完成决策后才更新已读时间戳，确保新消息判断的准确性
-        self.last_obs_time_mark = time.time()
 
         return (
             {
@@ -318,6 +316,8 @@ class ActionPlanner:
             actions_before_now_block = f"你刚刚选择并执行过的action是：\n{actions_before_now_block}"
 
             # 注意：不在这里更新last_obs_time_mark，应该在plan成功后再更新，避免异常情况下错误更新时间戳
+            self.last_obs_time_mark = time.time()
+
 
             if mode == ChatMode.FOCUS:
                 no_action_block = """
