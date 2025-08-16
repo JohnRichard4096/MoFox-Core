@@ -1,7 +1,7 @@
 from abc import ABC, abstractmethod
 from typing import Dict, Tuple, Optional, Any
 from src.common.logger import get_logger
-from src.plugin_system.base.component_types import CommandInfo, ComponentType
+from src.plugin_system.base.component_types import CommandInfo, ComponentType, ChatType
 from src.chat.message_receive.message import MessageRecv
 from src.plugin_system.apis import send_api
 
@@ -26,6 +26,8 @@ class BaseCommand(ABC):
     # 默认命令设置
     command_pattern: str = r""
     """命令匹配的正则表达式"""
+    chat_type_allow: ChatType = ChatType.ALL
+    """允许的聊天类型，默认为所有类型"""
 
     def __init__(self, message: MessageRecv, plugin_config: Optional[dict] = None):
         """初始化Command组件
@@ -40,7 +42,18 @@ class BaseCommand(ABC):
 
         self.log_prefix = "[Command]"
 
+        # 从类属性获取chat_type_allow设置
+        self.chat_type_allow = getattr(self.__class__, "chat_type_allow", ChatType.ALL)
+
         logger.debug(f"{self.log_prefix} Command组件初始化完成")
+        
+        # 验证聊天类型限制
+        if not self._validate_chat_type():
+            is_group = hasattr(self.message, 'is_group_message') and self.message.is_group_message
+            logger.warning(
+                f"{self.log_prefix} Command '{self.command_name}' 不支持当前聊天类型: "
+                f"{'群聊' if is_group else '私聊'}, 允许类型: {self.chat_type_allow.value}"
+            )
 
     def set_matched_groups(self, groups: Dict[str, str]) -> None:
         """设置正则表达式匹配的命名组
@@ -49,6 +62,35 @@ class BaseCommand(ABC):
             groups: 正则表达式匹配的命名组
         """
         self.matched_groups = groups
+
+    def _validate_chat_type(self) -> bool:
+        """验证当前聊天类型是否允许执行此Command
+        
+        Returns:
+            bool: 如果允许执行返回True，否则返回False
+        """
+        if self.chat_type_allow == ChatType.ALL:
+            return True
+        
+        # 检查是否为群聊消息
+        is_group = hasattr(self.message, 'is_group_message') and self.message.is_group_message
+        
+        if self.chat_type_allow == ChatType.GROUP and is_group:
+            return True
+        elif self.chat_type_allow == ChatType.PRIVATE and not is_group:
+            return True
+        else:
+            return False
+
+    def is_chat_type_allowed(self) -> bool:
+        """检查当前聊天类型是否允许执行此Command
+        
+        这是一个公开的方法，供外部调用检查聊天类型限制
+        
+        Returns:
+            bool: 如果允许执行返回True，否则返回False
+        """
+        return self._validate_chat_type()
 
     @abstractmethod
     async def execute(self) -> Tuple[bool, Optional[str], bool]:
@@ -228,4 +270,5 @@ class BaseCommand(ABC):
             component_type=ComponentType.COMMAND,
             description=cls.command_description,
             command_pattern=cls.command_pattern,
+            chat_type_allow=getattr(cls, "chat_type_allow", ChatType.ALL),
         )

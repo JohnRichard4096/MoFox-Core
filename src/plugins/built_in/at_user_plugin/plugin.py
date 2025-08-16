@@ -11,6 +11,7 @@ from src.plugin_system import (
 from src.person_info.person_info import get_person_info_manager
 from src.common.logger import get_logger
 from src.plugin_system import database_api
+from src.plugin_system.base.component_types import ChatType
 logger = get_logger(__name__)
 
 class AtAction(BaseAction):
@@ -21,6 +22,7 @@ class AtAction(BaseAction):
     action_description = "发送艾特消息"
     activation_type = ActionActivationType.LLM_JUDGE  # 消息接收时激活(?)
     parallel_action = False
+    chat_type_allow = ChatType.GROUP
 
     # === 功能描述（必须填写）===
     action_parameters = {

@@ -65,6 +65,36 @@ class ActionModifier:
         self.action_manager.restore_actions()
         all_actions = self.action_manager.get_using_actions()
 
+        # === 第0阶段：根据聊天类型过滤动作 ===
+        from src.plugin_system.base.component_types import ChatType
+        from src.plugin_system.core.component_registry import component_registry
+        from src.plugin_system.base.component_types import ComponentType
+        from src.chat.utils.utils import get_chat_type_and_target_info
+        
+        # 获取聊天类型
+        is_group_chat, _ = get_chat_type_and_target_info(self.chat_id)
+        all_registered_actions = component_registry.get_components_by_type(ComponentType.ACTION)
+        
+        chat_type_removals = []
+        for action_name in list(all_actions.keys()):
+            if action_name in all_registered_actions:
+                action_info = all_registered_actions[action_name]
+                chat_type_allow = getattr(action_info, 'chat_type_allow', ChatType.ALL)
+                
+                # 检查是否符合聊天类型限制
+                should_keep = (chat_type_allow == ChatType.ALL or 
+                             (chat_type_allow == ChatType.GROUP and is_group_chat) or 
+                             (chat_type_allow == ChatType.PRIVATE and not is_group_chat))
+                             
+                if not should_keep:
+                    chat_type_removals.append((action_name, f"不支持{'群聊' if is_group_chat else '私聊'}"))
+                    self.action_manager.remove_action_from_using(action_name)
+        
+        if chat_type_removals:
+            logger.info(f"{self.log_prefix} 第0阶段：根据聊天类型过滤 - 移除了 {len(chat_type_removals)} 个动作")
+            for action_name, reason in chat_type_removals:
+                logger.debug(f"{self.log_prefix} - 移除 {action_name}: {reason}")
+
         message_list_before_now_half = get_raw_msg_before_timestamp_with_chat(
             chat_id=self.chat_stream.stream_id,
             timestamp=time.time(),
@@ -122,7 +152,7 @@ class ActionModifier:
                 logger.debug(f"{self.log_prefix}阶段三移除动作: {action_name}，原因: {reason}")
 
         # === 统一日志记录 ===
-        all_removals = removals_s1 + removals_s2 + removals_s3
+        all_removals = chat_type_removals + removals_s1 + removals_s2 + removals_s3
         removals_summary: str = ""
         if all_removals:
             removals_summary = " | ".join([f"{name}({reason})" for name, reason in all_removals])

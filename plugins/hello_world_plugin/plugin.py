@@ -1,4 +1,4 @@
-from typing import List, Tuple, Type, Any
+from typing import List, Tuple, Type, Any, Optional
 from src.plugin_system import (
     BasePlugin,
     register_plugin,
@@ -15,6 +15,7 @@ from src.plugin_system import (
 from src.plugin_system.base.base_command import BaseCommand
 from src.plugin_system.apis import send_api
 from src.common.logger import get_logger
+from src.plugin_system.base.component_types import ChatType
 
 logger = get_logger(__name__)
 
@@ -145,10 +146,11 @@ class TimeCommand(BaseCommand):
     """时间查询Command - 响应/time命令"""
 
     command_name = "time"
-    command_description = "查询当前时间"
+    command_description = "获取当前时间"
 
     # === 命令设置（必须填写）===
     command_pattern = r"^/time$"  # 精确匹配 "/time" 命令
+    chat_type_allow = ChatType.GROUP  # 仅在群聊中可用
 
     async def execute(self) -> Tuple[bool, str, bool]:
         """执行时间查询"""
@@ -221,8 +223,10 @@ class HelloWorldPlugin(BasePlugin):
             (HelloAction.get_action_info(), HelloAction),
             (CompareNumbersTool.get_tool_info(), CompareNumbersTool),  # 添加比较数字工具
             (ByeAction.get_action_info(), ByeAction),  # 添加告别Action
-            (TimeCommand.get_command_info(), TimeCommand),
+            (TimeCommand.get_command_info(), TimeCommand),  # 现在只能在群聊中使用
             (GetGroupListCommand.get_command_info(), GetGroupListCommand),  # 添加获取群列表命令
+            (PrivateInfoCommand.get_command_info(), PrivateInfoCommand),  # 私聊专用命令
+            (GroupOnlyAction.get_action_info(), GroupOnlyAction),  # 群聊专用动作
             # (PrintMessage.get_handler_info(), PrintMessage),
         ]
 
@@ -247,3 +251,34 @@ class HelloWorldPlugin(BasePlugin):
 
 #     def get_plugin_components(self) -> List[Tuple[ComponentInfo, Type]]:
 #         return [(PrintMessage.get_handler_info(), PrintMessage)]
+
+# 添加一个新的私聊专用命令
+class PrivateInfoCommand(BaseCommand):
+    command_name = "private_info"
+    command_description = "获取私聊信息"
+    command_pattern = r"^/私聊信息$"
+    chat_type_allow = ChatType.PRIVATE  # 仅在私聊中可用
+
+    async def execute(self) -> Tuple[bool, Optional[str], bool]:
+        """执行私聊信息命令"""
+        try:
+            await self.send_text("这是一个只能在私聊中使用的命令！")
+            return True, "私聊信息命令执行成功", False
+        except Exception as e:
+            logger.error(f"私聊信息命令执行失败: {e}")
+            return False, f"命令执行失败: {e}", False
+
+# 添加一个新的仅群聊可用的Action
+class GroupOnlyAction(BaseAction):
+    action_name = "group_only_test"
+    action_description = "群聊专用测试动作"
+    chat_type_allow = ChatType.GROUP  # 仅在群聊中可用
+    
+    async def execute(self) -> Tuple[bool, str]:
+        """执行群聊专用测试动作"""
+        try:
+            await self.send_text("这是一个只能在群聊中执行的动作！")
+            return True, "群聊专用动作执行成功"
+        except Exception as e:
+            logger.error(f"群聊专用动作执行失败: {e}")
+            return False, f"动作执行失败: {e}"

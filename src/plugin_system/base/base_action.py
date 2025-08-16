@@ -6,7 +6,7 @@ from typing import Tuple, Optional, Dict, Any
 
 from src.common.logger import get_logger
 from src.chat.message_receive.chat_stream import ChatStream
-from src.plugin_system.base.component_types import ActionActivationType, ChatMode, ActionInfo, ComponentType
+from src.plugin_system.base.component_types import ActionActivationType, ChatMode, ActionInfo, ComponentType, ChatType
 from src.plugin_system.apis import send_api, database_api, message_api
 
 
@@ -91,6 +91,7 @@ class BaseAction(ABC):
         self.mode_enable: ChatMode = getattr(self.__class__, "mode_enable", ChatMode.ALL)
         self.parallel_action: bool = getattr(self.__class__, "parallel_action", True)
         self.associated_types: list[str] = getattr(self.__class__, "associated_types", []).copy()
+        self.chat_type_allow: ChatType = getattr(self.__class__, "chat_type_allow", ChatType.ALL)
 
         # =============================================================================
         # 便捷属性 - 直接在初始化时获取常用聊天信息（带类型注解）
@@ -146,6 +147,38 @@ class BaseAction(ABC):
         logger.debug(
             f"{self.log_prefix} 聊天信息: 类型={'群聊' if self.is_group else '私聊'}, 平台={self.platform}, 目标={self.target_id}"
         )
+        
+        # 验证聊天类型限制
+        if not self._validate_chat_type():
+            logger.warning(
+                f"{self.log_prefix} Action '{self.action_name}' 不支持当前聊天类型: "
+                f"{'群聊' if self.is_group else '私聊'}, 允许类型: {self.chat_type_allow.value}"
+            )
+
+    def _validate_chat_type(self) -> bool:
+        """验证当前聊天类型是否允许执行此Action
+        
+        Returns:
+            bool: 如果允许执行返回True，否则返回False
+        """
+        if self.chat_type_allow == ChatType.ALL:
+            return True
+        elif self.chat_type_allow == ChatType.GROUP and self.is_group:
+            return True
+        elif self.chat_type_allow == ChatType.PRIVATE and not self.is_group:
+            return True
+        else:
+            return False
+
+    def is_chat_type_allowed(self) -> bool:
+        """检查当前聊天类型是否允许执行此Action
+        
+        这是一个公开的方法，供外部调用检查聊天类型限制
+        
+        Returns:
+            bool: 如果允许执行返回True，否则返回False
+        """
+        return self._validate_chat_type()
 
     async def wait_for_new_message(self, timeout: int = 1200) -> Tuple[bool, str]:
         """等待新消息或超时
@@ -393,6 +426,7 @@ class BaseAction(ABC):
             action_parameters=getattr(cls, "action_parameters", {}).copy(),
             action_require=getattr(cls, "action_require", []).copy(),
             associated_types=getattr(cls, "associated_types", []).copy(),
+            chat_type_allow=getattr(cls, "chat_type_allow", ChatType.ALL),
         )
 
     @abstractmethod

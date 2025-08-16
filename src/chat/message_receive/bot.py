@@ -114,6 +114,12 @@ class ChatBot:
                 command_instance.set_matched_groups(matched_groups)
 
                 try:
+                    # 检查聊天类型限制
+                    if not command_instance.is_chat_type_allowed():
+                        is_group = hasattr(message, 'is_group_message') and message.is_group_message
+                        logger.info(f"命令 {command_class.__name__} 不支持当前聊天类型: {'群聊' if is_group else '私聊'}")
+                        return False, None, True  # 跳过此命令，继续处理其他消息
+                    
                     # 执行命令
                     success, response, intercept_message = await command_instance.execute()
 

@@ -47,6 +47,18 @@ class ChatMode(Enum):
         return self.value
 
 
+# 聊天类型枚举
+class ChatType(Enum):
+    """聊天类型枚举，用于限制插件在不同聊天环境中的使用"""
+
+    GROUP = "group"  # 仅群聊可用
+    PRIVATE = "private"  # 仅私聊可用
+    ALL = "all"  # 群聊和私聊都可用
+
+    def __str__(self):
+        return self.value
+
+
 # 事件类型枚举
 class EventType(Enum):
     """
@@ -124,6 +136,7 @@ class ActionInfo(ComponentInfo):
     # 模式和并行设置
     mode_enable: ChatMode = ChatMode.ALL
     parallel_action: bool = False
+    chat_type_allow: ChatType = ChatType.ALL  # 允许的聊天类型
 
     def __post_init__(self):
         super().__post_init__()
@@ -143,6 +156,7 @@ class CommandInfo(ComponentInfo):
     """命令组件信息"""
 
     command_pattern: str = ""  # 命令匹配模式（正则表达式）
+    chat_type_allow: ChatType = ChatType.ALL  # 允许的聊天类型
 
     def __post_init__(self):
         super().__post_init__()

@@ -15,6 +15,7 @@ from src.common.database.sqlalchemy_models import Messages, PersonInfo
 from src.common.logger import get_logger
 from src.plugin_system.apis import send_api
 from .qq_emoji_list import qq_face
+from src.plugin_system.base.component_types import ChatType
 
 logger = get_logger("set_emoji_like_plugin")
 
@@ -50,6 +51,7 @@ class SetEmojiLikeAction(BaseAction):
     action_name = "set_emoji_like"
     action_description = "为消息设置表情回应/贴表情"
     activation_type = ActionActivationType.ALWAYS  # 消息接收时激活(?)
+    chat_type_allow = ChatType.GROUP
     parallel_action = True
 
     # === 功能描述（必须填写）===

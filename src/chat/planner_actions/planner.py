@@ -290,9 +290,6 @@ class ActionPlanner:
                 timestamp=time.time(),
                 limit=int(global_config.chat.max_context_size * 0.6),
             )
-            
-            # 过滤掉bot自己的消息，避免planner把bot消息当作新消息处理
-            message_list_before_now = filter_mai_messages(message_list_before_now)
 
             chat_content_block, message_id_list = build_readable_messages_with_id(
                 messages=message_list_before_now,
