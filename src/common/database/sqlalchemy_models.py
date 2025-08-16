@@ -29,6 +29,8 @@ def get_string_field(max_length=255, **kwargs):
         return String(max_length, **kwargs)
     else:
         return Text(**kwargs)
+    
+
 
 class SessionProxy:
     """线程安全的Session代理类，自动管理session生命周期"""
@@ -155,11 +157,14 @@ class LLMUsage(Base):
 
     id = Column(Integer, primary_key=True, autoincrement=True)
     model_name = Column(get_string_field(100), nullable=False, index=True)
+    model_assign_name = Column(get_string_field(100), index=True)  # 添加索引
+    model_api_provider = Column(get_string_field(100), index=True)  # 添加索引
     user_id = Column(get_string_field(50), nullable=False, index=True)
     request_type = Column(get_string_field(50), nullable=False, index=True)
     endpoint = Column(Text, nullable=False)
     prompt_tokens = Column(Integer, nullable=False)
     completion_tokens = Column(Integer, nullable=False)
+    time_cost = Column(Float, nullable=True)
     total_tokens = Column(Integer, nullable=False)
     cost = Column(Float, nullable=False)
     status = Column(Text, nullable=False)
@@ -167,6 +172,9 @@ class LLMUsage(Base):
 
     __table_args__ = (
         Index('idx_llmusage_model_name', 'model_name'),
+        Index('idx_llmusage_model_assign_name', 'model_assign_name'),
+        Index('idx_llmusage_model_api_provider', 'model_api_provider'),
+        Index('idx_llmusage_time_cost', 'time_cost'),
         Index('idx_llmusage_user_id', 'user_id'),
         Index('idx_llmusage_request_type', 'request_type'),
         Index('idx_llmusage_timestamp', 'timestamp'),

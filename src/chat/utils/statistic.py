@@ -90,6 +90,18 @@ STD_TIME_COST_BY_MODULE = "std_time_costs_by_module"
 ONLINE_TIME = "online_time"
 TOTAL_MSG_CNT = "total_messages"
 MSG_CNT_BY_CHAT = "messages_by_chat"
+TIME_COST_BY_TYPE = "time_costs_by_type"
+TIME_COST_BY_USER = "time_costs_by_user"
+TIME_COST_BY_MODEL = "time_costs_by_model"
+TIME_COST_BY_MODULE = "time_costs_by_module"
+AVG_TIME_COST_BY_TYPE = "avg_time_costs_by_type"
+AVG_TIME_COST_BY_USER = "avg_time_costs_by_user"
+AVG_TIME_COST_BY_MODEL = "avg_time_costs_by_model"
+AVG_TIME_COST_BY_MODULE = "avg_time_costs_by_module"
+STD_TIME_COST_BY_TYPE = "std_time_costs_by_type"
+STD_TIME_COST_BY_USER = "std_time_costs_by_user"
+STD_TIME_COST_BY_MODEL = "std_time_costs_by_model"
+STD_TIME_COST_BY_MODULE = "std_time_costs_by_module"
 
 
 class OnlineTimeRecordTask(AsyncTask):
@@ -418,7 +430,7 @@ class StatisticOutputTask(AsyncTask):
                         stats[period_key][COST_BY_USER][user_id] += cost
                         stats[period_key][COST_BY_MODEL][model_name] += cost
                         stats[period_key][COST_BY_MODULE][module_name] += cost
-
+                        
                         # 收集time_cost数据
                         time_cost = record.time_cost or 0.0
                         if time_cost > 0:  # 只记录有效的time_cost
@@ -427,8 +439,8 @@ class StatisticOutputTask(AsyncTask):
                             stats[period_key][TIME_COST_BY_MODEL][model_name].append(time_cost)
                             stats[period_key][TIME_COST_BY_MODULE][module_name].append(time_cost)
                     break
-
-        # 计算平均耗时和标准差
+                
+                        # 计算平均耗时和标准差
         for period_key in stats:
             for category in [REQ_CNT_BY_TYPE, REQ_CNT_BY_USER, REQ_CNT_BY_MODEL, REQ_CNT_BY_MODULE]:
                 time_cost_key = f"time_costs_by_{category.split('_')[-1]}"
@@ -452,7 +464,6 @@ class StatisticOutputTask(AsyncTask):
                     else:
                         stats[period_key][avg_key][item_name] = 0.0
                         stats[period_key][std_key][item_name] = 0.0
-
         return stats
 
     @staticmethod
@@ -687,7 +698,6 @@ class StatisticOutputTask(AsyncTask):
         data_fmt = "{:<32}  {:>10}  {:>12}  {:>12}  {:>12}  {:>9.4f}¥  {:>10}  {:>10}"
 
         output = [
-            "按模型分类统计:",
             " 模型名称                          调用次数    输入Token     输出Token     Token总量     累计花费    平均耗时(秒)  标准差(秒)",
         ]
         for model_name, count in sorted(stats[REQ_CNT_BY_MODEL].items()):
@@ -843,7 +853,7 @@ class StatisticOutputTask(AsyncTask):
                 
                 <h2>按模型分类统计</h2>
                 <table>
-                    <thead><tr><th>模型名称</th><th>调用次数</th><th>输入Token</th><th>输出Token</th><th>Token总量</th><th>累计花费</th><th>平均耗时(秒)</th><th>标准差(秒)</th></tr></thead>
+                    <tr><th>模块名称</th><th>调用次数</th><th>输入Token</th><th>输出Token</th><th>Token总量</th><th>累计花费</th><th>平均耗时(秒)</th><th>标准差(秒)</th></tr>
                     <tbody>
                         {model_rows}
                     </tbody>
