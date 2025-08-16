@@ -41,12 +41,12 @@ class ImageManager:
             self._initialized = True
             self.vlm = LLMRequest(model_set=model_config.model_task_config.vlm, request_type="image")
 
-            try:
-                db.connect(reuse_if_open=True)
-                # 使用SQLAlchemy创建表已在初始化时完成
-                logger.debug("使用SQLAlchemy进行表管理")
-            except Exception as e:
-                logger.error(f"数据库连接失败: {e}")
+            # try:
+            #     db.connect(reuse_if_open=True)
+            #     # 使用SQLAlchemy创建表已在初始化时完成
+            #     logger.debug("使用SQLAlchemy进行表管理")
+            # except Exception as e:
+            #     logger.error(f"数据库连接失败: {e}")
 
             self._initialized = True
 
@@ -105,7 +105,8 @@ class ImageManager:
                         timestamp=current_timestamp
                     )
                     session.add(new_desc)
-                # session.commit() 会在上下文管理器中自动调用
+                    session.commit()
+                #  会在上下文管理器中自动调用
         except Exception as e:
             logger.error(f"保存描述到数据库失败 (SQLAlchemy): {str(e)}")
             
@@ -249,7 +250,8 @@ class ImageManager:
                                 timestamp=current_timestamp,
                             )
                             session.add(new_img)
-                        # session.commit() 会在上下文管理器中自动调用
+                            session.commit()
+                        #  会在上下文管理器中自动调用
                 except Exception as e:
                     logger.error(f"保存到Images表失败: {str(e)}")
 
@@ -326,7 +328,7 @@ class ImageManager:
                         existing_image.image_id = str(uuid.uuid4())
                     if not hasattr(existing_image, "vlm_processed") or existing_image.vlm_processed is None:
                         existing_image.vlm_processed = True
-                    session.commit()
+                    
                     logger.debug(f"[数据库] 更新已有图片记录: {image_hash[:8]}...")
                 else:
                     new_img = Images(
@@ -340,7 +342,7 @@ class ImageManager:
                         count=1,
                     )
                     session.add(new_img)
-                    session.commit()
+                    
                     logger.debug(f"[数据库] 创建新图片记录: {image_hash[:8]}...")
             except Exception as e:
                 logger.error(f"保存图片文件或元数据失败: {str(e)}")
@@ -514,35 +516,35 @@ class ImageManager:
                             existing_image.vlm_processed = False
 
                     existing_image.count += 1
-                    session.commit()
+                    
                     return existing_image.image_id, f"[picid:{existing_image.image_id}]"
 
-            # print(f"图片不存在: {image_hash}")
-            image_id = str(uuid.uuid4())
+                # print(f"图片不存在: {image_hash}")
+                image_id = str(uuid.uuid4())
 
-            # 保存新图片
-            current_timestamp = time.time()
-            image_dir = os.path.join(self.IMAGE_DIR, "images")
-            os.makedirs(image_dir, exist_ok=True)
-            filename = f"{image_id}.png"
-            file_path = os.path.join(image_dir, filename)
+                # 保存新图片
+                current_timestamp = time.time()
+                image_dir = os.path.join(self.IMAGE_DIR, "images")
+                os.makedirs(image_dir, exist_ok=True)
+                filename = f"{image_id}.png"
+                file_path = os.path.join(image_dir, filename)
 
-            # 保存文件
-            with open(file_path, "wb") as f:
-                f.write(image_bytes)
+                # 保存文件
+                with open(file_path, "wb") as f:
+                    f.write(image_bytes)
 
-            # 保存到数据库
-            new_img = Images(
-                image_id=image_id,
-                emoji_hash=image_hash,
-                path=file_path,
-                type="image",
-                timestamp=current_timestamp,
-                vlm_processed=False,
-                count=1,
-            )
-            session.add(new_img)
-            session.commit()
+                # 保存到数据库
+                new_img = Images(
+                    image_id=image_id,
+                    emoji_hash=image_hash,
+                    path=file_path,
+                    type="image",
+                    timestamp=current_timestamp,
+                    vlm_processed=False,
+                    count=1,
+                )
+                session.add(new_img)
+                session.commit()
 
             # 启动异步VLM处理
             asyncio.create_task(self._process_image_with_vlm(image_id, image_base64))
@@ -584,7 +586,7 @@ class ImageManager:
                     logger.debug(f"[缓存复用] 从其他相同图片记录复用描述: {existing_with_description.description[:50]}...")
                     image.description = existing_with_description.description
                     image.vlm_processed = True
-                    session.commit()
+                    
                     # 同时保存到ImageDescriptions表作为备用缓存
                     self._save_description_to_db(image_hash, existing_with_description.description, "image")
                     return
@@ -594,7 +596,7 @@ class ImageManager:
                     logger.debug(f"[缓存复用] 从ImageDescriptions表复用描述: {cached_description[:50]}...")
                     image.description = cached_description
                     image.vlm_processed = True
-                    session.commit()
+                    
                     return
 
                 # 获取图片格式

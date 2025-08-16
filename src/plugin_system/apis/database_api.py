@@ -14,7 +14,6 @@ from src.common.database.sqlalchemy_database_api import (
     db_save,
     db_get,
     store_action_info,
-    get_model_class,
     MODEL_MAPPING
 )
 
@@ -24,6 +23,5 @@ __all__ = [
     'db_save',
     'db_get',
     'store_action_info',
-    'get_model_class',
     'MODEL_MAPPING'
 ]

@@ -12,7 +12,7 @@ from sqlalchemy import select, text
 from sqlalchemy.dialects.sqlite import insert as sqlite_insert
 from sqlalchemy.dialects.mysql import insert as mysql_insert
 from src.common.database.sqlalchemy_models import ChatStreams  # 新增导入
-from src.common.database.sqlalchemy_database_api import get_session
+from src.common.database.sqlalchemy_database_api import get_db_session
 from src.config.config import global_config  # 新增导入
 # 避免循环导入，使用TYPE_CHECKING进行类型提示
 if TYPE_CHECKING:
@@ -23,7 +23,6 @@ install(extra_lines=3)
 
 
 logger = get_logger("chat_stream")
-session = get_session()
 
 class ChatMessageContext:
     """聊天消息上下文，存储消息的上下文信息"""
@@ -132,13 +131,14 @@ class ChatManager:
         if not self._initialized:
             self.streams: Dict[str, ChatStream] = {}  # stream_id -> ChatStream
             self.last_messages: Dict[str, "MessageRecv"] = {}  # stream_id -> last_message
-            try:
-                db.connect(reuse_if_open=True)
-                # 确保 ChatStreams 表存在
-                session.execute(text("CREATE TABLE IF NOT EXISTS chat_streams (stream_id TEXT PRIMARY KEY, platform TEXT, create_time REAL, last_active_time REAL, user_platform TEXT, user_id TEXT, user_nickname TEXT, user_cardname TEXT, group_platform TEXT, group_id TEXT, group_name TEXT)"))
-                session.commit()
-            except Exception as e:
-                logger.error(f"数据库连接或 ChatStreams 表创建失败: {e}")
+            # try:
+                # with get_db_session() as session:
+                #     db.connect(reuse_if_open=True)
+                #     # 确保 ChatStreams 表存在
+                #     session.execute(text("CREATE TABLE IF NOT EXISTS chat_streams (stream_id TEXT PRIMARY KEY, platform TEXT, create_time REAL, last_active_time REAL, user_platform TEXT, user_id TEXT, user_nickname TEXT, user_cardname TEXT, group_platform TEXT, group_id TEXT, group_name TEXT)"))
+                #     session.commit()
+            # except Exception as e:
+            #     logger.error(f"数据库连接或 ChatStreams 表创建失败: {e}")
 
             self._initialized = True
             # 在事件循环中启动初始化
@@ -236,7 +236,8 @@ class ChatManager:
 
             # 检查数据库中是否存在
             def _db_find_stream_sync(s_id: str):
-                return session.execute(select(ChatStreams).where(ChatStreams.stream_id == s_id)).scalar()
+                with get_db_session() as session:
+                    return session.execute(select(ChatStreams).where(ChatStreams.stream_id == s_id)).scalar()
 
             model_instance = await asyncio.to_thread(_db_find_stream_sync, stream_id)
 
@@ -331,44 +332,45 @@ class ChatManager:
         stream_data_dict = stream.to_dict()
 
         def _db_save_stream_sync(s_data_dict: dict):
-            user_info_d = s_data_dict.get("user_info")
-            group_info_d = s_data_dict.get("group_info")
+            with get_db_session() as session:
+                user_info_d = s_data_dict.get("user_info")
+                group_info_d = s_data_dict.get("group_info")
 
-            fields_to_save = {
-                "platform": s_data_dict["platform"],
-                "create_time": s_data_dict["create_time"],
-                "last_active_time": s_data_dict["last_active_time"],
-                "user_platform": user_info_d["platform"] if user_info_d else "",
-                "user_id": user_info_d["user_id"] if user_info_d else "",
-                "user_nickname": user_info_d["user_nickname"] if user_info_d else "",
-                "user_cardname": user_info_d.get("user_cardname", "") if user_info_d else None,
-                "group_platform": group_info_d["platform"] if group_info_d else "",
-                "group_id": group_info_d["group_id"] if group_info_d else "",
-                "group_name": group_info_d["group_name"] if group_info_d else "",
-            }
+                fields_to_save = {
+                    "platform": s_data_dict["platform"],
+                    "create_time": s_data_dict["create_time"],
+                    "last_active_time": s_data_dict["last_active_time"],
+                    "user_platform": user_info_d["platform"] if user_info_d else "",
+                    "user_id": user_info_d["user_id"] if user_info_d else "",
+                    "user_nickname": user_info_d["user_nickname"] if user_info_d else "",
+                    "user_cardname": user_info_d.get("user_cardname", "") if user_info_d else None,
+                    "group_platform": group_info_d["platform"] if group_info_d else "",
+                    "group_id": group_info_d["group_id"] if group_info_d else "",
+                    "group_name": group_info_d["group_name"] if group_info_d else "",
+                }
 
-            # 根据数据库类型选择插入语句
-            if global_config.database.database_type == "sqlite":
-                stmt = sqlite_insert(ChatStreams).values(stream_id=s_data_dict["stream_id"], **fields_to_save)
-                stmt = stmt.on_conflict_do_update(
-                    index_elements=['stream_id'],
-                    set_=fields_to_save
-                )
-            elif global_config.database.database_type == "mysql":
-                stmt = mysql_insert(ChatStreams).values(stream_id=s_data_dict["stream_id"], **fields_to_save)
-                stmt = stmt.on_duplicate_key_update(
-                    **{key: value for key, value in fields_to_save.items() if key != "stream_id"}
-                )
-            else:
-                # 默认使用通用插入，尝试SQLite语法
-                stmt = sqlite_insert(ChatStreams).values(stream_id=s_data_dict["stream_id"], **fields_to_save)
-                stmt = stmt.on_conflict_do_update(
-                    index_elements=['stream_id'],
-                    set_=fields_to_save
-                )
+                # 根据数据库类型选择插入语句
+                if global_config.database.database_type == "sqlite":
+                    stmt = sqlite_insert(ChatStreams).values(stream_id=s_data_dict["stream_id"], **fields_to_save)
+                    stmt = stmt.on_conflict_do_update(
+                        index_elements=['stream_id'],
+                        set_=fields_to_save
+                    )
+                elif global_config.database.database_type == "mysql":
+                    stmt = mysql_insert(ChatStreams).values(stream_id=s_data_dict["stream_id"], **fields_to_save)
+                    stmt = stmt.on_duplicate_key_update(
+                        **{key: value for key, value in fields_to_save.items() if key != "stream_id"}
+                    )
+                else:
+                    # 默认使用通用插入，尝试SQLite语法
+                    stmt = sqlite_insert(ChatStreams).values(stream_id=s_data_dict["stream_id"], **fields_to_save)
+                    stmt = stmt.on_conflict_do_update(
+                        index_elements=['stream_id'],
+                        set_=fields_to_save
+                    )
 
-            session.execute(stmt)
-            session.commit()
+                session.execute(stmt)
+                session.commit()
 
         try:
             await asyncio.to_thread(_db_save_stream_sync, stream_data_dict)
@@ -387,30 +389,32 @@ class ChatManager:
 
         def _db_load_all_streams_sync():
             loaded_streams_data = []
-            for model_instance in session.execute(select(ChatStreams)).scalars():
-                user_info_data = {
-                    "platform": model_instance.user_platform,
-                    "user_id": model_instance.user_id,
-                    "user_nickname": model_instance.user_nickname,
-                    "user_cardname": model_instance.user_cardname or "",
-                }
-                group_info_data = None
-                if model_instance.group_id:
-                    group_info_data = {
-                        "platform": model_instance.group_platform,
-                        "group_id": model_instance.group_id,
-                        "group_name": model_instance.group_name,
+            with get_db_session() as session:
+                for model_instance in session.execute(select(ChatStreams)).scalars():
+                    user_info_data = {
+                        "platform": model_instance.user_platform,
+                        "user_id": model_instance.user_id,
+                        "user_nickname": model_instance.user_nickname,
+                        "user_cardname": model_instance.user_cardname or "",
                     }
+                    group_info_data = None
+                    if model_instance.group_id:
+                        group_info_data = {
+                            "platform": model_instance.group_platform,
+                            "group_id": model_instance.group_id,
+                            "group_name": model_instance.group_name,
+                        }
 
-                data_for_from_dict = {
-                    "stream_id": model_instance.stream_id,
-                    "platform": model_instance.platform,
-                    "user_info": user_info_data,
-                    "group_info": group_info_data,
-                    "create_time": model_instance.create_time,
-                    "last_active_time": model_instance.last_active_time,
-                }
-                loaded_streams_data.append(data_for_from_dict)
+                    data_for_from_dict = {
+                        "stream_id": model_instance.stream_id,
+                        "platform": model_instance.platform,
+                        "user_info": user_info_data,
+                        "group_info": group_info_data,
+                        "create_time": model_instance.create_time,
+                        "last_active_time": model_instance.last_active_time,
+                    }
+                    loaded_streams_data.append(data_for_from_dict)
+                session.commit()
             return loaded_streams_data
 
         try:

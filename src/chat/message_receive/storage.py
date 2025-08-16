@@ -8,7 +8,7 @@ from src.common.database.sqlalchemy_models import Messages, Images
 from src.common.logger import get_logger
 from .chat_stream import ChatStream
 from .message import MessageSending, MessageRecv
-from src.common.database.sqlalchemy_database_api import get_session
+from src.common.database.sqlalchemy_database_api import get_db_session
 from sqlalchemy import select, update, desc
 
 logger = get_logger("message_storage")
@@ -95,7 +95,6 @@ class MessageStorage:
             priority_info_json = json.dumps(priority_info) if priority_info else None
 
             # 获取数据库会话
-            session = get_session()
 
             new_message = Messages(
                 message_id=msg_id,
@@ -132,8 +131,10 @@ class MessageStorage:
                 key_words_lite=key_words_lite,
                 selected_expressions=selected_expressions,
             )
-            session.add(new_message)
-            session.commit()
+            with get_db_session() as session:
+                session.add(new_message)
+                session.commit()
+                
         except Exception:
             logger.exception("存储消息失败")
             logger.error(f"消息：{message}")
@@ -183,7 +184,8 @@ class MessageStorage:
                     session.execute(
                         update(Messages).where(Messages.id == matched_message.id).values(message_id=qq_message_id)
                     )
-                    # session.commit() 会在上下文管理器中自动调用
+                    session.commit()
+                    #  会在上下文管理器中自动调用
                     logger.debug(f"更新消息ID成功: {matched_message.message_id} -> {qq_message_id}")
                 else:
                     logger.warning(f"未找到匹配的消息记录: {mmc_message_id}")
@@ -212,6 +214,7 @@ class MessageStorage:
                     image_record = session.execute(
                         select(Images).where(Images.description == description).order_by(desc(Images.timestamp))
                     ).scalar()
+                    session.commit()
                     return f"[picid:{image_record.image_id}]" if image_record else match.group(0)
             except Exception:
                 return match.group(0)

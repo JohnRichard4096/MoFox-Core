@@ -8,7 +8,7 @@ from typing import Optional
 from sqlalchemy.exc import SQLAlchemyError
 from src.common.logger import get_logger
 from src.common.database.sqlalchemy_models import (
-    Base, get_engine, get_session, initialize_database
+    Base, get_engine, initialize_database
 )
 
 logger = get_logger("sqlalchemy_init")
@@ -72,36 +72,6 @@ def create_all_tables() -> bool:
         return False
 
 
-def check_database_connection() -> bool:
-    """
-    检查数据库连接是否正常
-    
-    Returns:
-        bool: 连接是否正常
-    """
-    try:
-        session = get_session()
-        if session is None:
-            logger.error("无法获取数据库会话")
-            return False
-        
-        # 检查会话是否可用（如果能获取到会话说明连接正常）
-        if session is None:
-            logger.error("数据库会话无效")
-            return False
-        
-        session.close()
-        
-        logger.info("数据库连接检查通过")
-        return True
-        
-    except SQLAlchemyError as e:
-        logger.error(f"数据库连接检查失败: {e}")
-        return False
-    except Exception as e:
-        logger.error(f"数据库连接检查过程中发生未知错误: {e}")
-        return False
-
 
 def get_database_info() -> Optional[dict]:
     """
@@ -148,9 +118,6 @@ def initialize_database_compat() -> bool:
     success = initialize_sqlalchemy_database()
     if success:
         success = create_all_tables()
-    
-    if success:
-        success = check_database_connection()
     
     if success:
         _database_initialized = True

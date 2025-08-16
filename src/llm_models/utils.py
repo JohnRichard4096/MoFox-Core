@@ -5,7 +5,7 @@ from PIL import Image
 from datetime import datetime
 
 from src.common.logger import get_logger
-from src.common.database.sqlalchemy_models import LLMUsage, get_session
+from src.common.database.sqlalchemy_models import LLMUsage, get_db_session
 from src.config.api_ada_configs import ModelInfo
 from .payload_content.message import Message, MessageBuilder
 from .model_client.base_client import UsageRecord
@@ -156,9 +156,8 @@ class LLMUsageRecorder:
         session = None
         try:
             # 使用 SQLAlchemy 会话创建记录
-            session = get_session()
-            
-            usage_record = LLMUsage(
+            with get_db_session() as session:
+                usage_record = LLMUsage(
                 model_name=model_info.model_identifier,
                 model_assign_name=model_info.name,
                 model_api_provider=model_info.api_provider,
@@ -174,8 +173,8 @@ class LLMUsageRecorder:
                 timestamp=datetime.now(),  # SQLAlchemy 会处理 DateTime 字段
             )
             
-            session.add(usage_record)
-            session.commit()
+                session.add(usage_record)
+                session.commit()
             
             logger.debug(
                 f"Token使用情况 - 模型: {model_usage.model_name}, "
@@ -184,11 +183,7 @@ class LLMUsageRecorder:
                 f"总计: {model_usage.total_tokens}"
             )
         except Exception as e:
-            if session:
-                session.rollback()
             logger.error(f"记录token使用情况失败: {str(e)}")
-        finally:
-            if session:
-                session.close()
+
 
 llm_usage_recorder = LLMUsageRecorder()

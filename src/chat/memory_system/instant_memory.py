@@ -11,12 +11,11 @@ from datetime import datetime, timedelta
 from src.llm_models.utils_model import LLMRequest
 from src.common.logger import get_logger
 from src.common.database.sqlalchemy_models import Memory  # SQLAlchemy Models导入
-from src.common.database.sqlalchemy_database_api import get_session
+from src.common.database.sqlalchemy_database_api import get_db_session
 from src.config.config import model_config
 
 from sqlalchemy import select
 logger = get_logger(__name__)
-session = get_session()
 
 class MemoryItem:
     def __init__(self, memory_id: str, chat_id: str, memory_text: str, keywords: list[str]):
@@ -113,7 +112,8 @@ class InstantMemory:
             logger.info(f"不需要记忆：{text}")
 
     async def store_memory(self, memory_item: MemoryItem):
-        memory = Memory(
+        with get_db_session() as session:
+            memory = Memory(
             memory_id=memory_item.memory_id,
             chat_id=memory_item.chat_id,
             memory_text=memory_item.memory_text,
@@ -121,8 +121,8 @@ class InstantMemory:
             create_time=memory_item.create_time,
             last_view_time=memory_item.last_view_time,
         )
-        session.add(memory)
-        session.commit()
+            session.add(memory)
+            session.commit()
 
     async def get_memory(self, target: str):
         from json_repair import repair_json
@@ -165,17 +165,18 @@ class InstantMemory:
                 logger.info(f"start_time: {start_time}, end_time: {end_time}")
                 # 检索包含关键词的记忆
                 memories_set = set()
-                if start_time and end_time:
-                    start_ts = start_time.timestamp()
-                    end_ts = end_time.timestamp()
-                    query = session.execute(select(Memory).where(
-                        (Memory.chat_id == self.chat_id)
-                        & (Memory.create_time >= start_ts)
-                        & (Memory.create_time < end_ts)
-                    )).scalars()
-                else:
-                    query = session.execute(select(Memory).where(Memory.chat_id == self.chat_id)).scalars()
-
+                with get_db_session() as session:
+                    if start_time and end_time:
+                        start_ts = start_time.timestamp()
+                        end_ts = end_time.timestamp()
+                        
+                        query = session.execute(select(Memory).where(
+                            (Memory.chat_id == self.chat_id)
+                            & (Memory.create_time >= start_ts)
+                            & (Memory.create_time < end_ts)
+                        )).scalars()
+                    else:
+                        query = session.execute(select(Memory).where(Memory.chat_id == self.chat_id)).scalars()
                 for mem in query:
                     # 对每条记忆
                     mem_keywords = mem.keywords or ""

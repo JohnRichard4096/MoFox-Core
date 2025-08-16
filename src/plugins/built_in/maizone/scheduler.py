@@ -151,7 +151,7 @@ class ScheduleManager:
                     )
                     session.add(new_record)
                 
-                session.commit()
+                
                 logger.info(f"已更新日程处理状态: {datetime_hour} - {activity} - 成功: {success}")
                 
         except Exception as e:

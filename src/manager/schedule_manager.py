@@ -212,6 +212,7 @@ class ScheduleManager:
                             setattr(new_schedule, 'date', today_str)
                             setattr(new_schedule, 'schedule_data', json.dumps(schedule_data))
                             session.add(new_schedule)
+                            session.commit()
                     
                     # 美化输出
                     schedule_str = f"已成功生成并保存今天的日程 ({today_str})：\n"

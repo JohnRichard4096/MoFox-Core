@@ -10,7 +10,7 @@ from src.common.message_repository import find_messages, count_messages
 from src.common.database.sqlalchemy_models import ActionRecords, Images
 from src.person_info.person_info import PersonInfoManager, get_person_info_manager
 from src.chat.utils.utils import translate_timestamp_to_human_readable, assign_message_ids
-from src.common.database.sqlalchemy_database_api import get_session
+from src.common.database.sqlalchemy_database_api import get_db_session
 from sqlalchemy import select, and_
 
 install(extra_lines=3)

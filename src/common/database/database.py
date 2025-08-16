@@ -6,7 +6,7 @@ from src.common.logger import get_logger
 
 # SQLAlchemy相关导入
 from src.common.database.sqlalchemy_init import initialize_database_compat
-from src.common.database.sqlalchemy_models import get_engine, get_session
+from src.common.database.sqlalchemy_models import get_engine, get_db_session
 
 install(extra_lines=3)
 
@@ -18,7 +18,7 @@ logger = get_logger("database")
 
 # 兼容性：为了不破坏现有代码，保留db变量但指向SQLAlchemy
 class DatabaseProxy:
-    """数据库代理类，提供Peewee到SQLAlchemy的兼容性接口"""
+    """数据库代理类"""
     
     def __init__(self):
         self._engine = None
@@ -28,56 +28,7 @@ class DatabaseProxy:
         """初始化数据库连接"""
         return initialize_database_compat()
     
-    def connect(self, reuse_if_open=True):
-        """连接数据库（兼容性方法）"""
-        try:
-            self._engine = get_engine()
-            return True
-        except Exception as e:
-            logger.error(f"数据库连接失败: {e}")
-            return False
-    
-    def is_closed(self):
-        """检查数据库是否关闭（兼容性方法）"""
-        return self._engine is None
-    
-    def create_tables(self, models, safe=True):
-        """创建表（兼容性方法）"""
-        try:
-            from src.common.database.sqlalchemy_models import Base
-            engine = get_engine()
-            Base.metadata.create_all(bind=engine)
-            return True
-        except Exception as e:
-            logger.error(f"创建表失败: {e}")
-            return False
-    
-    def table_exists(self, model):
-        """检查表是否存在（兼容性方法）"""
-        try:
-            from sqlalchemy import inspect
-            engine = get_engine()
-            inspector = inspect(engine)
-            table_name = getattr(model, '_meta', {}).get('table_name', model.__name__.lower())
-            return table_name in inspector.get_table_names()
-        except Exception:
-            return False
-    
-    def execute_sql(self, sql):
-        """执行SQL（兼容性方法）"""
-        try:
-            from sqlalchemy import text
-            session = get_session()
-            result = session.execute(text(sql))
-            session.close()
-            return result
-        except Exception as e:
-            logger.error(f"执行SQL失败: {e}")
-            raise
-    
-    def atomic(self):
-        """事务上下文管理器（兼容性方法）"""
-        return SQLAlchemyTransaction()
+
 
 class SQLAlchemyTransaction:
     """SQLAlchemy事务上下文管理器"""
@@ -86,7 +37,7 @@ class SQLAlchemyTransaction:
         self.session = None
     
     def __enter__(self):
-        self.session = get_session()
+        self.session = get_db_session()
         return self.session
     
     def __exit__(self, exc_type, exc_val, exc_tb):

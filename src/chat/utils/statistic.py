@@ -432,7 +432,7 @@ class StatisticOutputTask(AsyncTask):
                         stats[period_key][COST_BY_MODULE][module_name] += cost
                         
                         # 收集time_cost数据
-                        time_cost = record.time_cost or 0.0
+                        time_cost = record.get('time_cost') or 0.0
                         if time_cost > 0:  # 只记录有效的time_cost
                             stats[period_key][TIME_COST_BY_TYPE][request_type].append(time_cost)
                             stats[period_key][TIME_COST_BY_USER][user_id].append(time_cost)
