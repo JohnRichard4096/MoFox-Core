@@ -525,8 +525,9 @@ def initialize_database():
     _engine = create_engine(database_url, **engine_kwargs)
     _SessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=_engine)
 
-    # 创建所有表
-    Base.metadata.create_all(bind=_engine)
+    # 调用新的迁移函数，它会处理表的创建和列的添加
+    from src.common.database.db_migration import check_and_migrate_database
+    check_and_migrate_database()
 
     logger.info(f"SQLAlchemy数据库初始化成功: {config.database_type}")
     return _engine, _SessionLocal
@@ -540,7 +541,7 @@ def get_db_session():
         _, SessionLocal = initialize_database()
         session = SessionLocal()
         yield session
-        # session.commit()
+        #session.commit()
     except Exception:
         if session:
             session.rollback()
