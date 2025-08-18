@@ -9,7 +9,6 @@ import faiss
 from typing import Any, Dict, Optional
 from src.common.logger import get_logger
 from src.llm_models.utils_model import LLMRequest
-from src.config.api_ada_configs import ModelTaskConfig
 from src.config.config import global_config, model_config
 
 logger = get_logger("cache_manager")
