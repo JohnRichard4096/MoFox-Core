@@ -169,7 +169,7 @@ ban_msgs_regex = [
 enabled = true # 是否启用反注入系统
 enabled_rules = true # 是否启用规则检测
 enabled_LLM = false # 是否启用LLM检测
-process_mode = "lenient" # 处理模式：strict(严格模式，直接丢弃), lenient(宽松模式，消息加盾)
+process_mode = "lenient" # 处理模式：strict(严格模式，直接丢弃), lenient(宽松模式，消息加盾), auto(自动模式), counter_attack(反击模式，使用LLM反击并丢弃消息)
 
 # 白名单配置
 # 格式：[[platform, user_id], ...]

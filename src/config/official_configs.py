@@ -1040,7 +1040,7 @@ class AntiPromptInjectionConfig(ConfigBase):
     """是否启用规则检测"""
     
     process_mode: str = "lenient"
-    """处理模式：strict(严格模式，直接丢弃), lenient(宽松模式，消息加盾), auto(自动模式，根据威胁等级自动选择加盾或丢弃)"""
+    """处理模式：strict(严格模式，直接丢弃), lenient(宽松模式，消息加盾), auto(自动模式，根据威胁等级自动选择加盾或丢弃), counter_attack(反击模式，使用LLM反击并丢弃消息)"""
     
     # 白名单配置
     whitelist: list[list[str]] = field(default_factory=list)

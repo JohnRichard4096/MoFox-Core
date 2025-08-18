@@ -304,6 +304,17 @@ class ChatBot:
                 # 消息被阻止（危险内容等）
                 anti_injector_logger.warning(f"消息被反注入系统阻止: {reason}")
                 return
+            elif result == ProcessResult.COUNTER_ATTACK:
+                # 反击模式：发送反击消息并阻止原消息
+                anti_injector_logger.info(f"反击模式启动: {reason}")
+                if modified_content:
+                    # 发送反击消息
+                    try:
+                        await send_api.text_to_stream(modified_content, message.chat_stream.stream_id)
+                        anti_injector_logger.info(f"反击消息已发送: {modified_content[:50]}...")
+                    except Exception as e:
+                        anti_injector_logger.error(f"发送反击消息失败: {e}")
+                return
             
             # 检查是否需要双重保护（消息加盾 + 系统提示词）
             safety_prompt = None

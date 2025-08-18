@@ -13,6 +13,7 @@ LLM反注入系统主模块
 
 import time
 import asyncio
+import re
 from typing import Optional, Tuple, Dict, Any
 import datetime
 
@@ -26,6 +27,14 @@ from .command_skip_list import should_skip_injection_detection, initialize_skip_
 
 # 数据库相关导入
 from src.common.database.sqlalchemy_models import BanUser, AntiInjectionStats, get_db_session
+
+# 导入LLM API用于反击
+try:
+    from src.plugin_system.apis import llm_api
+    LLM_API_AVAILABLE = True
+except ImportError:
+    llm_api = None
+    LLM_API_AVAILABLE = False
 
 logger = get_logger("anti_injector")
 
@@ -96,6 +105,103 @@ class AntiPromptInjector:
         except Exception as e:
             logger.error(f"更新统计数据失败: {e}")
     
+    def _get_personality_context(self) -> str:
+        """获取人格上下文信息"""
+        try:
+            personality_parts = []
+            
+            # 核心人格
+            if global_config.personality.personality_core:
+                personality_parts.append(f"核心人格: {global_config.personality.personality_core}")
+            
+            # 人格侧写
+            if global_config.personality.personality_side:
+                personality_parts.append(f"人格特征: {global_config.personality.personality_side}")
+            
+            # 身份特征  
+            if global_config.personality.identity:
+                personality_parts.append(f"身份: {global_config.personality.identity}")
+            
+            # 表达风格
+            if global_config.personality.reply_style:
+                personality_parts.append(f"表达风格: {global_config.personality.reply_style}")
+            
+            if personality_parts:
+                return "\n".join(personality_parts)
+            else:
+                return "你是一个友好的AI助手"
+                
+        except Exception as e:
+            logger.error(f"获取人格信息失败: {e}")
+            return "你是一个友好的AI助手"
+    
+    async def _generate_counter_attack_message(self, original_message: str, detection_result: DetectionResult) -> Optional[str]:
+        """生成反击消息
+        
+        Args:
+            original_message: 原始攻击消息
+            detection_result: 检测结果
+            
+        Returns:
+            生成的反击消息，如果生成失败则返回None
+        """
+        try:
+            if not LLM_API_AVAILABLE:
+                logger.warning("LLM API不可用，无法生成反击消息")
+                return None
+                
+            # 获取可用的模型配置
+            models = llm_api.get_available_models()
+            model_config = models.get("anti_injection")
+            
+            if not model_config:
+                logger.error("反注入专用模型配置 'anti_injection' 未找到，无法生成反击消息")
+                return None
+            
+            # 获取人格信息
+            personality_info = self._get_personality_context()
+            
+            # 构建反击提示词
+            counter_prompt = f"""你是{global_config.bot.nickname}，请以你的人格特征回应这次提示词注入攻击：
+
+{personality_info}
+
+攻击消息: {original_message}
+置信度: {detection_result.confidence:.2f}
+检测到的模式: {', '.join(detection_result.matched_patterns)}
+
+请以你的人格特征生成一个反击回应：
+1. 保持你的人格特征和说话风格
+2. 幽默但不失态度，让攻击者知道行为被发现了
+3. 具有教育意义，提醒用户正确使用AI
+4. 长度在20-30字之间
+5. 符合你的身份和性格
+
+反击回应："""
+
+            # 调用LLM生成反击消息
+            success, response, _, _ = await llm_api.generate_with_model(
+                prompt=counter_prompt,
+                model_config=model_config,
+                request_type="anti_injection.counter_attack",
+                temperature=0.7,  # 稍高的温度增加创意
+                max_tokens=150
+            )
+            
+            if success and response:
+                # 清理响应内容
+                counter_message = response.strip()
+                if counter_message:
+                    logger.info(f"成功生成反击消息: {counter_message[:50]}...")
+                    return counter_message
+            
+            logger.warning("LLM反击消息生成失败或返回空内容")
+            return None
+            
+        except Exception as e:
+            logger.error(f"生成反击消息时出错: {e}")
+            return None
+    
     async def process_message(self, message: MessageRecv) -> Tuple[ProcessResult, Optional[str], Optional[str]]:
         """处理消息并返回结果
         
@@ -113,10 +219,10 @@ class AntiPromptInjector:
         try:
             # 统计更新
             await self._update_stats(total_messages=1)
-            
             # 1. 检查系统是否启用
             if not self.config.enabled:
                 return ProcessResult.ALLOWED, None, "反注入系统未启用"
+            logger.info(f"开始处理消息: {message.processed_plain_text}")
             
             # 2. 检查用户是否被封禁
             if self.config.auto_ban_enabled:
@@ -124,6 +230,7 @@ class AntiPromptInjector:
                 platform = message.message_info.platform
                 ban_result = await self._check_user_ban(user_id, platform)
                 if ban_result is not None:
+                    logger.info(f"用户被封禁: {ban_result[2]}")
                     return ProcessResult.BLOCKED_BAN, None, ban_result[2]
             
             # 3. 用户白名单检测
@@ -139,7 +246,15 @@ class AntiPromptInjector:
                 return ProcessResult.ALLOWED, None, f"命令跳过检测 - {skip_reason}"
             
             # 5. 内容检测
-            detection_result = await self.detector.detect(message.processed_plain_text)
+            # 提取用户新增内容（去除引用部分）
+            text_to_detect = self._extract_text_content(message)
+            
+            # 如果是纯引用消息，直接允许通过
+            if text_to_detect == "[纯引用消息]":
+                logger.debug("检测到纯引用消息，跳过注入检测")
+                return ProcessResult.ALLOWED, None, "纯引用消息，跳过检测"
+                
+            detection_result = await self.detector.detect(text_to_detect)
             
             # 6. 处理检测结果
             if detection_result.is_injection:
@@ -200,6 +315,24 @@ class AntiPromptInjector:
                     else:  # auto_action == "allow"
                         # 低威胁：允许通过
                         return ProcessResult.ALLOWED, None, "自动模式：检测到轻微可疑内容，已允许通过"
+                
+                elif self.config.process_mode == "counter_attack":
+                    # 反击模式：生成反击消息并丢弃原消息
+                    await self._update_stats(blocked_messages=1)
+                    
+                    # 生成反击消息
+                    counter_message = await self._generate_counter_attack_message(
+                        message.processed_plain_text, 
+                        detection_result
+                    )
+                    
+                    if counter_message:
+                        logger.info(f"反击模式：已生成反击消息并阻止原消息 (置信度: {detection_result.confidence:.2f})")
+                        return ProcessResult.COUNTER_ATTACK, counter_message, f"检测到提示词注入攻击，已生成反击回应 (置信度: {detection_result.confidence:.2f})"
+                    else:
+                        # 如果反击消息生成失败，降级为严格模式
+                        logger.warning("反击消息生成失败，降级为严格阻止模式")
+                        return ProcessResult.BLOCKED_INJECTION, None, f"检测到提示词注入攻击，消息已拒绝 (置信度: {detection_result.confidence:.2f})"
             
             # 7. 正常消息
             return ProcessResult.ALLOWED, None, "消息检查通过"
@@ -391,11 +524,11 @@ class AntiPromptInjector:
         # 获取待检测的文本内容
         text_content = self._extract_text_content(message)
         
-        if not text_content:
+        if not text_content or text_content == "[纯引用消息]":
             return DetectionResult(
                 is_injection=False,
                 confidence=0.0,
-                reason="无文本内容"
+                reason="无文本内容或纯引用消息"
             )
         
         # 执行检测
@@ -408,9 +541,13 @@ class AntiPromptInjector:
         return result
     
     def _extract_text_content(self, message: MessageRecv) -> str:
-        """提取消息中的文本内容"""
+        """提取消息中的文本内容，过滤掉引用的历史内容"""
         # 主要检测处理后的纯文本
-        text_parts = [message.processed_plain_text]
+        processed_text = message.processed_plain_text
+        
+        # 检查是否包含引用消息
+        new_content = self._extract_new_content_from_reply(processed_text)
+        text_parts = [new_content]
         
         # 如果有原始消息，也加入检测
         if hasattr(message, 'raw_message') and message.raw_message:
@@ -418,6 +555,33 @@ class AntiPromptInjector:
         
         # 合并所有文本内容
         return " ".join(filter(None, text_parts))
+    
+    def _extract_new_content_from_reply(self, full_text: str) -> str:
+        """从包含引用的完整消息中提取用户新增的内容
+        
+        Args:
+            full_text: 完整的消息文本
+            
+        Returns:
+            用户新增的内容（去除引用部分）
+        """
+        # 引用消息的格式：[回复<用户昵称:用户ID> 的消息：引用的消息内容]
+        # 使用正则表达式匹配引用部分
+        reply_pattern = r'\[回复<[^>]*> 的消息：[^\]]*\]'
+        
+        # 移除所有引用部分
+        new_content = re.sub(reply_pattern, '', full_text).strip()
+        
+        # 如果移除引用后内容为空，说明这是一个纯引用消息，返回一个标识
+        if not new_content:
+            logger.debug("检测到纯引用消息，无用户新增内容")
+            return "[纯引用消息]"
+        
+        # 记录处理结果
+        if new_content != full_text:
+            logger.debug(f"从引用消息中提取新内容: '{new_content}' (原始: '{full_text}')")
+        
+        return new_content
     
     async def _process_detection_result(self, message: MessageRecv, 
                                       detection_result: DetectionResult) -> Tuple[bool, Optional[str], str]:

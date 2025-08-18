@@ -18,6 +18,7 @@ class ProcessResult(Enum):
     BLOCKED_INJECTION = "blocked_injection"  # 被阻止-注入攻击
     BLOCKED_BAN = "blocked_ban"   # 被阻止-用户封禁
     SHIELDED = "shielded"         # 已加盾处理
+    COUNTER_ATTACK = "counter_attack"  # 反击模式-使用LLM反击并丢弃消息
 
 
 @dataclass
