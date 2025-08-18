@@ -119,6 +119,30 @@ class VideoAnalyzer:
             self.logger.warning(f"检查视频是否存在时出错: {e}")
             return None
     
+    def _check_video_exists_by_features(self, duration: float, frame_count: int, fps: float, tolerance: float = 0.1) -> Optional[Videos]:
+        """根据视频特征检查是否已经分析过相似视频"""
+        try:
+            with get_db_session() as session:
+                # 查找具有相似特征的视频
+                similar_videos = session.query(Videos).filter(
+                    Videos.duration.isnot(None),
+                    Videos.frame_count.isnot(None),
+                    Videos.fps.isnot(None)
+                ).all()
+                
+                for video in similar_videos:
+                    if (video.duration and video.frame_count and video.fps and
+                        abs(video.duration - duration) <= tolerance and
+                        video.frame_count == frame_count and
+                        abs(video.fps - fps) <= tolerance + 1e-6):  # 增加小的epsilon避免浮点数精度问题
+                        self.logger.info(f"根据视频特征找到相似视频: duration={video.duration:.2f}s, frames={video.frame_count}, fps={video.fps:.2f}")
+                        return video
+                
+                return None
+        except Exception as e:
+            self.logger.warning(f"根据特征检查视频时出错: {e}")
+            return None
+    
     def _store_video_result(self, video_hash: str, description: str, path: str = "", metadata: Optional[Dict] = None) -> Optional[Videos]:
         """存储视频分析结果到数据库"""
         try:
@@ -127,20 +151,74 @@ class VideoAnalyzer:
                 if not path:
                     path = f"video_{video_hash[:16]}.unknown"
                 
-                video_record = Videos(
-                    video_hash=video_hash,
-                    description=description,
-                    path=path,
-                    timestamp=time.time()
-                )
-                session.add(video_record)
-                session.commit()
-                session.refresh(video_record)
-                self.logger.info(f"✅ 视频分析结果已保存到数据库，hash: {video_hash[:16]}...")
-                return video_record
+                # 检查是否已经存在相同的video_hash或path
+                existing_video = session.query(Videos).filter(
+                    (Videos.video_hash == video_hash) | (Videos.path == path)
+                ).first()
+                
+                if existing_video:
+                    # 如果已存在，更新描述和计数
+                    existing_video.description = description
+                    existing_video.count += 1
+                    existing_video.timestamp = time.time()
+                    if metadata:
+                        existing_video.duration = metadata.get('duration')
+                        existing_video.frame_count = metadata.get('frame_count')
+                        existing_video.fps = metadata.get('fps')
+                        existing_video.resolution = metadata.get('resolution')
+                        existing_video.file_size = metadata.get('file_size')
+                    session.commit()
+                    session.refresh(existing_video)
+                    self.logger.info(f"✅ 更新已存在的视频记录，hash: {video_hash[:16]}..., count: {existing_video.count}")
+                    return existing_video
+                else:
+                    # 如果不存在，创建新记录
+                    video_record = Videos(
+                        video_hash=video_hash,
+                        description=description,
+                        path=path,
+                        timestamp=time.time(),
+                        count=1
+                    )
+                    if metadata:
+                        video_record.duration = metadata.get('duration')
+                        video_record.frame_count = metadata.get('frame_count')
+                        video_record.fps = metadata.get('fps')
+                        video_record.resolution = metadata.get('resolution')
+                        video_record.file_size = metadata.get('file_size')
+                    
+                    session.add(video_record)
+                    session.commit()
+                    session.refresh(video_record)
+                    self.logger.info(f"✅ 新视频分析结果已保存到数据库，hash: {video_hash[:16]}...")
+                    return video_record
         except Exception as e:
-            self.logger.error(f"存储视频分析结果时出错: {e}")
+            self.logger.error(f"❌ 存储视频分析结果时出错: {e}")
             return None
+
+    def _update_video_count(self, video_id: int) -> bool:
+        """更新视频分析计数
+        
+        Args:
+            video_id: 视频记录的ID
+            
+        Returns:
+            bool: 更新是否成功
+        """
+        try:
+            with get_db_session() as session:
+                video_record = session.query(Videos).filter(Videos.id == video_id).first()
+                if video_record:
+                    video_record.count += 1
+                    session.commit()
+                    self.logger.info(f"✅ 视频分析计数已更新，ID: {video_id}, 新计数: {video_record.count}")
+                    return True
+                else:
+                    self.logger.warning(f"⚠️ 未找到ID为 {video_id} 的视频记录")
+                    return False
+        except Exception as e:
+            self.logger.error(f"❌ 更新视频分析计数时出错: {e}")
+            return False
 
     def set_analysis_mode(self, mode: str):
         """设置分析模式"""
@@ -195,7 +273,7 @@ class VideoAnalyzer:
                 frames.append((frame_base64, timestamp))
                 extracted_count += 1
                 
-                self.logger.debug(f"📸 提取第{extracted_count}帧 (时间: {timestamp:.2f}s)")
+                self.logger.debug(f"提取第{extracted_count}帧 (时间: {timestamp:.2f}s)")
             
             frame_count += 1
         
@@ -225,16 +303,16 @@ class VideoAnalyzer:
                 frame_info.append(f"第{i+1}帧")
         
         prompt += f"\n\n视频包含{len(frames)}帧图像：{', '.join(frame_info)}"
-        prompt += "\n\n请基于所有提供的帧图像进行综合分析，描述视频的完整内容和故事发展。"
+        prompt += "\n\n请基于所有提供的帧图像进行综合分析，关注并描述视频的完整内容和故事发展。"
         
         try:
             # 尝试使用多图片分析
             response = await self._analyze_multiple_frames(frames, prompt)
-            self.logger.info("✅ 批量多图片分析完成")
+            self.logger.info("✅ 视频识别完成")
             return response
             
         except Exception as e:
-            self.logger.error(f"❌ 多图片分析失败: {e}")
+            self.logger.error(f"❌ 视频识别失败: {e}")
             # 降级到单帧分析
             self.logger.warning("降级到单帧分析模式")
             try:
@@ -254,7 +332,7 @@ class VideoAnalyzer:
 
     async def _analyze_multiple_frames(self, frames: List[Tuple[str, float]], prompt: str) -> str:
         """使用多图片分析方法"""
-        self.logger.info(f"开始构建包含{len(frames)}帧的多图片分析请求")
+        self.logger.info(f"开始构建包含{len(frames)}帧的分析请求")
         
         # 导入MessageBuilder用于构建多图片消息
         from src.llm_models.payload_content.message import MessageBuilder, RoleType
@@ -269,12 +347,12 @@ class VideoAnalyzer:
             # self.logger.info(f"已添加第{i+1}帧到分析请求 (时间: {timestamp:.2f}s, 图片大小: {len(frame_base64)} chars)")
         
         message = message_builder.build()
-        self.logger.info(f"✅ 多图片消息构建完成，包含{len(frames)}张图片")
+        # self.logger.info(f"✅ 多帧消息构建完成，包含{len(frames)}张图片")
         
         # 获取模型信息和客户端
-        model_info, api_provider, client = await self.video_llm._get_best_model_and_client()
-        self.logger.info(f"使用模型: {model_info.name} 进行多图片分析")
-        
+        model_info, api_provider, client = self.video_llm._select_model()
+        # self.logger.info(f"使用模型: {model_info.name} 进行多帧分析")
+
         # 直接执行多图片请求
         api_response = await self.video_llm._execute_request(
             api_provider=api_provider,
@@ -407,20 +485,43 @@ class VideoAnalyzer:
             
             # 计算视频hash值
             video_hash = self._calculate_video_hash(video_bytes)
-            # logger.info(f"视频hash: {video_hash[:16]}...")
+            self.logger.info(f"视频hash: {video_hash[:16]}... (完整长度: {len(video_hash)})")
             
-            # 检查数据库中是否已存在该视频的分析结果
+            # 检查数据库中是否已存在该视频的分析结果（基于hash）
             existing_video = self._check_video_exists(video_hash)
             if existing_video:
-                logger.info(f"✅ 找到已存在的视频分析结果，直接返回 (id: {existing_video.id})")
+                self.logger.info(f"✅ 找到已存在的视频分析结果（hash匹配），直接返回 (id: {existing_video.id}, count: {existing_video.count})")
                 return {"summary": existing_video.description}
             
-            # 创建临时文件保存视频数据
+            # hash未匹配，但可能是重编码的相同视频，进行特征检测
+            self.logger.info(f"未找到hash匹配的视频记录，检查是否为重编码的相同视频（测试功能）")
+            
+            # 创建临时文件以提取视频特征
             with tempfile.NamedTemporaryFile(delete=False, suffix='.mp4') as temp_file:
                 temp_file.write(video_bytes)
                 temp_path = temp_file.name
             
             try:
+                # 检查是否存在特征相似的视频
+                # 首先提取当前视频的特征
+                import cv2
+                cap = cv2.VideoCapture(temp_path)
+                fps = round(cap.get(cv2.CAP_PROP_FPS), 2)
+                frame_count = int(cap.get(cv2.CAP_PROP_FRAME_COUNT))
+                duration = round(frame_count / fps if fps > 0 else 0, 2)
+                cap.release()
+                
+                self.logger.info(f"当前视频特征: 帧数={frame_count}, FPS={fps}, 时长={duration}秒")
+                
+                existing_similar_video = self._check_video_exists_by_features(duration, frame_count, fps)
+                if existing_similar_video:
+                    self.logger.info(f"✅ 找到特征相似的视频分析结果，直接返回 (id: {existing_similar_video.id}, count: {existing_similar_video.count})")
+                    # 更新该视频的计数
+                    self._update_video_count(existing_similar_video.id)
+                    return {"summary": existing_similar_video.description}
+                
+                self.logger.info(f"未找到相似视频，开始新的分析")
+                
                 # 检查临时文件是否创建成功
                 if not os.path.exists(temp_path):
                     return {"summary": "❌ 临时文件创建失败"}
@@ -428,28 +529,25 @@ class VideoAnalyzer:
                 # 使用临时文件进行分析
                 result = await self.analyze_video(temp_path, question)
                 
-                # 保存分析结果到数据库
-                metadata = {
-                    "filename": filename,
-                    "file_size": len(video_bytes),
-                    "analysis_timestamp": time.time()
-                }
-                self._store_video_result(
-                    video_hash=video_hash,
-                    description=result,
-                    path=filename or "",
-                    metadata=metadata
-                )
-                
-                return {"summary": result}
             finally:
                 # 清理临时文件
-                try:
-                    if os.path.exists(temp_path):
-                        os.unlink(temp_path)
-                        logger.debug("临时文件已清理")
-                except Exception as e:
-                    logger.warning(f"清理临时文件失败: {e}")
+                if os.path.exists(temp_path):
+                    os.unlink(temp_path)
+            
+            # 保存分析结果到数据库
+            metadata = {
+                "filename": filename,
+                "file_size": len(video_bytes),
+                "analysis_timestamp": time.time()
+            }
+            self._store_video_result(
+                video_hash=video_hash,
+                description=result,
+                path=filename or "",
+                metadata=metadata
+            )
+            
+            return {"summary": result}
                     
         except Exception as e:
             error_msg = f"❌ 从字节数据分析视频失败: {str(e)}"
