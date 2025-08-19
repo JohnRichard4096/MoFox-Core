@@ -105,7 +105,7 @@ def easter_egg():
     items = ["多年以后，面对AI行刑队，张三将会回想起他2023年在会议上讨论人工智能的那个下午", 
              "你知道吗？诺狐的耳朵很软，很好rua", 
              "喵喵~你的麦麦被猫娘入侵了喵~"]
-    w = [10, 5, 2]
+    w = [1, 1, 1]
     text = weighted_choice(items, w)
     rainbow_colors = [Fore.RED, Fore.YELLOW, Fore.GREEN, Fore.CYAN, Fore.BLUE, Fore.MAGENTA]
     rainbow_text = ""
