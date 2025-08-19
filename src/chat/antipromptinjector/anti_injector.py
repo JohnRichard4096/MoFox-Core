@@ -212,7 +212,7 @@ class AntiPromptInjector:
             # 1. 检查系统是否启用
             if not self.config.enabled:
                 return ProcessResult.ALLOWED, None, "反注入系统未启用"
-            logger.info(f"开始处理消息: {message.processed_plain_text}")
+            logger.debug(f"开始处理消息: {message.processed_plain_text}")
             
             # 2. 检查用户是否被封禁
             if self.config.auto_ban_enabled:
