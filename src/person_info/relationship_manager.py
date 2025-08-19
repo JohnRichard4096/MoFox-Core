@@ -16,9 +16,75 @@ logger = get_logger("relation")
 def init_prompt():
     Prompt(
         """
-你的名字是{bot_name}，{bot_name}的别名是{alias_str}。
-请不要混淆你自己和{bot_name}和{person_name}。
-请你基于用户 {person_name}(昵称:{nickname}) 的最近发言，总结出其中是否有有关{person_name}的内容引起了你的兴趣，或者有什么值得记忆的点。
+        person_info_manager = get_person_info_manager()
+        person_name = await person_info_manager.get_value(person_id, "person_name")
+        nickname = await person_info_manager.get_value(person_id, "nickname")
+        know_times: float = await person_info_manager.get_value(person_id, "know_times") or 0  # type: ignore
+
+        alias_str = ", ".join(global_config.bot.alias_names)
+        # personality_block =get_individuality().get_personality_prompt(x_person=2, level=2)
+        # identity_block =get_individuality().get_identity_prompt(x_person=2, level=2)
+
+        user_messages = bot_engaged_messages
+
+        current_time = datetime.fromtimestamp(timestamp).strftime("%Y-%m-%d %H:%M:%S")
+
+        # 匿名化消息
+        # 创建用户名称映射
+        name_mapping = {}
+        current_user = "A"
+        user_count = 1
+
+        # 遍历消息，构建映射
+        for msg in user_messages:
+            # 获取平台信息，优先使用chat_info_platform，如果为None则使用user_platform
+            platform = msg.get("chat_info_platform") or msg.get("user_platform", "unknown")
+            user_id = msg.get("user_id")
+            
+            await person_info_manager.get_or_create_person(
+                platform=platform,  # type: ignore
+                user_id=user_id,  # type: ignore
+                nickname=msg.get("user_nickname"),  # type: ignore
+                user_cardname=msg.get("user_cardname"),  # type: ignore
+            )
+            replace_user_id: str = msg.get("user_id")  # type: ignore
+            replace_platform: str = platform  # type: ignore
+            replace_person_id = PersonInfoManager.get_person_id(replace_platform, replace_user_id)
+            replace_person_name = await person_info_manager.get_value(replace_person_id, "person_name")
+
+            # 跳过机器人自己
+            if replace_user_id == global_config.bot.qq_account:
+                name_mapping[f"{global_config.bot.nickname}"] = f"{global_config.bot.nickname}"
+                continue
+
+            # 跳过目标用户
+            if replace_person_name == person_name:
+                name_mapping[replace_person_name] = f"{person_name}"
+                continue
+
+            # 其他用户映射
+            if replace_person_name not in name_mapping:
+                if current_user > "Z":
+                    current_user = "A"
+                    user_count += 1
+                name_mapping[replace_person_name] = f"用户{current_user}{user_count if user_count > 1 else ''}"
+                current_user = chr(ord(current_user) + 1)
+
+        readable_messages = build_readable_messages(
+            messages=user_messages, replace_bot_name=True, timestamp_mode="normal_no_YMD", truncate=True
+        )
+
+        if not readable_messages:
+            return
+
+        for original_name, mapped_name in name_mapping.items():
+            # print(f"original_name: {original_name}, mapped_name: {mapped_name}")
+            readable_messages = readable_messages.replace(f"{original_name}", f"{mapped_name}")
+
+        prompt = f"""
+你的名字是{global_config.bot.nickname}，{global_config.bot.nickname}的别名是{alias_str}。
+请不要混淆你自己和{global_config.bot.nickname}和{person_name}。
+请你基于用户 {person_name}(昵称:{nickname}) 的最近发言，总结出其中是否有有关{person_name}的内容引起了你的兴趣，或者有什么需要你记忆的点，或者对你友好或者不友好的点。
 如果没有，就输出none
 
 {current_time}的聊天内容：

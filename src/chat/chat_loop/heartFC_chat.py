@@ -469,7 +469,17 @@ class HeartFChatting:
             # Normal模式：消息数量不足，等待
             await asyncio.sleep(0.5)
             return True
-        return True
+
+    async def build_reply_to_str(self, message_data: dict):
+        person_info_manager = get_person_info_manager()
+        
+        # 获取平台信息，优先使用chat_info_platform，如果为None则使用user_platform
+        platform = message_data.get("chat_info_platform") or message_data.get("user_platform") or self.chat_stream.platform
+        user_id = message_data.get("user_id")
+        
+        person_id = person_info_manager.get_person_id(platform, user_id)
+        person_name = await person_info_manager.get_value(person_id, "person_name")
+        return f"{person_name}:{message_data.get('processed_plain_text')}"
 
     async def _send_and_store_reply(
         self,
@@ -482,19 +492,17 @@ class HeartFChatting:
     ) -> Tuple[Dict[str, Any], str, Dict[str, float]]:
         
         with Timer("回复发送", cycle_timers):
-            reply_text = await self._send_response(
-                reply_set=response_set,
-                message_data=action_message,
-                selected_expressions=selected_expressions,
-            )
+            reply_text = await self._send_response(response_set, reply_to_str, loop_start_time, action_message)
+
+            # 存储reply action信息
+        person_info_manager = get_person_info_manager()
         
-        # 获取 platform，如果不存在则从 chat_stream 获取，如果还是 None 则使用默认值
-        platform = action_message.get("chat_info_platform")
-        if platform is None:
-            platform = getattr(self.chat_stream, "platform", "unknown")
+        # 获取平台信息，优先使用chat_info_platform，如果为空则使用user_platform
+        platform = action_message.get("chat_info_platform") or action_message.get("user_platform") or self.chat_stream.platform
+        user_id = action_message.get("user_id", "")
         
-        person = Person(platform = platform ,user_id = action_message.get("user_id", ""))
-        person_name = person.person_name
+        person_id = person_info_manager.get_person_id(platform, user_id)
+        person_name = await person_info_manager.get_value(person_id, "person_name")
         action_prompt_display = f"你对{person_name}进行了回复：{reply_text}"
 
         await database_api.store_action_info(
