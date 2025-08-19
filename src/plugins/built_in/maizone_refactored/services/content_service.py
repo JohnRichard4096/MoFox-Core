@@ -4,6 +4,7 @@
 负责生成所有与QQ空间相关的文本内容，例如说说、评论等。
 """
 from typing import Callable
+import datetime
 
 from src.common.logger import get_logger
 from src.plugin_system.apis import llm_api, config_api
@@ -49,19 +50,27 @@ class ContentService:
             bot_expression = config_api.get_global_config("personality.reply_style", "内容积极向上")
             qq_account = config_api.get_global_config("bot.qq_account", "")
 
+            # 获取当前时间信息
+            now = datetime.datetime.now()
+            current_time = now.strftime("%Y年%m月%d日 %H:%M")
+            weekday_names = ["星期一", "星期二", "星期三", "星期四", "星期五", "星期六", "星期日"]
+            weekday = weekday_names[now.weekday()]
+
             # 构建提示词
             if topic:
                 prompt = f"""
-                你是'{bot_personality}'，你想写一条主题是'{topic}'的说说发表在qq空间上，
+                你是'{bot_personality}'，现在是{current_time}（{weekday}），你想写一条主题是'{topic}'的说说发表在qq空间上，
                 {bot_expression}
                 不要刻意突出自身学科背景，不要浮夸，不要夸张修辞，可以适当使用颜文字，
+                你可以在说说中自然地提及当前的时间（如"今天"、"现在"、"此刻"等），让说说更贴近发布时间，
                 只输出一条说说正文的内容，不要有其他的任何正文以外的冗余输出
                 """
             else:
                 prompt = f"""
-                你是'{bot_personality}'，你想写一条说说发表在qq空间上，主题不限
+                你是'{bot_personality}'，现在是{current_time}（{weekday}），你想写一条说说发表在qq空间上，主题不限
                 {bot_expression}
                 不要刻意突出自身学科背景，不要浮夸，不要夸张修辞，可以适当使用颜文字，
+                你可以在说说中自然地提及当前的时间（如"今天"、"现在"、"此刻"等），让说说更贴近发布时间，
                 只输出一条说说正文的内容，不要有其他的任何正文以外的冗余输出
                 """
 
@@ -218,13 +227,20 @@ class ContentService:
             bot_expression = config_api.get_global_config("expression.expression_style", "内容积极向上")
             qq_account = config_api.get_global_config("bot.qq_account", "")
 
+            # 获取当前时间信息
+            now = datetime.datetime.now()
+            current_time = now.strftime("%Y年%m月%d日 %H:%M")
+            weekday_names = ["星期一", "星期二", "星期三", "星期四", "星期五", "星期六", "星期日"]
+            weekday = weekday_names[now.weekday()]
+
             # 构建基于活动的提示词
             prompt = f"""
-            你是'{bot_personality}'，根据你当前的日程安排，你正在'{activity}'。
+            你是'{bot_personality}'，现在是{current_time}（{weekday}），根据你当前的日程安排，你正在'{activity}'。
             请基于这个活动写一条说说发表在qq空间上，
             {bot_expression}
             说说内容应该自然地反映你正在做的事情或你的想法，
             不要刻意突出自身学科背景，不要浮夸，不要夸张修辞，可以适当使用颜文字，
+            你可以在说说中自然地提及当前的时间（如"今天"、"现在"、"此刻"等），让说说更贴近发布时间，
             只输出一条说说正文的内容，不要有其他的任何正文以外的冗余输出
             
             注意：
