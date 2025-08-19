@@ -570,21 +570,53 @@ class HeartFChatting:
             await self.relationship_builder.build_relation()
             await self.expression_learner.trigger_learning_for_chat()
 
-            # 群印象构建：仅在群聊中触发
-            # if self.chat_stream.group_info and getattr(self.chat_stream.group_info, "group_id", None):
-            #     await self.group_relationship_manager.build_relation(
-            #         chat_id=self.stream_id,
-            #         platform=self.chat_stream.platform
-            #     )
+            available_actions = {}
 
+            # 第一步：动作修改
+            with Timer("动作修改", cycle_timers):
+                try:
+                    await self.action_modifier.modify_actions()
+                    available_actions = self.action_manager.get_using_actions()
+                except Exception as e:
+                    logger.error(f"{self.log_prefix} 动作修改失败: {e}")
 
-            if random.random() > global_config.chat.focus_value and mode == ChatMode.FOCUS:
-                #如果激活度没有激活，并且聊天活跃度低，有可能不进行plan，相当于不在电脑前，不进行认真思考
-                actions = [
-                    {
-                        "action_type": "no_reply",
-                        "reasoning": "选择不回复",
-                        "action_data": {},
+            # 在focus模式下如果你的bot被@/提到了，那么就移除no_reply动作
+            is_mentioned_bot = message_data.get("is_mentioned", False)
+            at_bot_mentioned = (global_config.chat.mentioned_bot_inevitable_reply and is_mentioned_bot) or \
+                             (global_config.chat.at_bot_inevitable_reply and is_mentioned_bot)
+            
+            if self.loop_mode == ChatMode.FOCUS and at_bot_mentioned and "no_reply" in available_actions:
+                logger.info(f"{self.log_prefix} Focus模式下检测到@或提及bot，移除no_reply动作以确保回复")
+                available_actions = {k: v for k, v in available_actions.items() if k != "no_reply"}  # 用一个循环来移除no_reply
+
+            # 检查是否在normal模式下没有可用动作（除了reply相关动作）
+            skip_planner = False
+            if self.loop_mode == ChatMode.NORMAL:
+                # 过滤掉reply相关的动作，检查是否还有其他动作
+                non_reply_actions = {
+                    k: v for k, v in available_actions.items() if k not in ["reply", "no_reply", "no_action"]
+                }
+
+                if not non_reply_actions:
+                    skip_planner = True
+                    logger.info(f"{self.log_prefix} Normal模式下没有可用动作，直接回复")
+
+                    # 直接设置为reply动作
+                    action_type = "reply"
+                    reasoning = ""
+                    action_data = {"loop_start_time": loop_start_time}
+                    is_parallel = False
+
+                    # 构建plan_result用于后续处理
+                    plan_result = {
+                        "action_result": {
+                            "action_type": action_type,
+                            "action_data": action_data,
+                            "reasoning": reasoning,
+                            "timestamp": time.time(),
+                            "is_parallel": is_parallel,
+                        },
+                        "action_prompt": "",
                     }
                 ]
             else:

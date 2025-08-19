@@ -1,5 +1,5 @@
 [inner]
-version = "6.3.8"
+version = "6.3.9"
 
 #----以下是给开发人员阅读的，如果你只是部署了麦麦，不需要阅读----
 #如果你想要修改配置文件，请递增version的值
@@ -104,8 +104,9 @@ max_context_size = 25 # 上下文长度
 thinking_timeout = 40 # 麦麦一次回复最长思考规划时间，超过这个时间的思考会放弃（往往是api反应太慢）
 replyer_random_probability = 0.5 # 首要replyer模型被选择的概率
 
-mentioned_bot_inevitable_reply = true # 提及 bot 大概率回复
-at_bot_inevitable_reply = true # @bot 或 提及bot 大概率回复
+mentioned_bot_inevitable_reply = true # 提及 bot 必然回复
+at_bot_inevitable_reply = true # @bot 或 提及bot 必然回复
+# 兼容normal、focus，在focus模式下为强制移除no_reply动作
 
 focus_value_adjust = [
     ["", "8:00,1", "12:00,0.8", "18:00,1", "01:00,0.3"],
@@ -166,8 +167,8 @@ ban_msgs_regex = [
 ]
 
 [anti_prompt_injection] # LLM反注入系统配置
-enabled = true # 是否启用反注入系统
-enabled_rules = true # 是否启用规则检测
+enabled = false # 是否启用反注入系统
+enabled_rules = false # 是否启用规则检测
 enabled_LLM = false # 是否启用LLM检测
 process_mode = "lenient" # 处理模式：strict(严格模式，直接丢弃), lenient(宽松模式，消息加盾), auto(自动模式), counter_attack(反击模式，使用LLM反击并丢弃消息)
 
