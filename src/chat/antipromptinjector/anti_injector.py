@@ -81,9 +81,9 @@ class AntiPromptInjector:
             if whitelist_result is not None:
                 return ProcessResult.ALLOWED, None, whitelist_result[2]
             
-            # 4. 命令跳过列表检测
-            message_text = self.message_processor.extract_text_content(message)
-            should_skip, skip_reason = should_skip_injection_detection(message_text)
+            # 4. 命令跳过列表检测 & 内容提取
+            text_to_detect = self.message_processor.extract_text_content(message)
+            should_skip, skip_reason = should_skip_injection_detection(text_to_detect)
             if should_skip:
                 logger.debug(f"消息匹配跳过列表，跳过反注入检测: {skip_reason}")
                 return ProcessResult.ALLOWED, None, f"命令跳过检测 - {skip_reason}"
@@ -91,6 +91,7 @@ class AntiPromptInjector:
             # 5. 内容检测
             # 提取用户新增内容（去除引用部分）
             text_to_detect = self.message_processor.extract_text_content(message)
+            logger.debug(f"提取的检测文本: '{text_to_detect}' (长度: {len(text_to_detect)})")
             
             # 如果是纯引用消息，直接允许通过
             if text_to_detect == "[纯引用消息]":

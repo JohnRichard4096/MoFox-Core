@@ -32,17 +32,14 @@ class MessageProcessor:
         """
         # 主要检测处理后的纯文本
         processed_text = message.processed_plain_text
+        logger.debug(f"原始processed_plain_text: '{processed_text}'")
         
-        # 检查是否包含引用消息
+        # 检查是否包含引用消息，提取用户新增内容
         new_content = self.extract_new_content_from_reply(processed_text)
-        text_parts = [new_content]
+        logger.debug(f"提取的新内容: '{new_content}'")
         
-        # 如果有原始消息，也加入检测
-        if hasattr(message, 'raw_message') and message.raw_message:
-            text_parts.append(str(message.raw_message))
-        
-        # 合并所有文本内容
-        return " ".join(filter(None, text_parts))
+        # 只返回用户新增的内容，避免重复
+        return new_content
     
     def extract_new_content_from_reply(self, full_text: str) -> str:
         """从包含引用的完整消息中提取用户新增的内容

@@ -13,6 +13,9 @@ from src.plugin_system.base.plugin_base import PluginBase
 from src.plugin_system.base.component_types import ComponentType
 from src.plugin_system.utils.manifest_utils import VersionComparator
 from .component_registry import component_registry
+import asyncio
+from src.chat.antipromptinjector.processors.command_skip_list import skip_list_manager
+
 
 logger = get_logger("plugin_manager")
 
@@ -595,10 +598,6 @@ class PluginManager:
     def _refresh_anti_injection_skip_list(self):
         """插件加载完成后刷新反注入跳过列表"""
         try:
-            import asyncio
-            from src.chat.antipromptinjector.command_skip_list import skip_list_manager
-            
-            # 如果当前在事件循环中，直接调用
             try:
                 loop = asyncio.get_running_loop()
                 # 在后台任务中执行刷新

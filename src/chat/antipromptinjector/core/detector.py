@@ -153,6 +153,9 @@ class PromptInjectionDetector:
         """基于LLM的检测"""
         start_time = time.time()
         
+        # 添加调试日志
+        logger.debug(f"LLM检测输入消息: '{message}' (长度: {len(message)})")
+        
         try:
             # 获取可用的模型配置
             models = llm_api.get_available_models()

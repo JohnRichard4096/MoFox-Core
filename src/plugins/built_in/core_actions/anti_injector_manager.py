@@ -11,7 +11,7 @@
 
 from src.plugin_system.base import BaseCommand
 from src.chat.antipromptinjector import get_anti_injector
-from src.chat.antipromptinjector.command_skip_list import (
+from src.chat.antipromptinjector.processors.command_skip_list import (
     get_skip_patterns_info, 
     skip_list_manager
 )
