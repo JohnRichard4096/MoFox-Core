@@ -128,13 +128,8 @@ talk_frequency_adjust = [
 # 主动思考功能配置（仅在focus模式下生效）
 enable_proactive_thinking = false # 是否启用主动思考功能
 proactive_thinking_interval = 1500 # 主动思考触发间隔时间（秒），默认1500秒（25分钟）
-# 主动思考prompt模板，{time}会被替换为实际的沉默时间（如"2小时30分15秒"）
-proactive_thinking_prompt_template = """现在群里面已经隔了{time}没有人发送消息了，请你结合上下文以及群聊里面之前聊过的话题和你的人设来决定要不要主动发送消息，你可以选择：
+The_scope_that_proactive_thinking_can_trigger = "all" #主动思考可以触发的范围(all - 所有，private - 私聊，group - 群聊)
 
-1. 继续保持沉默（当{time}以前已经结束了一个话题并且你不想挑起新话题时）
-2. 选择回复（当{time}以前你发送了一条消息且没有人回复你时、你想主动挑起一个话题时）
-
-请根据当前情况做出选择。如果选择回复，请直接发送你想说的内容；如果选择保持沉默，请只回复"沉默"（注意：这个词不会被发送到群聊中）。"""
 
 # 特定聊天流配置示例：
 # [
@@ -307,7 +302,7 @@ library_log_levels = { "aiohttp" = "WARNING"} # 设置特定库的日志级别
 
 [dependency_management] # 插件Python依赖管理配置
 # 是否启用自动安装Python依赖包（主开关）
-auto_install = false #暂时关闭一下因为还用不了
+auto_install = true #暂时关闭一下因为还用不了
 # 安装超时时间（秒）
 auto_install_timeout = 300
 # 是否使用PyPI镜像源（推荐，可加速下载）

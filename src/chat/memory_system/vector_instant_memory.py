@@ -1,18 +1,13 @@
 import asyncio
 import time
-import json
-import hashlib
-from typing import List, Optional, Tuple, Dict, Any
+from typing import List, Dict, Any
 from dataclasses import dataclass
 import threading
-from datetime import datetime, timedelta
 
-import numpy as np
 import chromadb
 from chromadb.config import Settings
 from src.common.logger import get_logger
 from src.chat.utils.utils import get_embedding
-from src.config.config import global_config
 
 
 logger = get_logger("vector_instant_memory_v2")

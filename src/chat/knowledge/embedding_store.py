@@ -25,7 +25,6 @@ from rich.progress import (
     SpinnerColumn,
     TextColumn,
 )
-from src.chat.utils.utils import get_embedding
 from src.config.config import global_config
 
 

@@ -81,7 +81,7 @@ class ChatConfig(ValidatedConfigBase):
     timestamp_display_mode: Literal["normal", "normal_no_YMD", "relative"] = Field(default="normal_no_YMD", description="时间戳显示模式")
     enable_proactive_thinking: bool = Field(default=False, description="启用主动思考")
     proactive_thinking_interval: int = Field(default=1500, description="主动思考间隔")
-    proactive_thinking_prompt_template: str = Field(default="", description="主动思考提示模板")
+    The_scope_that_proactive_thinking_can_trigger: str = Field(default="all", description="主动思考可以触发的范围")
 
     def get_current_talk_frequency(self, chat_stream_id: Optional[str] = None) -> float:
         """

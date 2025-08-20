@@ -88,8 +88,10 @@ class HeartFChatting:
 
         self.relationship_builder = relationship_builder_manager.get_or_create_builder(self.stream_id)
         self.expression_learner = expression_learner_manager.get_expression_learner(self.stream_id)
-        self.group_relationship_manager = get_group_relationship_manager()
-        
+
+        self.loop_mode = ChatMode.NORMAL  # 初始循环模式为普通模式
+
+        self.last_action = "no_action"
 
         self.action_manager = ActionManager()
         self.action_planner = ActionPlanner(chat_id=self.stream_id, action_manager=self.action_manager)
@@ -108,7 +110,13 @@ class HeartFChatting:
         self.plan_timeout_count = 0
 
         self.last_read_time = time.time() - 1
-        
+
+        self.willing_manager = get_willing_manager()
+
+        logger.info(f"{self.log_prefix} HeartFChatting 初始化完成")
+
+        self.energy_value = 5
+
         # 根据配置初始化聊天模式和能量值
         is_group_chat = self.chat_stream.group_info is not None
         if is_group_chat and global_config.chat.group_chat_mode != "auto":
@@ -120,9 +128,9 @@ class HeartFChatting:
                 self.loop_mode = ChatMode.NORMAL
                 self.energy_value = 15
                 logger.info(f"{self.log_prefix} 群聊强制普通模式已启用，能量值设置为15")
-        
+
         self.focus_energy = 1
-        
+
         # 能量值日志时间控制
         self.last_energy_log_time = 0  # 上次记录能量值日志的时间
         self.energy_log_interval = 90  # 能量值日志间隔（秒）
@@ -130,6 +138,22 @@ class HeartFChatting:
         # 主动思考功能相关属性
         self.last_message_time = time.time()  # 最后一条消息的时间
         self._proactive_thinking_task: Optional[asyncio.Task] = None  # 主动思考任务
+
+        self.proactive_thinking_prompts = {
+            "private": """现在你和你朋友的私聊里面已经隔了{time}没有发送消息了，请你结合上下文以及你和你朋友之前聊过的话题和你的人设来决定要不要主动发送消息，你可以选择：
+
+            1. 继续保持沉默（当{time}以前已经结束了一个话题并且你不想挑起新话题时）
+            2. 选择回复（当{time}以前你发送了一条消息且没有人回复你时、你想主动挑起一个话题时）
+
+            请根据当前情况做出选择。如果选择回复，请直接发送你想说的内容；如果选择保持沉默，请只回复"沉默"（注意：这个词不会被发送到群聊中）。""",
+            "group": """现在群里面已经隔了{time}没有人发送消息了，请你结合上下文以及群聊里面之前聊过的话题和你的人设来决定要不要主动发送消息，你可以选择：
+
+            1. 继续保持沉默（当{time}以前已经结束了一个话题并且你不想挑起新话题时）
+            2. 选择回复（当{time}以前你发送了一条消息且没有人回复你时、你想主动挑起一个话题时）
+
+            请根据当前情况做出选择。如果选择回复，请直接发送你想说的内容；如果选择保持沉默，请只回复"沉默"（注意：这个词不会被发送到群聊中）。""",
+        }
+        self.proactive_thinking_chat_scope = global_config.chat.The_scope_that_proactive_thinking_can_trigger
 
     async def start(self):
         """检查是否需要启动主循环，如果未激活则启动。"""
@@ -146,9 +170,8 @@ class HeartFChatting:
             self._energy_task = asyncio.create_task(self._energy_loop())
             self._energy_task.add_done_callback(self._handle_energy_completion)
 
-            # 启动主动思考任务（仅在群聊且启用的情况下）
-            if (global_config.chat.enable_proactive_thinking and 
-                self.chat_stream.group_info is not None):
+            # 启动主动思考任务
+            if global_config.chat.enable_proactive_thinking:
                 self._proactive_thinking_task = asyncio.create_task(self._proactive_thinking_loop())
                 self._proactive_thinking_task.add_done_callback(self._handle_proactive_thinking_completion)
 
@@ -237,7 +260,7 @@ class HeartFChatting:
     async def _energy_loop(self):
         while self.running:
             await asyncio.sleep(10)
-            
+
             # 检查是否为群聊且配置了强制模式
             is_group_chat = self.chat_stream.group_info is not None
             if is_group_chat and global_config.chat.group_chat_mode != "auto":
@@ -249,7 +272,7 @@ class HeartFChatting:
                     self.loop_mode = ChatMode.NORMAL
                     self.energy_value = 15  # 强制设置为15
                 continue  # 跳过正常的能量值衰减逻辑
-            
+
             # 原有的自动模式逻辑
             if self.loop_mode == ChatMode.NORMAL:
                 self.energy_value -= 0.3
@@ -262,14 +285,19 @@ class HeartFChatting:
         """主动思考循环，仅在focus模式下生效"""
         while self.running:
             await asyncio.sleep(30)  # 每30秒检查一次
-            
+
             # 只在focus模式下进行主动思考
             if self.loop_mode != ChatMode.FOCUS:
                 continue
-                
+            if self.proactive_thinking_chat_scope == "group" and self.chat_stream.group_info is None:
+                continue
+            if self.proactive_thinking_chat_scope == "private" and self.chat_stream.group_info is not None:
+                continue
+            
+
             current_time = time.time()
             silence_duration = current_time - self.last_message_time
-            
+
             # 检查是否达到主动思考的时间间隔
             if silence_duration >= global_config.chat.proactive_thinking_interval:
                 try:
@@ -285,7 +313,7 @@ class HeartFChatting:
         hours = int(seconds // 3600)
         minutes = int((seconds % 3600) // 60)
         secs = int(seconds % 60)
-        
+
         parts = []
         if hours > 0:
             parts.append(f"{hours}小时")
@@ -293,26 +321,21 @@ class HeartFChatting:
             parts.append(f"{minutes}分")
         if secs > 0 or not parts:  # 如果没有小时和分钟，显示秒
             parts.append(f"{secs}秒")
-            
+
         return "".join(parts)
 
     async def _execute_proactive_thinking(self, silence_duration: float):
         """执行主动思考"""
         formatted_time = self._format_duration(silence_duration)
         logger.info(f"{self.log_prefix} 触发主动思考，已沉默{formatted_time}")
-        
+
         try:
-            # 构建主动思考的prompt
-            proactive_prompt = global_config.chat.proactive_thinking_prompt_template.format(
-                time=formatted_time
-            )
-            
+            # 根据聊天类型选择prompt
+            chat_type = "group" if self.chat_stream.group_info else "private"
+            prompt_template = self.proactive_thinking_prompts.get(chat_type, self.proactive_thinking_prompts["group"])
+            proactive_prompt = prompt_template.format(time=formatted_time)
+
             # 创建一个虚拟的消息数据用于主动思考
-            """
-            因为主动思考是在没有用户消息的情况下触发的
-            但规划器仍然需要一个"消息"作为输入来工作
-            所以需要"伪造"一个消息来触发思考流程，本质上是系统与自己的对话，让AI能够主动思考和决策。
-            """
             thinking_message = {
                 "processed_plain_text": proactive_prompt,
                 "user_id": "system_proactive_thinking",
@@ -321,15 +344,14 @@ class HeartFChatting:
                 "message_type": "proactive_thinking",
                 "user_nickname": "系统主动思考",
                 "chat_info_platform": "system",
-                "message_id": f"proactive_{int(time.time())}"
+                "message_id": f"proactive_{int(time.time())}",
             }
-            
+
             # 使用现有的_observe方法来处理主动思考
-            # 这样可以复用现有的完整思考流程
             logger.info(f"{self.log_prefix} 开始主动思考...")
             await self._observe(message_data=thinking_message)
             logger.info(f"{self.log_prefix} 主动思考完成")
-                
+
         except Exception as e:
             logger.error(f"{self.log_prefix} 主动思考执行异常: {e}")
             logger.error(traceback.format_exc())
@@ -364,30 +386,29 @@ class HeartFChatting:
             + (f"\n详情: {'; '.join(timer_strings)}" if timer_strings else "")
         )
 
-
     async def _loopbody(self):
         recent_messages_dict = message_api.get_messages_by_time_in_chat(
             chat_id=self.stream_id,
             start_time=self.last_read_time,
             end_time=time.time(),
-            limit = 10,
+            limit=10,
             limit_mode="latest",
             filter_mai=True,
             filter_command=True,
-        )   
-        
+        )
+        new_message_count = len(recent_messages_dict)
+
         # 如果有新消息，更新最后消息时间（用于主动思考计时）
         if new_message_count > 0:
             current_time = time.time()
             self.last_message_time = current_time
-        
-        
+
         if self.loop_mode == ChatMode.FOCUS:
             # focus模式下，在有新消息时进行观察思考
             # 主动思考由独立的 _proactive_thinking_loop 处理
             if new_message_count > 0:
                 self.last_read_time = time.time()
-                
+
                 if await self._observe():
                     # 在强制模式下，能量值不会因观察而增加
                     is_group_chat = self.chat_stream.group_info is not None
@@ -399,17 +420,17 @@ class HeartFChatting:
             # 如果开启了强制私聊专注模式且当前为私聊，则不允许退出专注状态
             is_private_chat = self.chat_stream.group_info is None
             is_group_chat = self.chat_stream.group_info is not None
-            
+
             if global_config.chat.force_focus_private and is_private_chat:
                 # 强制私聊专注模式下，保持专注状态，但重置能量值防止过低
                 if self.energy_value <= 1:
                     self.energy_value = 5  # 重置为较低但足够的能量值
                 return True
-            
+
             # 群聊强制专注模式下，不允许退出专注状态
             if is_group_chat and global_config.chat.group_chat_mode == "focus":
                 return True
-            
+
             if self.energy_value <= 1:
                 self.energy_value = 1
                 self.loop_mode = ChatMode.NORMAL
@@ -420,12 +441,12 @@ class HeartFChatting:
             # 检查是否应该强制进入专注模式（私聊且开启强制专注）
             is_private_chat = self.chat_stream.group_info is None
             is_group_chat = self.chat_stream.group_info is not None
-            
+
             if global_config.chat.force_focus_private and is_private_chat:
                 self.loop_mode = ChatMode.FOCUS
                 self.energy_value = 10  # 设置初始能量值
                 return True
-            
+
             # 群聊强制普通模式下，不允许进入专注状态
             if is_group_chat and global_config.chat.group_chat_mode == "normal":
                 # 在强制普通模式下，即使满足条件也不进入专注模式
@@ -433,9 +454,7 @@ class HeartFChatting:
             elif global_config.chat.focus_value != 0:
                 if new_message_count > 3 / pow(global_config.chat.focus_value, 0.5):
                     self.loop_mode = ChatMode.FOCUS
-                    self.energy_value = (
-                        10 + (new_message_count / (3 / pow(global_config.chat.focus_value, 0.5))) * 10
-                    )
+                    self.energy_value = 10 + (new_message_count / (3 / pow(global_config.chat.focus_value, 0.5))) * 10
                     return True
 
                 if self.energy_value >= 30:
@@ -447,7 +466,7 @@ class HeartFChatting:
                 self.last_read_time = earliest_messages_data.get("time")
 
                 if_think = await self.normal_response(earliest_messages_data)
-                
+
                 # 在强制模式下，能量值变化逻辑需要特殊处理
                 is_group_chat = self.chat_stream.group_info is not None
                 if is_group_chat and global_config.chat.group_chat_mode != "auto":
@@ -472,11 +491,13 @@ class HeartFChatting:
 
     async def build_reply_to_str(self, message_data: dict):
         person_info_manager = get_person_info_manager()
-        
+
         # 获取平台信息，优先使用chat_info_platform，如果为None则使用user_platform
-        platform = message_data.get("chat_info_platform") or message_data.get("user_platform") or self.chat_stream.platform
+        platform = (
+            message_data.get("chat_info_platform") or message_data.get("user_platform") or self.chat_stream.platform
+        )
         user_id = message_data.get("user_id")
-        
+
         person_id = person_info_manager.get_person_id(platform, user_id)
         person_name = await person_info_manager.get_value(person_id, "person_name")
         return f"{person_name}:{message_data.get('processed_plain_text')}"
@@ -496,11 +517,13 @@ class HeartFChatting:
 
             # 存储reply action信息
         person_info_manager = get_person_info_manager()
-        
+
         # 获取平台信息，优先使用chat_info_platform，如果为空则使用user_platform
-        platform = action_message.get("chat_info_platform") or action_message.get("user_platform") or self.chat_stream.platform
+        platform = (
+            action_message.get("chat_info_platform") or action_message.get("user_platform") or self.chat_stream.platform
+        )
         user_id = action_message.get("user_id", "")
-        
+
         person_id = person_info_manager.get_person_id(platform, user_id)
         person_name = await person_info_manager.get_value(person_id, "person_name")
         action_prompt_display = f"你对{person_name}进行了回复：{reply_text}"
@@ -582,12 +605,15 @@ class HeartFChatting:
 
             # 在focus模式下如果你的bot被@/提到了，那么就移除no_reply动作
             is_mentioned_bot = message_data.get("is_mentioned", False)
-            at_bot_mentioned = (global_config.chat.mentioned_bot_inevitable_reply and is_mentioned_bot) or \
-                             (global_config.chat.at_bot_inevitable_reply and is_mentioned_bot)
-            
+            at_bot_mentioned = (global_config.chat.mentioned_bot_inevitable_reply and is_mentioned_bot) or (
+                global_config.chat.at_bot_inevitable_reply and is_mentioned_bot
+            )
+
             if self.loop_mode == ChatMode.FOCUS and at_bot_mentioned and "no_reply" in available_actions:
                 logger.info(f"{self.log_prefix} Focus模式下检测到@或提及bot，移除no_reply动作以确保回复")
-                available_actions = {k: v for k, v in available_actions.items() if k != "no_reply"}  # 用一个循环来移除no_reply
+                available_actions = {
+                    k: v for k, v in available_actions.items() if k != "no_reply"
+                }  # 用一个循环来移除no_reply
 
             # 检查是否在normal模式下没有可用动作（除了reply相关动作）
             skip_planner = False
@@ -648,13 +674,13 @@ class HeartFChatting:
                     )
 
                 action_data["loop_start_time"] = loop_start_time
- 
-             # 在私聊的专注模式下，如果规划动作为no_reply，则强制改为reply
+
+            # 在私聊的专注模式下，如果规划动作为no_reply，则强制改为reply
             is_private_chat = self.chat_stream.group_info is None
             if self.loop_mode == ChatMode.FOCUS and is_private_chat and action_type == "no_reply":
                 action_type = "reply"
                 logger.info(f"{self.log_prefix} 私聊专注模式下强制回复")
- 
+
             if action_type == "reply":
                 logger.info(f"{self.log_prefix}{global_config.bot.nickname} 决定进行回复")
             elif is_parallel:
@@ -759,64 +785,9 @@ class HeartFChatting:
                         "loop_info": None,
                         "error": str(e)
                     }
-                  
-            action_tasks = [asyncio.create_task(execute_action(action,actions)) for action in actions]
-            
-            # 并行执行所有任务
-            results = await asyncio.gather(*action_tasks, return_exceptions=True)
-            
-            # 处理执行结果
-            reply_loop_info = None
-            reply_text_from_reply = ""
-            action_success = False
-            action_reply_text = ""
-            action_command = ""
-            
-            for i, result in enumerate(results):
-                if isinstance(result, BaseException):
-                    logger.error(f"{self.log_prefix} 动作执行异常: {result}")
-                    continue
-                
-                _cur_action = actions[i]
-                if result["action_type"] != "reply":
-                    action_success = result["success"]
-                    action_reply_text = result["reply_text"]
-                    action_command = result.get("command", "")
-                elif result["action_type"] == "reply":
-                    if result["success"]:
-                        reply_loop_info = result["loop_info"]
-                        reply_text_from_reply = result["reply_text"]
-                    else:
-                        logger.warning(f"{self.log_prefix} 回复动作执行失败")
+                    reply_text = action_reply_text
 
-            # 构建最终的循环信息
-            if reply_loop_info:
-                # 如果有回复信息，使用回复的loop_info作为基础
-                loop_info = reply_loop_info
-                # 更新动作执行信息
-                loop_info["loop_action_info"].update(
-                    {
-                        "action_taken": action_success,
-                        "command": action_command,
-                        "taken_time": time.time(),
-                    }
-                )
-                reply_text = reply_text_from_reply
-            else:
-                # 没有回复信息，构建纯动作的loop_info
-                loop_info = {
-                    "loop_plan_info": {
-                        "action_result": actions,
-                    },
-                    "loop_action_info": {
-                        "action_taken": action_success,
-                        "reply_text": action_reply_text,
-                        "command": action_command,
-                        "taken_time": time.time(),
-                    },
-                }
-                reply_text = action_reply_text
-                    
+        self.last_action = action_type
 
         if s4u_config.enable_s4u:
             await stop_typing()
@@ -926,20 +897,20 @@ class HeartFChatting:
             logger.info(f"{self.log_prefix} 从思考到回复，共有{new_message_count}条新消息，使用引用回复")
 
         reply_text = ""
-        
+
         # 检查是否为主动思考且决定沉默
         is_proactive_thinking = message_data.get("message_type") == "proactive_thinking"
-        
+
         first_replied = False
         for reply_seg in reply_set:
             data = reply_seg[1]
             reply_text += data
-            
+
             # 如果是主动思考且回复内容是"沉默"，则不发送消息
             if is_proactive_thinking and data.strip() == "沉默":
                 logger.info(f"{self.log_prefix} 主动思考决定保持沉默，不发送消息")
                 continue
-            
+
             if not first_replied:
                 await send_api.text_to_stream(
                     text=data,
