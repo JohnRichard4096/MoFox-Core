@@ -5,7 +5,7 @@ import random
 import os
 import traceback
 
-logger = get_logger("search_bing")
+logger = get_logger("web_surfing_tool")
 
 ABSTRACT_MAX_LENGTH = 300  # abstract max length
 
