@@ -530,6 +530,11 @@ class OpenaiClient(BaseClient):
         except APIStatusError as e:
             # 重封装APIError为RespNotOkException
             raise RespNotOkException(e.status_code) from e
+        except Exception as e:
+            # 添加通用异常处理和日志记录
+            logger.error(f"获取嵌入时发生未知错误: {str(e)}")
+            logger.error(f"错误类型: {type(e)}")
+            raise
 
         response = APIResponse()
 
