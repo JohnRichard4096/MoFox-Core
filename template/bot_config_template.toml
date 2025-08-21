@@ -364,6 +364,7 @@ guidelines = """
 晚上我希望你能多和朋友们交流，维系好彼此的关系。
 另外，请保证充足的休眠时间来处理和整合一天的数据。
 """
+enabe_is_sleep = false
 
 [experimental] #实验性功能
 enable_friend_chat = false # 是否启用好友聊天

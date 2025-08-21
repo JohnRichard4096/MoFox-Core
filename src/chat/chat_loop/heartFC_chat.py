@@ -25,6 +25,7 @@ from src.plugin_system.apis import generator_api, send_api, message_api, databas
 from src.mais4u.mai_think import mai_thinking_manager
 from src.mais4u.constant_s4u import ENABLE_S4U
 from src.chat.chat_loop.hfc_utils import send_typing, stop_typing
+from src.manager.schedule_manager import schedule_manager
 
 ERROR_LOOP_INFO = {
     "loop_plan_info": {
@@ -176,7 +177,7 @@ class HeartFChatting:
         self.delta_sigma = getattr(global_config.chat, 'delta_sigma', 120)
         
         # 打印主动思考配置信息
-        logger.info(f"{self.log_prefix} 主动思考配置: 启用={global_config.chat.enable_proactive_thinking}, "
+        logger.debug(f"{self.log_prefix} 主动思考配置: 启用={global_config.chat.enable_proactive_thinking}, "
                    f"旧范围={self.proactive_thinking_chat_scope}, 私聊={self.proactive_thinking_in_private}, "
                    f"群聊={self.proactive_thinking_in_group}, ID列表={self.proactive_thinking_ids}, "
                    f"基础间隔={global_config.chat.proactive_thinking_interval}s, Delta={self.delta_sigma}")
@@ -538,10 +539,13 @@ class HeartFChatting:
         )
 
     async def _loopbody(self):
+        if schedule_manager.is_sleeping():
+           return True
+
         recent_messages_dict = message_api.get_messages_by_time_in_chat(
-            chat_id=self.stream_id,
-            start_time=self.last_read_time,
-            end_time=time.time(),
+           chat_id=self.stream_id,
+           start_time=self.last_read_time,
+           end_time=time.time(),
             limit=10,
             limit_mode="latest",
             filter_mai=True,
@@ -549,7 +553,7 @@ class HeartFChatting:
         )
         new_message_count = len(recent_messages_dict)
 
-        # 如果有新消息，更新最后消息时间（用于主动思考计时）
+       # 如果有新消息，更新最后消息时间（用于主动思考计时）
         if new_message_count > 0:
             current_time = time.time()
             self.last_message_time = current_time

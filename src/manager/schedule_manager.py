@@ -312,6 +312,43 @@ class ScheduleManager:
                 continue
         return None
 
+    def is_sleeping(self) -> bool:
+        """检查当前是否处于休眠时间（日程表的第一项或最后一项）"""
+        if not global_config.schedule.enabe_is_sleep:
+            return False
+        if not self.today_schedule:
+            return False
+
+        now = datetime.now().time()
+        
+        # 修复：应该获取列表的第一个元素
+        first_item = self.today_schedule
+        last_item = self.today_schedule[-1]
+
+        for item in [first_item, last_item]:
+            try:
+                time_range = item.get("time_range")
+                if not time_range:
+                    continue
+
+                start_str, end_str = time_range.split('-')
+                start_time = datetime.strptime(start_str.strip(), "%H:%M").time()
+                end_time = datetime.strptime(end_str.strip(), "%H:%M").time()
+
+                if start_time <= end_time:
+                    # 同一天内的时间段
+                    if start_time <= now < end_time:
+                        return True
+                else:
+                    # 跨天的时间段
+                    if now >= start_time or now < end_time:
+                        return True
+            except (ValueError, KeyError, AttributeError) as e:
+                logger.warning(f"解析休眠日程事件失败: {item}, 错误: {e}")
+                continue
+        
+        return False
+
     def _validate_schedule_with_pydantic(self, schedule_data) -> bool:
         """使用Pydantic验证日程数据格式和完整性"""
         try:

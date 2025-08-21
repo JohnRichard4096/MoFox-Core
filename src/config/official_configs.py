@@ -579,6 +579,7 @@ class ScheduleConfig(ValidatedConfigBase):
 
     enable: bool = Field(default=True, description="启用")
     guidelines: Optional[str] = Field(default=None, description="指导方针")
+    enabe_is_sleep: bool = Field(default=True, description="让AI会根据日程表睡觉和苏醒")
 
 
 
