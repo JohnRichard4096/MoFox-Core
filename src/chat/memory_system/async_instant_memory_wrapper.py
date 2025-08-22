@@ -33,7 +33,7 @@ class AsyncInstantMemoryWrapper:
             try:
                 from src.chat.memory_system.instant_memory import InstantMemory
                 self.llm_memory = InstantMemory(self.chat_id)
-                logger.debug(f"LLM瞬时记忆系统已初始化: {self.chat_id}")
+                logger.info(f"LLM瞬时记忆系统已初始化: {self.chat_id}")
             except Exception as e:
                 logger.warning(f"LLM瞬时记忆系统初始化失败: {e}")
                 self.llm_memory_enabled = False  # 初始化失败则禁用
@@ -44,7 +44,7 @@ class AsyncInstantMemoryWrapper:
             try:
                 from src.chat.memory_system.vector_instant_memory import VectorInstantMemoryV2
                 self.vector_memory = VectorInstantMemoryV2(self.chat_id)
-                logger.debug(f"向量瞬时记忆系统已初始化: {self.chat_id}")
+                logger.info(f"向量瞬时记忆系统已初始化: {self.chat_id}")
             except Exception as e:
                 logger.warning(f"向量瞬时记忆系统初始化失败: {e}")
                 self.vector_memory_enabled = False # 初始化失败则禁用

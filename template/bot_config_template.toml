@@ -252,6 +252,8 @@ memory_forget_time = 48 #多长时间后的记忆会被遗忘 单位小时
 memory_forget_percentage = 0.008 # 记忆遗忘比例 控制记忆遗忘程度 越大遗忘越多 建议保持默认
 
 enable_instant_memory = false # 是否启用即时记忆，测试功能，可能存在未知问题
+enable_llm_instant_memory = true # 是否启用基于LLM的瞬时记忆
+enable_vector_instant_memory = true # 是否启用基于向量的瞬时记忆
 
 #不希望记忆的词，已经记忆的不会受到影响，需要手动清理
 memory_ban_words = [ "表情包", "图片", "回复", "聊天记录" ]
