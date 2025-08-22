@@ -16,7 +16,7 @@ class ReplyAction(BaseAction):
 
     focus_activation_type = ActionActivationType.ALWAYS
     normal_activation_type = ActionActivationType.ALWAYS
-    mode_enable = ChatMode.FOCUS | ChatMode.NORMAL
+    mode_enable = ChatMode.ALL
     parallel_action = False
 
     # 动作基本信息
