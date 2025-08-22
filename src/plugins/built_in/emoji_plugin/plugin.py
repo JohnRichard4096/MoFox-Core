@@ -19,7 +19,7 @@ from src.common.logger import get_logger
 from src.plugins.built_in.core_actions.no_reply import NoReplyAction
 from src.plugins.built_in.core_actions.reply import ReplyAction
 from src.plugins.built_in.core_actions.emoji import EmojiAction
-from src.plugins.built_in.core_actions.anti_injector_manager import AntiInjectorStatusCommand, AntiInjectorSkipListCommand
+from src.plugins.built_in.core_actions.anti_injector_manager import AntiInjectorStatusCommand
 
 logger = get_logger("core_actions")
 
@@ -76,7 +76,6 @@ class CoreActionsPlugin(BasePlugin):
             components.append((EmojiAction.get_action_info(), EmojiAction))
         if self.get_config("components.enable_anti_injector_manager", True):
             components.append((AntiInjectorStatusCommand.get_command_info(), AntiInjectorStatusCommand))
-            components.append((AntiInjectorSkipListCommand.get_command_info(), AntiInjectorSkipListCommand))
 
 
         return components
