@@ -341,16 +341,22 @@ class LLMRequest:
                         is_truncated = True
                         logger.warning("未检测到 [done] 标记，判定为截断")
                 
-                if (is_empty_reply or is_truncated) and empty_retry_count < max_empty_retry:
-                    empty_retry_count += 1
-                    reason = "空回复" if is_empty_reply else "截断"
-                    logger.warning(f"检测到{reason}，正在进行第 {empty_retry_count}/{max_empty_retry} 次重新生成")
+                if is_empty_reply or is_truncated:
+                    if empty_retry_count < max_empty_retry:
+                        empty_retry_count += 1
+                        reason = "空回复" if is_empty_reply else "截断"
+                        logger.warning(f"检测到{reason}，正在进行第 {empty_retry_count}/{max_empty_retry} 次重新生成")
 
-                    if empty_retry_interval > 0:
-                        await asyncio.sleep(empty_retry_interval)
+                        if empty_retry_interval > 0:
+                            await asyncio.sleep(empty_retry_interval)
 
-                    model_info, api_provider, client = self._select_model()
-                    continue
+                        model_info, api_provider, client = self._select_model()
+                        continue
+                    else:
+                        # 已达到最大重试次数，但仍然是空回复或截断
+                        reason = "空回复" if is_empty_reply else "截断"
+                        # 抛出异常，由外层重试逻辑或最终的异常处理器捕获
+                        raise RuntimeError(f"经过 {max_empty_retry + 1} 次尝试后仍然是{reason}的回复")
 
                 # 记录使用情况
                 if usage := response.usage:
