@@ -61,6 +61,8 @@ class VideoAnalyzer:
             self.max_image_size = config.max_image_size
             self.enable_frame_timing = config.enable_frame_timing
             self.batch_analysis_prompt = config.batch_analysis_prompt
+            self.frame_extraction_mode = config.frame_extraction_mode
+            self.frame_interval_seconds = config.frame_interval_seconds
             
             # 将配置文件中的模式映射到内部使用的模式名称
             config_mode = config.analysis_mode
@@ -92,6 +94,8 @@ class VideoAnalyzer:
             self.batch_size = 3  # 批处理时每批处理的帧数
             self.timeout = 60.0  # 分析超时时间（秒）
             self.enable_frame_timing = True
+            self.frame_extraction_mode = "fixed_number"
+            self.frame_interval_seconds = 2.0
             self.batch_analysis_prompt = """请分析这个视频的内容。这些图片是从视频中按时间顺序提取的关键帧。
 
 请提供详细的分析，包括：
@@ -191,24 +195,59 @@ class VideoAnalyzer:
         
         logger.info(f"视频信息: {total_frames}帧, {fps:.2f}FPS, {duration:.2f}秒")
         
-        # 动态计算帧间隔
-        if duration > 0:
-            frame_interval = max(1, int(duration / self.max_frames * fps))
-        else:
-            frame_interval = 30  # 默认间隔
-        
         frame_count = 0
         extracted_count = 0
         
-        while cap.isOpened() and extracted_count < self.max_frames:
-            ret, frame = cap.read()
-            if not ret:
-                break
+        if self.frame_extraction_mode == "time_interval":
+            # 新模式：按时间间隔抽帧
+            time_interval = self.frame_interval_seconds
+            next_frame_time = 0.0
+            
+            while cap.isOpened():
+                ret, frame = cap.read()
+                if not ret:
+                    break
                 
-            if frame_count % frame_interval == 0:
-                # 转换为PIL图像并压缩
-                frame_rgb = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
-                pil_image = Image.fromarray(frame_rgb)
+                current_time = cap.get(cv2.CAP_PROP_POS_MSEC) / 1000.0
+                
+                if current_time >= next_frame_time:
+                    # 转换为PIL图像并压缩
+                    frame_rgb = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
+                    pil_image = Image.fromarray(frame_rgb)
+                    
+                    # 调整图像大小
+                    if max(pil_image.size) > self.max_image_size:
+                        ratio = self.max_image_size / max(pil_image.size)
+                        new_size = tuple(int(dim * ratio) for dim in pil_image.size)
+                        pil_image = pil_image.resize(new_size, Image.Resampling.LANCZOS)
+                    
+                    # 转换为base64
+                    buffer = io.BytesIO()
+                    pil_image.save(buffer, format='JPEG', quality=self.frame_quality)
+                    frame_base64 = base64.b64encode(buffer.getvalue()).decode('utf-8')
+                    
+                    frames.append((frame_base64, current_time))
+                    extracted_count += 1
+                    
+                    logger.debug(f"提取第{extracted_count}帧 (时间: {current_time:.2f}s)")
+                    
+                    next_frame_time += time_interval
+        else:
+            # 旧模式：固定总帧数
+            if duration > 0:
+                frame_interval = max(1, int(total_frames / self.max_frames))
+            else:
+                frame_interval = 1 # 如果无法获取时长，则逐帧提取直到达到max_frames
+
+            while cap.isOpened() and extracted_count < self.max_frames:
+                ret, frame = cap.read()
+                if not ret:
+                    break
+                
+                if frame_count % frame_interval == 0:
+                    # 转换为PIL图像并压缩
+                    frame_rgb = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
+                    pil_image = Image.fromarray(frame_rgb)
                 
                 # 调整图像大小
                 if max(pil_image.size) > self.max_image_size:
@@ -227,8 +266,8 @@ class VideoAnalyzer:
                 extracted_count += 1
                 
                 logger.debug(f"提取第{extracted_count}帧 (时间: {timestamp:.2f}s)")
-            
-            frame_count += 1
+                
+                frame_count += 1
         
         cap.release()
         logger.info(f"✅ 成功提取{len(frames)}帧")

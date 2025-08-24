@@ -382,7 +382,9 @@ enable_friend_chat = false # 是否启用好友聊天
 [video_analysis] # 视频分析配置
 enable = true # 是否启用视频分析功能
 analysis_mode = "batch_frames" # 分析模式："frame_by_frame"（逐帧分析，非常慢  "建议frames大于8时不要使用这个"  ...但是详细）、"batch_frames"（批量分析，快但可能略简单  -其实效果也差不多）或 "auto"（自动选择）
-max_frames = 16 # 最大分析帧数
+frame_extraction_mode = "fixed_number"  # 抽帧模式: "fixed_number" (固定总帧数) 或 "time_interval" (按时间间隔)
+frame_interval_seconds = 2.0  # 按时间间隔抽帧的秒数（仅在 mode = "time_interval" 时生效）
+max_frames = 16 # 最大分析帧数（仅在 mode = "fixed_number" 时生效）
 frame_quality = 80 # 帧图像JPEG质量 (1-100)
 max_image_size = 800 # 单帧最大图像尺寸(像素)
 enable_frame_timing = true # 是否在分析中包含帧的时间信息
