@@ -1,0 +1,44 @@
+{
+  "manifest_version": 1,
+  "name": "权限示例插件 (Permission Example Plugin)",
+  "version": "1.0.0",
+  "description": "MaiCore权限系统演示插件，包含权限节点注册、权限检查和多种权限命令示例。",
+  "author": {
+    "name": "MaiBot开发团队",
+    "url": "https://github.com/MaiM-with-u"
+  },
+  "license": "GPL-v3.0-or-later",
+  "host_application": {
+    "min_version": "0.8.0"
+  },
+  "homepage_url": "https://github.com/MaiM-with-u/maibot",
+  "repository_url": "https://github.com/MaiM-with-u/maibot",
+  "keywords": ["permission", "example", "权限", "admin", "user", "master", "demo", "tutorial"],
+  "categories": ["Examples", "Tutorial", "Permission"],
+  "default_locale": "zh-CN",
+  "locales_path": "_locales",
+  "plugin_info": {
+    "is_built_in": false,
+    "plugin_type": "example",
+    "components": [
+      {
+        "type": "command",
+        "name": "admin_example",
+        "description": "管理员权限示例命令",
+        "pattern": "/admin_example"
+      },
+      {
+        "type": "command",
+        "name": "user_example",
+        "description": "用户权限示例命令",
+        "pattern": "/user_example"
+      },
+      {
+        "type": "command",
+        "name": "master_example",
+        "description": "Master专用示例命令",
+        "pattern": "/master_example"
+      }
+    ]
+  }
+}

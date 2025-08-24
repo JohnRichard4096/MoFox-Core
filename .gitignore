@@ -325,6 +325,7 @@ src/plugins/test_plugin_pic/actions/pic_action_config.toml
 run_pet.bat
 /plugins/*
 !/plugins/set_emoji_like
+!/plugins/permission_example
 !/plugins/hello_world_plugin
 !/plugins/take_picture_plugin
 
