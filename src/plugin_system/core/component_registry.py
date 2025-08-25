@@ -221,7 +221,10 @@ class ComponentRegistry:
         if not handler_info.enabled:
             logger.warning(f"EventHandler组件 {handler_name} 未启用")
             return True  # 未启用，但是也是注册成功
-
+        
+        # 使用EventManager进行事件处理器注册
+        from src.plugin_system.core.event_manager import event_manager
+        return event_manager.register_event_handler(handler_class)
 
     # === 组件移除相关 ===
 
