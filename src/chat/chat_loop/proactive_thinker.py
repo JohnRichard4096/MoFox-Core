@@ -140,7 +140,7 @@ class ProactiveThinker:
             
         功能说明:
         - 检查聊天流是否存在
-        - 检查当前聊天是否在启用列表中（如果配置了列表）
+        - 检查当前聊天是否在启用列表中（按平台和类型分别检查）
         - 根据聊天类型（群聊/私聊）和配置决定是否启用
         - 群聊需要proactive_thinking_in_group为True
         - 私聊需要proactive_thinking_in_private为True
@@ -148,21 +148,35 @@ class ProactiveThinker:
         if not self.context.chat_stream:
             return False
 
-        try:
-            chat_id = int(self.context.stream_id.split(':')[-1])
-        except (ValueError, IndexError):
-            chat_id = None
-        
-        proactive_thinking_ids = getattr(global_config.chat, 'proactive_thinking_enable_ids', [])
-        if proactive_thinking_ids and (chat_id is None or chat_id not in proactive_thinking_ids):
-            return False
-        
         is_group_chat = self.context.chat_stream.group_info is not None
         
+        # 检查基础开关
         if is_group_chat and not global_config.chat.proactive_thinking_in_group:
             return False
         if not is_group_chat and not global_config.chat.proactive_thinking_in_private:
             return False
+        
+        # 获取当前聊天的完整标识 (platform:chat_id)
+        stream_parts = self.context.stream_id.split(':')
+        if len(stream_parts) >= 2:
+            platform = stream_parts[0]
+            chat_id = stream_parts[1]
+            current_chat_identifier = f"{platform}:{chat_id}"
+        else:
+            # 如果无法解析，则使用原始stream_id
+            current_chat_identifier = self.context.stream_id
+        
+        # 检查是否在启用列表中
+        if is_group_chat:
+            # 群聊检查
+            enable_list = getattr(global_config.chat, 'proactive_thinking_enable_in_groups', [])
+            if enable_list and current_chat_identifier not in enable_list:
+                return False
+        else:
+            # 私聊检查  
+            enable_list = getattr(global_config.chat, 'proactive_thinking_enable_in_private', [])
+            if enable_list and current_chat_identifier not in enable_list:
+                return False
             
         return True
     

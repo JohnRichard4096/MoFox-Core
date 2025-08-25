@@ -84,9 +84,9 @@ class ChatConfig(ValidatedConfigBase):
     The_scope_that_proactive_thinking_can_trigger: str = Field(default="all", description="主动思考可以触发的范围")
     proactive_thinking_in_private: bool = Field(default=True, description="主动思考可以在私聊里面启用")
     proactive_thinking_in_group: bool = Field(default=True, description="主动思考可以在群聊里面启用")
-    proactive_thinking_enable_ids: List[int] = Field(default_factory=list, description="启用主动思考的范围，不区分群聊和私聊，为空则不限制")
+    proactive_thinking_enable_in_private: List[str] = Field(default_factory=list, description="启用主动思考的私聊范围，格式：platform:user_id，为空则不限制")
+    proactive_thinking_enable_in_groups: List[str] = Field(default_factory=list, description="启用主动思考的群聊范围，格式：platform:group_id，为空则不限制")
     delta_sigma: int = Field(default=120, description="采用正态分布随机时间间隔")
-    enable_ids: List[int] = Field(default_factory=lambda: [123456, 234567], description="启用主动思考的范围，不区分群聊和私聊，为空则不限制")
     proactive_thinking_prompt_template: str = Field(default="""现在群里面已经隔了{time}没有人发送消息了，请你结合上下文以及群聊里面之前聊过的话题和你的人设来决定要不要主动发送消息，你可以选择：
 
 1. 继续保持沉默（当{time}以前已经结束了一个话题并且你不想挑起新话题时）
