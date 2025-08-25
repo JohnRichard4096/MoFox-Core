@@ -58,7 +58,7 @@ from src.plugin_system import BasePlugin, register_plugin, ComponentInfo
 
 @register_plugin # 注册插件
 class HelloWorldPlugin(BasePlugin):
-    """Hello World插件 - 你的第一个MaiCore插件"""
+    """Hello World插件 - 你的第一个MoFox_Bot插件"""
 
     # 以下是插件基本信息和方法（必须填写）
     plugin_name = "hello_world_plugin"
@@ -73,7 +73,7 @@ class HelloWorldPlugin(BasePlugin):
         return []
 ```
 
-🎉 恭喜！你刚刚创建了一个最简单但完整的MaiCore插件！
+🎉 恭喜！你刚刚创建了一个最简单但完整的MoFox_Bot插件！
 
 **解释一下这些代码：**
 
@@ -86,7 +86,7 @@ class HelloWorldPlugin(BasePlugin):
 
 现在就可以测试这个插件了！启动MoFox_Bot：
 
-直接通过启动器运行MaiCore或者 `python bot.py`
+直接通过启动器运行MoFox_Bot或者 `python bot.py`
 
 在日志中你应该能看到插件被加载的信息。虽然插件还没有任何功能，但它已经成功运行了！
 
