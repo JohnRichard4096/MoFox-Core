@@ -1,8 +1,8 @@
 from abc import ABC, abstractmethod
-from typing import Tuple, Optional, Dict
+from typing import Tuple, Optional, Dict, List, Union
 
 from src.common.logger import get_logger
-from .component_types import MaiMessages, EventType, EventHandlerInfo, ComponentType
+from .component_types import EventType, EventHandlerInfo, ComponentType
 
 logger = get_logger("base_event_handler")
 
@@ -13,8 +13,6 @@ class BaseEventHandler(ABC):
     所有事件处理器都应该继承这个基类，提供事件处理的基本接口
     """
 
-    event_type: EventType = EventType.UNKNOWN
-    """事件类型，默认为未知"""
     handler_name: str = ""
     """处理器名称"""
     handler_description: str = ""
@@ -23,6 +21,8 @@ class BaseEventHandler(ABC):
     """处理器权重，越大权重越高"""
     intercept_message: bool = False
     """是否拦截消息，默认为否"""
+    init_subscribe: List[Union[EventType, str]] = [EventType.UNKNOWN]
+    """初始化时订阅的事件名称"""
 
     def __init__(self):
         self.log_prefix = "[EventHandler]"
@@ -30,17 +30,50 @@ class BaseEventHandler(ABC):
         """对应插件名"""
         self.plugin_config: Optional[Dict] = None
         """插件配置字典"""
-        if self.event_type == EventType.UNKNOWN:
+        self.subscribed_events = []
+        """订阅的事件列表"""
+        if EventType.UNKNOWN in self.init_subscribe:
             raise NotImplementedError("事件处理器必须指定 event_type")
 
     @abstractmethod
-    async def execute(self, message: MaiMessages) -> Tuple[bool, bool, Optional[str]]:
+    async def execute(self, kwargs: dict | None) -> Tuple[bool, bool, Optional[str]]:
         """执行事件处理的抽象方法，子类必须实现
-
+        Args:
+            kwargs (dict | None): 事件消息对象，当你注册的事件为ON_START和ON_STOP时message为None
         Returns:
             Tuple[bool, bool, Optional[str]]: (是否执行成功, 是否需要继续处理, 可选的返回消息)
         """
         raise NotImplementedError("子类必须实现 execute 方法")
+
+    def subscribe(self, event_name: str) -> None:
+        """订阅一个事件
+
+        Args:
+            event_name (str): 要订阅的事件名称
+        """
+        from src.plugin_system.core.event_manager import event_manager
+        
+        if not event_manager.subscribe_handler_to_event(self.handler_name, event_name):
+            logger.error(f"事件处理器 {self.handler_name} 订阅事件 {event_name} 失败")
+            return
+            
+        logger.debug(f"{self.log_prefix} 订阅事件 {event_name}")
+        self.subscribed_events.append(event_name)
+
+    def unsubscribe(self, event_name: str) -> None:
+        """取消订阅一个事件
+
+        Args:
+            event_name (str): 要取消订阅的事件名称
+        """
+        from src.plugin_system.core.event_manager import event_manager
+        
+        if event_manager.unsubscribe_handler_from_event(self.handler_name, event_name):
+            logger.debug(f"{self.log_prefix} 取消订阅事件 {event_name}")
+            if event_name in self.subscribed_events:
+                self.subscribed_events.remove(event_name)
+        else:
+            logger.warning(f"{self.log_prefix} 未订阅事件 {event_name}，无法取消订阅")
 
     @classmethod
     def get_handler_info(cls) -> "EventHandlerInfo":
@@ -54,7 +87,6 @@ class BaseEventHandler(ABC):
             name=name,
             component_type=ComponentType.EVENT_HANDLER,
             description=getattr(cls, "handler_description", "events处理器"),
-            event_type=cls.event_type,
             weight=cls.weight,
             intercept_message=cls.intercept_message,
         )
