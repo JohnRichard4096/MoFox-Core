@@ -1,0 +1,42 @@
+{
+  "manifest_version": 1,
+  "name": "napcat_plugin",
+  "version": "1.0.0",
+  "description": "基于OneBot 11协议的NapCat QQ协议插件，提供完整的QQ机器人API接口，使用现有adapter连接",
+  "author": {
+    "name": "Windpicker_owo",
+    "url": "https://github.com/Windpicker-owo"
+  },
+  "license": "GPL-v3.0-or-later",
+  
+  "host_application": {
+    "min_version": "0.10.0",
+    "max_version": "0.10.0"
+  },
+  "homepage_url": "https://github.com/Windpicker-owo/InternetSearchPlugin",
+  "repository_url": "https://github.com/Windpicker-owo/InternetSearchPlugin",
+  "keywords": ["qq", "bot", "napcat", "onebot", "api", "websocket"],
+  "categories": ["protocol"],
+  "default_locale": "zh-CN",
+  "locales_path": "_locales",
+  
+  "plugin_info": {
+    "is_built_in": false,
+    "components": [
+      {
+        "type": "tool",
+        "name": "napcat_tool",
+        "description": "NapCat QQ协议综合工具，提供消息发送、群管理、好友管理、文件操作等完整功能"
+      }
+    ],
+    "features": [
+    "消息发送与接收",
+    "群管理功能",
+    "好友管理功能",
+    "文件上传下载",
+    "AI语音功能",
+    "群签到与戳一戳",
+    "现有adapter连接"
+  ]
+  }
+}
