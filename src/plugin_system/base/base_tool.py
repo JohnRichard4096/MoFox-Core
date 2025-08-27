@@ -31,6 +31,13 @@ class BaseTool(ABC):
     history_ttl: int = 5
     """工具调用历史记录的TTL值，默认为5。设为0表示不记录历史"""
 
+    enable_cache: bool = False
+    """是否为该工具启用缓存"""
+    cache_ttl: int = 3600
+    """缓存的TTL值（秒），默认为3600秒（1小时）"""
+    semantic_cache_query_key: Optional[str] = None
+    """用于语义缓存的查询参数键名。如果设置，将使用此参数的值进行语义相似度搜索"""
+
     def __init__(self, plugin_config: Optional[dict] = None):
         self.plugin_config = plugin_config or {}  # 直接存储插件配置字典
 

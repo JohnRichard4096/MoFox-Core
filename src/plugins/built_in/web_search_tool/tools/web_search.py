@@ -31,6 +31,12 @@ class WebSurfingTool(BaseTool):
         ("time_range", ToolParamType.STRING, "指定搜索的时间范围，可以是 'any', 'week', 'month'。默认为 'any'。", False, ["any", "week", "month"])
     ] # type: ignore
 
+    # --- 新的缓存配置 ---
+    enable_cache: bool = True
+    cache_ttl: int = 7200  # 缓存2小时
+    semantic_cache_query_key: str = "query"
+    # --------------------
+
     def __init__(self, plugin_config=None):
         super().__init__(plugin_config)
         # 初始化搜索引擎
@@ -46,16 +52,6 @@ class WebSurfingTool(BaseTool):
         if not query:
             return {"error": "搜索查询不能为空。"}
 
-        # 获取当前文件路径用于缓存键
-        import os
-        current_file_path = os.path.abspath(__file__)
-
-        # 检查缓存
-        cached_result = await tool_cache.get(self.name, function_args, current_file_path, semantic_query=query)
-        if cached_result:
-            logger.info(f"缓存命中: {self.name} -> {function_args}")
-            return cached_result
-
         # 读取搜索配置
         enabled_engines = config_api.get_global_config("web_search.enabled_engines", ["ddg"])
         search_strategy = config_api.get_global_config("web_search.search_strategy", "single")
@@ -69,10 +65,6 @@ class WebSurfingTool(BaseTool):
             result = await self._execute_fallback_search(function_args, enabled_engines)
         else:  # single
             result = await self._execute_single_search(function_args, enabled_engines)
-        
-        # 保存到缓存
-        if "error" not in result:
-            await tool_cache.set(self.name, function_args, current_file_path, result, semantic_query=query)
             
         return result
 
