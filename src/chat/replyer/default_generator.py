@@ -201,7 +201,7 @@ class DefaultReplyer:
 
         from src.plugin_system.core.tool_use import ToolExecutor  # 延迟导入ToolExecutor，不然会循环依赖
 
-        self.tool_executor = ToolExecutor(chat_id=self.chat_stream.stream_id)
+        self.tool_executor = ToolExecutor(chat_id=self.chat_stream.stream_id, enable_cache=False)
 
     async def _build_cross_context_block(self, current_chat_id: str, target_user_info: Optional[Dict[str, Any]]) -> str:
         """构建跨群聊上下文"""
