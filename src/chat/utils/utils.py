@@ -449,6 +449,8 @@ def find_similar_topics_simple(text: str, topics: list, top_k: int = 5) -> list:
 
 def truncate_message(message: str, max_length=20) -> str:
     """截断消息，使其不超过指定长度"""
+    if message is None:
+        return ""
     return f"{message[:max_length]}..." if len(message) > max_length else message
 
 
