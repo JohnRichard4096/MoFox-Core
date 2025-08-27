@@ -329,10 +329,13 @@ class LLMRequest:
                 if not reasoning_content and content:
                     content, extracted_reasoning = self._extract_reasoning(content)
                     reasoning_content = extracted_reasoning
-
-                # 检测是否为空回复或截断
-                is_empty_reply = not content or content.strip() == ""
+                
+                is_empty_reply = False
                 is_truncated = False
+                # 检测是否为空回复或截断
+                if not tool_calls:
+                    is_empty_reply = not content or content.strip() == ""
+                    is_truncated = False
 
                 if use_anti_truncation:
                     if content.endswith("[done]"):
@@ -371,7 +374,7 @@ class LLMRequest:
                     )
 
                 # 处理空回复
-                if not content:
+                if not content and not tool_calls:
                     if raise_when_empty:
                         raise RuntimeError(f"经过 {empty_retry_count} 次重试后仍然生成空回复")
                     content = "生成的响应为空，请检查模型配置或输入内容是否正确"
