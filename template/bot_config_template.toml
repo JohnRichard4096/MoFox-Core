@@ -1,5 +1,5 @@
 [inner]
-version = "6.5.6"
+version = "6.5.7"
 
 #----以下是给开发人员阅读的，如果你只是部署了麦麦，不需要阅读----
 #如果你想要修改配置文件，请递增version的值
@@ -378,6 +378,21 @@ guidelines = """
 另外，请保证充足的休眠时间来处理和整合一天的数据。
 """
 enable_is_sleep = false
+
+# --- 弹性睡眠与睡前消息 ---
+# 是否启用弹性睡眠。启用后，AI不会到点立刻入睡，而是会根据睡眠压力增加5-10分钟的缓冲，并可能因为压力不足而推迟睡眠。
+enable_flexible_sleep = true
+# 触发弹性睡眠的睡眠压力阈值。当AI的睡眠压力低于此值时，可能会推迟入睡。
+flexible_sleep_pressure_threshold = 40.0
+# 每日最大可推迟入睡的总分钟数。
+max_sleep_delay_minutes = 60
+
+# 是否在进入“准备入睡”状态时发送一条消息通知。
+enable_pre_sleep_notification = true
+# 接收睡前消息的群组列表。格式为: ["platform:group_id1", "platform:group_id2"]，例如 ["qq:12345678"]
+pre_sleep_notification_groups = []
+# 用于生成睡前消息的提示。AI会根据这个提示生成一句晚安问候。
+pre_sleep_prompt = "我准备睡觉了，请生成一句简短自然的晚安问候。"
 
 [video_analysis] # 视频分析配置
 enable = true # 是否启用视频分析功能

@@ -530,6 +530,14 @@ class ScheduleConfig(ValidatedConfigBase):
     enable: bool = Field(default=True, description="启用")
     guidelines: Optional[str] = Field(default=None, description="指导方针")
     enable_is_sleep: bool = Field(default=True, description="让AI会根据日程表睡觉和苏醒")
+    
+    enable_flexible_sleep: bool = Field(default=True, description="是否启用弹性睡眠")
+    flexible_sleep_pressure_threshold: float = Field(default=40.0, description="触发弹性睡眠的睡眠压力阈值，低于该值可能延迟入睡")
+    max_sleep_delay_minutes: int = Field(default=60, description="单日最大延迟入睡分钟数")
+    
+    enable_pre_sleep_notification: bool = Field(default=True, description="是否启用睡前消息")
+    pre_sleep_notification_groups: List[str] = Field(default_factory=list, description="接收睡前消息的群号列表, 格式: [\"platform:group_id1\", \"platform:group_id2\"]")
+    pre_sleep_prompt: str = Field(default="我准备睡觉了，请生成一句简短自然的晚安问候。", description="用于生成睡前消息的提示")
 
 
 

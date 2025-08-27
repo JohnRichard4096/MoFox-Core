@@ -1,5 +1,6 @@
 import orjson
 import asyncio
+import random
 from datetime import datetime, time, timedelta
 from typing import Optional, List, Dict, Any
 from lunar_python import Lunar
@@ -15,6 +16,7 @@ from src.llm_models.utils_model import LLMRequest
 from src.common.logger import get_logger
 from json_repair import repair_json
 from src.manager.async_task_manager import AsyncTask, async_task_manager
+from src.plugin_system.apis import send_api, generator_api
 
 
 logger = get_logger("schedule_manager")
@@ -127,6 +129,12 @@ class ScheduleManager:
         self.last_sleep_log_time = 0
         self.sleep_log_interval = 35  # 日志记录间隔，单位秒
         self.schedule_generation_running = False  # 防止重复生成任务
+
+        # 弹性睡眠相关状态
+        self._is_preparing_sleep: bool = False
+        self._sleep_buffer_end_time: Optional[datetime] = None
+        self._total_delayed_minutes_today: int = 0
+        self._last_sleep_check_date: Optional[datetime.date] = None
 
     async def start_daily_schedule_generation(self):
         """启动每日零点自动生成新日程的任务"""
@@ -392,27 +400,97 @@ class ScheduleManager:
                 continue
         return None
 
-    def is_sleeping(self, wakeup_manager=None) -> bool:
+    def is_sleeping(self, wakeup_manager: Optional["WakeUpManager"] = None) -> bool:
         """
-        通过关键词匹配检查当前是否处于休眠时间。
-        
-        Args:
-            wakeup_manager: 可选的唤醒度管理器，用于检查是否被唤醒。
-            
-        Returns:
-            bool: 是否处于休眠状态。
+        通过关键词匹配、唤醒度、睡眠压力等综合判断是否处于休眠时间。
+        新增弹性睡眠机制，允许在压力低时延迟入睡，并在入睡前发送通知。
         """
+        from src.chat.chat_loop.wakeup_manager import WakeUpManager
+        # --- 基础检查 ---
         if not global_config.schedule.enable_is_sleep:
             return False
         if not self.today_schedule:
             return False
 
-        # 从配置获取关键词，如果配置中没有则使用默认列表
-        sleep_keywords = ["休眠", "睡觉", "梦乡",]
-        
-        now = datetime.now().time()
+        now = datetime.now()
+        today = now.date()
 
-        # 遍历当天的所有日程
+        # --- 每日状态重置 ---
+        if self._last_sleep_check_date != today:
+            logger.info(f"新的一天 ({today})，重置弹性睡眠状态。")
+            self._total_delayed_minutes_today = 0
+            self._is_preparing_sleep = False
+            self._sleep_buffer_end_time = None
+            self._last_sleep_check_date = today
+
+        # --- 检查是否在“准备入睡”的缓冲期 ---
+        if self._is_preparing_sleep and self._sleep_buffer_end_time:
+            if now >= self._sleep_buffer_end_time:
+                logger.info("睡眠缓冲期结束，正式进入休眠状态。")
+                return True
+            else:
+                remaining_seconds = (self._sleep_buffer_end_time - now).total_seconds()
+                logger.debug(f"处于入睡缓冲期，剩余 {remaining_seconds:.1f} 秒。")
+                return False
+
+        # --- 判断当前是否为理论上的睡眠时间 ---
+        is_in_theoretical_sleep, activity = self._is_in_theoretical_sleep_time(now.time())
+
+        if not is_in_theoretical_sleep:
+            # 如果不在理论睡眠时间，确保重置准备状态
+            if self._is_preparing_sleep:
+                logger.info("已离开理论休眠时间，取消“准备入睡”状态。")
+                self._is_preparing_sleep = False
+                self._sleep_buffer_end_time = None
+            return False
+
+        # --- 处理唤醒状态 ---
+        if wakeup_manager and wakeup_manager.is_in_angry_state():
+            current_timestamp = now.timestamp()
+            if current_timestamp - self.last_sleep_log_time > self.sleep_log_interval:
+                logger.info(f"在休眠活动 '{activity}' 期间，但已被唤醒。")
+                self.last_sleep_log_time = current_timestamp
+            return False
+
+        # --- 核心：弹性睡眠逻辑 ---
+        if global_config.schedule.enable_flexible_sleep and not self._is_preparing_sleep:
+            # 首次进入理论睡眠时间，触发弹性判断
+            logger.info(f"进入理论休眠时间 '{activity}'，开始弹性睡眠判断...")
+            
+            # 1. 获取睡眠压力
+            sleep_pressure = wakeup_manager.context.sleep_pressure if wakeup_manager else 999
+            pressure_threshold = global_config.schedule.flexible_sleep_pressure_threshold
+            
+            # 2. 判断是否延迟
+            if sleep_pressure < pressure_threshold and self._total_delayed_minutes_today < global_config.schedule.max_sleep_delay_minutes:
+                delay_minutes = 15  # 每次延迟15分钟
+                self._total_delayed_minutes_today += delay_minutes
+                self._sleep_buffer_end_time = now + timedelta(minutes=delay_minutes)
+                logger.info(f"睡眠压力 ({sleep_pressure:.1f}) 低于阈值 ({pressure_threshold})，延迟入睡 {delay_minutes} 分钟。今日已累计延迟 {self._total_delayed_minutes_today} 分钟。")
+            else:
+                # 3. 计算5-10分钟的入睡缓冲
+                buffer_seconds = random.randint(5 * 60, 10 * 60)
+                self._sleep_buffer_end_time = now + timedelta(seconds=buffer_seconds)
+                logger.info(f"睡眠压力正常或已达今日最大延迟，将在 {buffer_seconds / 60:.1f} 分钟内入睡。")
+
+            # 4. 发送睡前通知
+            if global_config.schedule.enable_pre_sleep_notification:
+                asyncio.create_task(self._send_pre_sleep_notification())
+
+            self._is_preparing_sleep = True
+            return False  # 进入准备阶段，但尚未正式入睡
+
+        # --- 经典模式或已在弹性睡眠流程中 ---
+        current_timestamp = now.timestamp()
+        if current_timestamp - self.last_sleep_log_time > self.sleep_log_interval:
+            logger.info(f"当前处于休眠活动 '{activity}' 中 (经典模式)。")
+            self.last_sleep_log_time = current_timestamp
+        return True
+
+    def _is_in_theoretical_sleep_time(self, now_time: time) -> (bool, Optional[str]):
+        """检查当前时间是否落在日程表的任何一个睡眠活动中"""
+        sleep_keywords = ["休眠", "睡觉", "梦乡"]
+        
         for event in self.today_schedule:
             try:
                 activity = event.get("activity", "").strip()
@@ -421,47 +499,82 @@ class ScheduleManager:
                 if not activity or not time_range:
                     continue
 
-                # 1. 检查活动内容是否包含任一休眠关键词
                 if any(keyword in activity for keyword in sleep_keywords):
-                    # 2. 如果包含，再检查当前时间是否在该时间段内
                     start_str, end_str = time_range.split('-')
                     start_time = datetime.strptime(start_str.strip(), "%H:%M").time()
                     end_time = datetime.strptime(end_str.strip(), "%H:%M").time()
 
-                    is_in_time_range = False
                     if start_time <= end_time:  # 同一天
-                        if start_time <= now < end_time:
-                            is_in_time_range = True
+                        if start_time <= now_time < end_time:
+                            return True, activity
                     else:  # 跨天
-                        if now >= start_time or now < end_time:
-                            is_in_time_range = True
-                    
-                    # 如果时间匹配，则进入最终判断
-                    if is_in_time_range:
-                        # 检查是否被唤醒
-                        if wakeup_manager and wakeup_manager.is_in_angry_state():
-                            current_timestamp = datetime.now().timestamp()
-                            if current_timestamp - self.last_sleep_log_time > self.sleep_log_interval:
-                                logger.info(f"在休眠活动 '{activity}' 期间，但已被唤醒。")
-                                self.last_sleep_log_time = current_timestamp
-                            else:
-                                logger.debug(f"在休眠活动 '{activity}' 期间，但已被唤醒。")
-                            return False
-                        
-                        current_timestamp = datetime.now().timestamp()
-                        if current_timestamp - self.last_sleep_log_time > self.sleep_log_interval:
-                            logger.info(f"当前处于休眠活动 '{activity}' 中。")
-                            self.last_sleep_log_time = current_timestamp
-                        else:
-                            logger.debug(f"当前处于休眠活动 '{activity}' 中。")
-                        return True  # 找到匹配的休眠活动，直接返回True
-
+                        if now_time >= start_time or now_time < end_time:
+                            return True, activity
             except (ValueError, KeyError, AttributeError) as e:
                 logger.warning(f"解析日程事件时出错: {event}, 错误: {e}")
                 continue
-                
-        # 遍历完所有日程都未找到匹配的休眠活动
-        return False
+        
+        return False, None
+
+    async def _send_pre_sleep_notification(self):
+        """异步生成并发送睡前通知"""
+        try:
+            groups = global_config.schedule.pre_sleep_notification_groups
+            prompt = global_config.schedule.pre_sleep_prompt
+
+            if not groups:
+                logger.info("未配置睡前通知的群组，跳过发送。")
+                return
+            
+            if not prompt:
+                logger.warning("睡前通知的prompt为空，跳过发送。")
+                return
+
+            # 为防止消息风暴，稍微延迟一下
+            await asyncio.sleep(random.uniform(5, 15))
+
+            for group_id_str in groups:
+                try:
+                    # 格式 "platform:group_id"
+                    parts = group_id_str.split(":")
+                    if len(parts) != 2:
+                        logger.warning(f"无效的群组ID格式: {group_id_str}")
+                        continue
+                    
+                    platform, group_id = parts
+                    
+                    # 使用与 ChatStream.get_stream_id 相同的逻辑生成 stream_id
+                    import hashlib
+                    key = "_".join([platform, group_id])
+                    stream_id = hashlib.md5(key.encode()).hexdigest()
+
+                    logger.info(f"正在为群组 {group_id_str} (Stream ID: {stream_id}) 生成睡前消息...")
+                    
+                    # 调用 generator_api 生成回复
+                    success, reply_set, _ = await generator_api.generate_reply(
+                        chat_id=stream_id,
+                        extra_info=prompt,
+                        request_type="schedule.pre_sleep_notification"
+                    )
+
+                    if success and reply_set:
+                        # 提取文本内容并发送
+                        reply_text = "".join([content for msg_type, content in reply_set if msg_type == "text"])
+                        if reply_text:
+                            logger.info(f"向群组 {group_id_str} 发送睡前消息: {reply_text}")
+                            await send_api.text_to_stream(text=reply_text, stream_id=stream_id)
+                        else:
+                            logger.warning(f"为群组 {group_id_str} 生成的回复内容为空。")
+                    else:
+                        logger.error(f"为群组 {group_id_str} 生成睡前消息失败。")
+
+                    await asyncio.sleep(random.uniform(2, 5)) # 避免发送过快
+
+                except Exception as e:
+                    logger.error(f"向群组 {group_id_str} 发送睡前消息失败: {e}")
+
+        except Exception as e:
+            logger.error(f"发送睡前通知任务失败: {e}")
 
     def _validate_schedule_with_pydantic(self, schedule_data) -> bool:
         """使用Pydantic验证日程数据格式和完整性"""
