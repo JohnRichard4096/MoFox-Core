@@ -100,7 +100,7 @@ class CycleProcessor:
         from src.plugin_system.core.event_manager import event_manager
         from src.plugin_system.base.component_types import EventType
         # 触发 ON_PLAN 事件
-        result = await event_manager.trigger_event(EventType.ON_PLAN, stream_id=self.context.stream_id)
+        result = await event_manager.trigger_event(EventType.ON_PLAN, plugin_name="SYSTEM", stream_id=self.context.stream_id)
         if result and not result.all_continue_process():
             return
             

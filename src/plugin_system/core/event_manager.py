@@ -40,12 +40,18 @@ class EventManager:
         self._initialized = True
         logger.info("EventManager 单例初始化完成")
     
-    def register_event(self, event_name: Union[EventType, str]) -> bool:
+    def register_event(
+            self, 
+            event_name: Union[EventType, str],
+            allowed_subscribers: List[str]=[],  
+            allowed_triggers: List[str]=[]
+            ) -> bool:
         """注册一个新的事件
         
         Args:
             event_name Union[EventType, str]: 事件名称
-            
+            allowed_subscribers: List[str]: 事件订阅者白名单,  
+            allowed_triggers: List[str]: 事件触发插件白名单
         Returns:
             bool: 注册成功返回True，已存在返回False
         """
@@ -53,7 +59,7 @@ class EventManager:
             logger.warning(f"事件 {event_name} 已存在，跳过注册")
             return False
             
-        event = BaseEvent(event_name)
+        event = BaseEvent(event_name,allowed_subscribers,allowed_triggers)
         self._events[event_name] = event
         logger.info(f"事件 {event_name} 注册成功")
         
@@ -210,7 +216,12 @@ class EventManager:
         if handler_instance in event.subscribers:
             logger.warning(f"事件处理器 {handler_name} 已经订阅了事件 {event_name}，跳过重复订阅")
             return True
-            
+        
+        # 白名单检查
+        if event.allowed_subscribers and handler_name not in event.allowed_subscribers:
+            logger.warning(f"事件处理器 {handler_name} 不在事件 {event_name} 的订阅者白名单中，无法订阅")
+            return False
+        
         event.subscribers.append(handler_instance)
         
         # 按权重从高到低排序订阅者
@@ -264,11 +275,12 @@ class EventManager:
             
         return {handler.handler_name: handler for handler in event.subscribers}
     
-    async def trigger_event(self, event_name: Union[EventType, str], **kwargs) -> Optional[HandlerResultsCollection]:
+    async def trigger_event(self, event_name: Union[EventType, str], plugin_name: Optional[str]="",  **kwargs) -> Optional[HandlerResultsCollection]:
         """触发指定事件
         
         Args:
             event_name Union[EventType, str]: 事件名称
+            plugin_name str: 触发事件的插件名
             **kwargs: 传递给处理器的参数
             
         Returns:
@@ -280,7 +292,15 @@ class EventManager:
         if event is None:
             logger.error(f"事件 {event_name} 不存在，无法触发")
             return None
-
+        
+        # 插件白名单检查
+        if event.allowed_triggers and not plugin_name:
+            logger.warning(f"事件 {event_name} 存在触发者白名单，缺少plugin_name无法验证权限，已拒绝触发！")
+            return None
+        elif event.allowed_triggers and plugin_name not in event.allowed_triggers:
+            logger.warning(f"插件 {plugin_name} 没有权限触发事件 {event_name}，已拒绝触发！")
+            return None
+        
         return await event.activate(params)
     
     def init_default_events(self) -> None:
@@ -297,7 +317,7 @@ class EventManager:
         ]
         
         for event_name in default_events:
-            self.register_event(event_name)
+            self.register_event(event_name,allowed_triggers=["SYSTEM"])
         
         logger.info("默认事件初始化完成")
     

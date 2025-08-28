@@ -246,7 +246,7 @@ MoFox_Bot(第三方修改版)
 
 
         try:
-            await event_manager.trigger_event(EventType.ON_START)
+            await event_manager.trigger_event(EventType.ON_START,plugin_name="SYSTEM")
             init_time = int(1000 * (time.time() - init_start_time))
             logger.info(f"初始化完成，神经元放电{init_time}次")
         except Exception as e:

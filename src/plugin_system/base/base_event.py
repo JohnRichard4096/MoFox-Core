@@ -3,18 +3,18 @@ from typing import List, Dict, Any, Optional
 from src.common.logger import get_logger
 
 logger = get_logger("base_event")
-
+ 
 class HandlerResult:
     """事件处理器执行结果
     
     所有事件处理器必须返回此类的实例
     """
-    def __init__(self, success: bool, continue_process: bool, message: str = "", handler_name: str = ""):
+    def __init__(self, success: bool, continue_process: bool, message: Any = {}, handler_name: str = ""):
         self.success = success
         self.continue_process = continue_process
         self.message = message
         self.handler_name = handler_name
-    
+
     def __repr__(self):
         return f"HandlerResult(success={self.success}, continue_process={self.continue_process}, message='{self.message}', handler_name='{self.handler_name}')"
 
@@ -67,9 +67,16 @@ class HandlerResultsCollection:
         }
 
 class BaseEvent:
-    def __init__(self, name: str):
+    def __init__(
+            self, 
+            name: str, 
+            allowed_subscribers: List[str]=[],  
+            allowed_triggers: List[str]=[]
+        ):
         self.name = name
         self.enabled = True
+        self.allowed_subscribers = allowed_subscribers  # 记录事件处理器名
+        self.allowed_triggers = allowed_triggers  # 记录插件名
 
         from src.plugin_system.base.base_events_handler import BaseEventHandler
         self.subscribers: List["BaseEventHandler"] = [] # 订阅该事件的事件处理器列表
