@@ -13,6 +13,7 @@ from src.plugin_system import (
     register_plugin
 )
 from src.plugin_system.base.config_types import ConfigField
+from src.plugin_system.apis.permission_api import permission_api
 
 from .actions.read_feed_action import ReadFeedAction
 from .actions.send_feed_action import SendFeedAction
@@ -82,7 +83,12 @@ class MaiZoneRefactoredPlugin(BasePlugin):
 
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
-        
+        permission_api.register_permission_node(
+            "plugin.send.permission",
+            "是否可以使用机器人发送说说",
+            "maiZone",
+            False
+        )
         content_service = ContentService(self.get_config)
         image_service = ImageService(self.get_config)
         cookie_service = CookieService(self.get_config)
@@ -102,5 +108,5 @@ class MaiZoneRefactoredPlugin(BasePlugin):
         return [
             (SendFeedAction.get_action_info(), SendFeedAction),
             (ReadFeedAction.get_action_info(), ReadFeedAction),
-            (SendFeedCommand.get_command_info(), SendFeedCommand),
+            (SendFeedCommand.get_plus_command_info(), SendFeedCommand),
         ]

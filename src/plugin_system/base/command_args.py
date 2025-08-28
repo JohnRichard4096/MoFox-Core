@@ -50,7 +50,8 @@ class CommandArgs:
                     self._parsed_args = self._raw_args.split()
         
         return self._parsed_args
-    
+
+    @property
     def is_empty(self) -> bool:
         """检查参数是否为空
         
@@ -73,7 +74,8 @@ class CommandArgs:
         if 0 <= index < len(args):
             return args[index]
         return default
-    
+
+    @property
     def get_first(self, default: str = "") -> str:
         """获取第一个参数
         

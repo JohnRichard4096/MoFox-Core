@@ -16,6 +16,7 @@ from src.plugin_system.apis.permission_api import permission_api
 from src.plugin_system.apis.logging_api import get_logger
 from src.plugin_system.base.component_types import PlusCommandInfo, ChatType
 from src.plugin_system.base.config_types import ConfigField
+from src.plugin_system.utils.permission_decorators import require_permission, require_master, PermissionChecker
 
 
 logger = get_logger("Permission")
@@ -46,70 +47,38 @@ class PermissionCommand(PlusCommand):
             "permission_manager",
             True
         )
-    
+
     async def execute(self, args: CommandArgs) -> Tuple[bool, Optional[str], bool]:
         """执行权限管理命令"""
-        if args.is_empty():
+        if args.is_empty:
             await self._show_help()
             return True, "显示帮助信息", True
         
-        subcommand = args.get_first().lower()
+        subcommand = args.get_first.lower()
         remaining_args = args.get_args()[1:]  # 获取除第一个参数外的所有参数
         chat_stream = self.message.chat_stream
         
-        # 检查基本查看权限
-        can_view = permission_api.check_permission(
-            chat_stream.platform,
-            chat_stream.user_info.user_id,
-            "plugin.permission.view"
-        ) or permission_api.is_master(chat_stream.platform, chat_stream.user_info.user_id)
-
-        # 检查管理权限
-        can_manage = permission_api.check_permission(
-            chat_stream.platform, 
-            chat_stream.user_info.user_id, 
-            "plugin.permission.manage"
-        ) or permission_api.is_master(chat_stream.platform, chat_stream.user_info.user_id)
-        
         if subcommand in ["grant", "授权", "give"]:
-            if not can_manage:
-                await self.send_text("❌ 你没有权限管理的权限")
-                return True, "权限不足", True
             await self._grant_permission(chat_stream, remaining_args)
             return True, "执行授权命令", True
             
         elif subcommand in ["revoke", "撤销", "remove"]:
-            if not can_manage:
-                await self.send_text("❌ 你没有权限管理的权限")
-                return True, "权限不足", True
             await self._revoke_permission(chat_stream, remaining_args)
             return True, "执行撤销命令", True
             
         elif subcommand in ["list", "列表", "ls"]:
-            if not can_view:
-                await self.send_text("❌ 你没有查看权限的权限")
-                return True, "权限不足", True
             await self._list_permissions(chat_stream, remaining_args)
             return True, "执行列表命令", True
             
         elif subcommand in ["check", "检查"]:
-            if not can_view:
-                await self.send_text("❌ 你没有查看权限的权限")
-                return True, "权限不足", True
             await self._check_permission(chat_stream, remaining_args)
             return True, "执行检查命令", True
             
         elif subcommand in ["nodes", "节点"]:
-            if not can_view:
-                await self.send_text("❌ 你没有查看权限的权限")
-                return True, "权限不足", True
             await self._list_nodes(chat_stream, remaining_args)
             return True, "执行节点命令", True
             
         elif subcommand in ["allnodes", "全部节点", "all"]:
-            if not can_view:
-                await self.send_text("❌ 你没有查看权限的权限")
-                return True, "权限不足", True
             await self._list_all_nodes_with_description(chat_stream)
             return True, "执行全部节点命令", True
             
@@ -149,11 +118,18 @@ class PermissionCommand(PlusCommand):
         await self.send_text(help_text)
     
     def _parse_user_mention(self, mention: str) -> Optional[str]:
-        """解析用户提及，提取QQ号"""
+        """解析用户提及，提取QQ号
+        
+        支持的格式:
+        - @<用户名:QQ号> 格式
+        - [CQ:at,qq=QQ号] 格式  
+        - 直接的QQ号
+        """
         # 匹配 @<用户名:QQ号> 格式，提取QQ号
         at_match = re.search(r'@<[^:]+:(\d+)>', mention)
         if at_match:
             return at_match.group(1)
+
         
         # 直接是数字
         if mention.isdigit():
@@ -161,62 +137,94 @@ class PermissionCommand(PlusCommand):
         
         return None
 
+    @staticmethod
+    def parse_user_from_args(args: CommandArgs, index: int = 0) -> Optional[str]:
+        """从CommandArgs中解析用户ID
+        
+        Args:
+            args: 命令参数对象
+            index: 参数索引，默认为0（第一个参数）
+            
+        Returns:
+            Optional[str]: 解析出的用户ID，如果解析失败返回None
+        """
+        if index >= args.count():
+            return None
+        
+        mention = args.get_arg(index)
+        
+        # 匹配 @<用户名:QQ号> 格式，提取QQ号
+        at_match = re.search(r'@<[^:]+:(\d+)>', mention)
+        if at_match:
+            return at_match.group(1)
+        
+        # 匹配传统的 [CQ:at,qq=数字] 格式
+        cq_match = re.search(r'\[CQ:at,qq=(\d+)\]', mention)
+        if cq_match:
+            return cq_match.group(1)
+        
+        # 直接是数字
+        if mention.isdigit():
+            return mention
+        
+        return None
+
+    @require_permission("plugin.permission.manage", "❌ 你没有权限管理的权限")
     async def _grant_permission(self, chat_stream, args: List[str]):
         """授权用户权限"""
         if len(args) < 2:
             await self.send_text("❌ 用法: /permission grant <@用户|QQ号> <权限节点>")
             return
         
-        user_mention = args[0]
-        permission_node = args[1]
-        
-        # 解析用户ID
-        user_id = self._parse_user_mention(user_mention)
+        # 解析用户ID - 使用新的解析方法
+        user_id = self._parse_user_mention(args[0])
         if not user_id:
-            await self.send_text("❌ 无效的用户格式，请使用 @用户 或直接输入QQ号")
+            await self.send_text("❌ 无效的用户格式，请使用 @<用户名:QQ号> 或直接输入QQ号")
             return
+        
+        permission_node = args[1]
         
         # 执行授权
         success = permission_api.grant_permission(chat_stream.platform, user_id, permission_node)
         
         if success:
-            await self.send_text(f"✅ 已授权用户 {user_id} 权限节点 {permission_node}")
+            await self.send_text(f"✅ 已授权用户 {user_id} 权限节点 `{permission_node}`")
         else:
             await self.send_text("❌ 授权失败，请检查权限节点是否存在")
 
+    @require_permission("plugin.permission.manage", "❌ 你没有权限管理的权限")
     async def _revoke_permission(self, chat_stream, args: List[str]):
         """撤销用户权限"""
         if len(args) < 2:
             await self.send_text("❌ 用法: /permission revoke <@用户|QQ号> <权限节点>")
             return
         
-        user_mention = args[0]
-        permission_node = args[1]
-        
-        # 解析用户ID
-        user_id = self._parse_user_mention(user_mention)
+        # 解析用户ID - 使用新的解析方法
+        user_id = self._parse_user_mention(args[0])
         if not user_id:
-            await self.send_text("❌ 无效的用户格式，请使用 @用户 或直接输入QQ号")
+            await self.send_text("❌ 无效的用户格式，请使用 @<用户名:QQ号> 或直接输入QQ号")
             return
+        
+        permission_node = args[1]
         
         # 执行撤销
         success = permission_api.revoke_permission(chat_stream.platform, user_id, permission_node)
         
         if success:
-            await self.send_text(f"✅ 已撤销用户 {user_id} 权限节点 {permission_node}")
+            await self.send_text(f"✅ 已撤销用户 {user_id} 权限节点 `{permission_node}`")
         else:
             await self.send_text("❌ 撤销失败，请检查权限节点是否存在")
     
+    @require_permission("plugin.permission.view", "❌ 你没有查看权限的权限")
     async def _list_permissions(self, chat_stream, args: List[str]):
         """列出用户权限"""
         target_user_id = None
         
         if args:
-            # 指定了用户
-            user_mention = args[0]
-            target_user_id = self._parse_user_mention(user_mention)
+            # 指定了用户 - 使用新的解析方法
+            target_user_id = self._parse_user_mention(args[0])
             if not target_user_id:
-                await self.send_text("❌ 无效的用户格式，请使用 @用户 或直接输入QQ号")
+                await self.send_text("❌ 无效的用户格式，请使用 @<用户名:QQ号> 或直接输入QQ号")
                 return
         else:
             # 查看自己的权限
@@ -229,30 +237,30 @@ class PermissionCommand(PlusCommand):
         permissions = permission_api.get_user_permissions(chat_stream.platform, target_user_id)
         
         if is_master:
-            response = f"👑 用户 {target_user_id} 是Master用户，拥有所有权限"
+            response = f"👑 用户 `{target_user_id}` 是Master用户，拥有所有权限"
         else:
             if permissions:
-                perm_list = "\n".join([f"• {perm}" for perm in permissions])
-                response = f"📋 用户 {target_user_id} 拥有的权限：\n{perm_list}"
+                perm_list = "\n".join([f"• `{perm}`" for perm in permissions])
+                response = f"📋 用户 `{target_user_id}` 拥有的权限：\n{perm_list}"
             else:
-                response = f"📋 用户 {target_user_id} 没有任何权限"
+                response = f"📋 用户 `{target_user_id}` 没有任何权限"
         
         await self.send_text(response)
 
+    @require_permission("plugin.permission.view", "❌ 你没有查看权限的权限")
     async def _check_permission(self, chat_stream, args: List[str]):
         """检查用户权限"""
         if len(args) < 2:
             await self.send_text("❌ 用法: /permission check <@用户|QQ号> <权限节点>")
             return
         
-        user_mention = args[0]
-        permission_node = args[1]
-        
-        # 解析用户ID
-        user_id = self._parse_user_mention(user_mention)
+        # 解析用户ID - 使用新的解析方法
+        user_id = self._parse_user_mention(args[0])
         if not user_id:
-            await self.send_text("❌ 无效的用户格式，请使用 @用户 或直接输入QQ号")
+            await self.send_text("❌ 无效的用户格式，请使用 @<用户名:QQ号> 或直接输入QQ号")
             return
+        
+        permission_node = args[1]
         
         # 检查权限
         has_permission = permission_api.check_permission(chat_stream.platform, user_id, permission_node)
@@ -260,14 +268,15 @@ class PermissionCommand(PlusCommand):
         
         if has_permission:
             if is_master:
-                response = f"✅ 用户 {user_id} 拥有权限 {permission_node}（Master用户）"
+                response = f"✅ 用户 `{user_id}` 拥有权限 `{permission_node}`（Master用户）"
             else:
-                response = f"✅ 用户 {user_id} 拥有权限 {permission_node}"
+                response = f"✅ 用户 `{user_id}` 拥有权限 `{permission_node}`"
         else:
-            response = f"❌ 用户 {user_id} 没有权限 {permission_node}"
+            response = f"❌ 用户 `{user_id}` 没有权限 `{permission_node}`"
         
         await self.send_text(response)
 
+    @require_permission("plugin.permission.view", "❌ 你没有查看权限的权限")
     async def _list_nodes(self, chat_stream, args: List[str]):
         """列出权限节点"""
         plugin_name = args[0] if args else None
@@ -300,6 +309,7 @@ class PermissionCommand(PlusCommand):
         
         await self.send_text(response)
 
+    @require_permission("plugin.permission.view", "❌ 你没有查看权限的权限")
     async def _list_all_nodes_with_description(self, chat_stream):
         """列出所有插件的权限节点（带详细描述）"""
         # 获取所有权限节点
