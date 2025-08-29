@@ -564,32 +564,370 @@ class NapcatEvent(Enum):
         """
         该分类是对信息相关的操作，只能由外部触发，napcat_plugin负责处理
         """
-        SEND_GROUP_POKE = "napcat_send_group_poke"  
-        '''发送群聊戳一戳'''
         SEND_PRIVATE_MSG = "napcat_send_private_msg"    
-        '''发送私聊消息'''
-        SEND_POKE = "napcat_send_friend_poke"    
-        '''发送戳一戳'''
+        '''发送私聊消息
+        
+        Args:
+            user_id (Opetional[str|int]): 用户id(必需)
+            message (Opetional[str]): 消息object(必需)
+            raw (Optional[dict]): 原始请求体
+        
+        Returns:
+            dict: {
+            "status": "ok",
+            "retcode": 0,
+            "data": {
+                "message_id": 0
+            },
+            "message": "string",
+            "wording": "string",
+            "echo": "string"
+        }
+        '''
+        SEND_POKE = "napcat_send_poke"    
+        '''发送戳一戳
+        
+        Args:
+            group_id (Optional[str|int]): 群号
+            user_id (Optional[str|int]): 对方QQ号(必需)
+            raw (Optional[dict]): 原始请求体
+        
+        Returns:
+            dict: {
+            "status": "ok",
+            "retcode": 0,
+            "data": null,
+            "message": "string",
+            "wording": "string",
+            "echo": "string"
+        }
+        '''
         DELETE_MSG = "napcat_delete_msg"    
-        '''撤回消息'''
+        '''撤回消息
+
+        Args:
+            message_id (Optional[str|int]): 消息id(必需)
+            raw (Optional[dict]): 原始请求体
+        
+        Returns:
+            dict: {
+            "status": "ok",
+            "retcode": 0,
+            "data": null,
+            "message": "string",
+            "wording": "string",
+            "echo": "string"
+        }
+        '''
         GET_GROUP_MSG_HISTORY = "napcat_get_group_msg_history"  
-        '''获取群历史消息'''
+        '''获取群历史消息
+        
+        Args:
+            group_id (Optional[str|int]): 群号(必需)
+            message_seq (Optional[str|int]): 消息序号,0为最新
+            count (Optional[int]): 获取数量
+            reverseOrder (Optional[bool]): 是否倒序
+            raw (Optional[dict]): 原始请求体
+        
+        Returns:
+            dict: {
+            "status": "ok",
+            "retcode": 0,
+            "data": {
+                "messages": [
+                    {
+                        "self_id": 0,
+                        "user_id": 0,
+                        "time": 0,
+                        "message_id": 0,
+                        "message_seq": 0,
+                        "real_id": 0,
+                        "real_seq": "string",
+                        "message_type": "string",
+                        "sender": {
+                            "user_id": 0,
+                            "nickname": "string",
+                            "sex": "male",
+                            "age": 0,
+                            "card": "string",
+                            "role": "owner"
+                        },
+                        "raw_message": "string",
+                        "font": 0,
+                        "sub_type": "string",
+                        "message": [
+                            {
+                                "type": "text",
+                                "data": {
+                                    "text": "string"
+                                }
+                            }
+                        ],
+                        "message_format": "string",
+                        "post_type": "string",
+                        "group_id": 0
+                    }
+                ]
+            },
+            "message": "string",
+            "wording": "string",
+            "echo": "string"
+        }
+        '''
         GET_MSG = "napcat_get_msg"  
-        '''获取消息详情'''
+        '''获取消息详情
+        
+        Args: 
+            message_id (Optional[str|int]): 消息id(必需)
+            raw (Optional[dict]): 原始请求体
+
+        Returns:
+            dict: {
+            "status": "ok",
+            "retcode": 0,
+            "data": {
+                "self_id": 0,
+                "user_id": 0,
+                "time": 0,
+                "message_id": 0,
+                "message_seq": 0,
+                "real_id": 0,
+                "real_seq": "string",
+                "message_type": "string",
+                "sender": {
+                    "user_id": 0,
+                    "nickname": "string",
+                    "sex": "male",
+                    "age": 0,
+                    "card": "string",
+                    "role": "owner"
+                },
+                "raw_message": "string",
+                "font": 0,
+                "sub_type": "string",
+                "message": [
+                    {
+                        "type": "text",
+                        "data": {
+                            "text": "string"
+                        }
+                    }
+                ],
+                "message_format": "string",
+                "post_type": "string",
+                "group_id": 0
+            },
+            "message": "string",
+            "wording": "string",
+            "echo": "string"
+        }        
+        '''
         GET_FORWARD_MSG = "napcat_get_forward_msg"  
-        '''获取合并转发消息'''
+        '''获取合并转发消息
+        
+        Args:
+            message_id (Optional[str|int]): 消息id(必需)
+            raw (Optional[dict]): 原始请求体
+        
+        Returns:
+            dict: {
+            "status": "ok",
+            "retcode": 0,
+            "data": {
+                "messages": [
+                    {
+                        "self_id": 0,
+                        "user_id": 0,
+                        "time": 0,
+                        "message_id": 0,
+                        "message_seq": 0,
+                        "real_id": 0,
+                        "real_seq": "string",
+                        "message_type": "string",
+                        "sender": {
+                            "user_id": 0,
+                            "nickname": "string",
+                            "sex": "male",
+                            "age": 0,
+                            "card": "string",
+                            "role": "owner"
+                        },
+                        "raw_message": "string",
+                        "font": 0,
+                        "sub_type": "string",
+                        "message": [
+                            {
+                                "type": "text",
+                                "data": {
+                                    "text": "string"
+                                }
+                            }
+                        ],
+                        "message_format": "string",
+                        "post_type": "string",
+                        "group_id": 0
+                    }
+                ]
+            },
+            "message": "string",
+            "wording": "string",
+            "echo": "string"
+        }
+        '''
         SET_MSG_EMOJI_LIKE = "napcat_set_msg_emoji_like"    
-        '''贴表情'''
+        '''贴表情
+        
+        Args:
+            message_id (Optional[str|int]): 消息id(必需)
+            emoji_id (Optional[int]): 表情id(必需)
+            set (Optional[bool]): 是否贴(必需)
+            raw (Optional[dict]): 原始请求体
+
+        Returns:
+            dict: {
+            "status": "ok",
+            "retcode": 0,
+            "data": {
+                "result": 0,
+                "errMsg": "string"
+            },
+            "message": "string",
+            "wording": "string",
+            "echo": "string"
+        }
+        '''
         GET_FRIEND_MSG_HISTORY = "napcat_get_friend_msg_history"    
-        '''获取好友历史消息'''
+        '''获取好友历史消息
+        
+        Args:
+            user_id (Optional[str|int]): 用户id(必需)
+            message_seq (Optional[str|int]): 消息序号,0为最新
+            count (Optional[int]): 获取数量
+            reverseOrder (Optional[bool]): 是否倒序
+            raw (Optional[dict]): 原始请求体
+        
+        Returns:
+            dict: {
+            "status": "ok",
+            "retcode": 0,
+            "data": {
+                "messages": [
+                    {
+                        "self_id": 0,
+                        "user_id": 0,
+                        "time": 0,
+                        "message_id": 0,
+                        "message_seq": 0,
+                        "real_id": 0,
+                        "real_seq": "string",
+                        "message_type": "string",
+                        "sender": {
+                            "user_id": 0,
+                            "nickname": "string",
+                            "sex": "male",
+                            "age": 0,
+                            "card": "string",
+                            "role": "owner"
+                        },
+                        "raw_message": "string",
+                        "font": 0,
+                        "sub_type": "string",
+                        "message": [
+                            {
+                                "type": "text",
+                                "data": {
+                                    "text": "string"
+                                }
+                            }
+                        ],
+                        "message_format": "string",
+                        "post_type": "string",
+                        "group_id": 0
+                    }
+                ]
+            },
+            "message": "string",
+            "wording": "string",
+            "echo": "string"
+        }
+        '''
         FETCH_EMOJI_LIKE = "napcat_fetch_emoji_like"    
-        '''获取贴表情详情'''
+        '''获取贴表情详情
+        
+        Args:
+            message_id (Optional[str|int]): 消息id(必需)
+            emojiId (Optional[str]): 表情id(必需)
+            emojiType (Optional[str]): 表情类型(必需)
+            count (Optional[int]): 返回数量
+            raw (Optional[dict]): 原始请求体
+        
+        Returns:
+            dict: {
+            "status": "ok",
+            "retcode": 0,
+            "data": {
+                "result": 0,
+                "errMsg": "string",
+                "emojiLikesList": [
+                    {
+                        "tinyId": "string",
+                        "nickName": "string",
+                        "headUrl": "string"
+                    }
+                ],
+                "cookie": "string",
+                "isLastPage": true,
+                "isFirstPage": true
+            },
+            "message": "string",
+            "wording": "string",
+            "echo": "string"
+        }
+        '''
         SEND_FORWARF_MSG = "napcat_send_forward_msg"    
-        '''发送合并转发消息'''
-        GET_RECOED = "napcat_get_record"    
-        '''获取语音消息详情'''
+        '''发送合并转发消息
+        
+        Args:
+            group_id (Optional[str|int]): 群号
+            user_id (Optional[str|int]): 用户id
+            messages (Optional[dict]): 一级合并转发消息节点(必需)
+            news (Optional[dict]): 原转发消息之外的消息(必需)
+            prompt (Optional[str]): 外显(必需)
+            summary (Optional[str]): 底下文本(必需)
+            source (Optional[str]): 内容(必需)
+            raw (Optional[dict]): 原始请求体
+            
+        Returns:
+            dict: {
+            "status": "ok",
+            "retcode": 0,
+            "data": {},
+            "message": "string",
+            "wording": "string",
+            "echo": "string"
+        }
+        '''
         SEND_GROUP_AI_RECORD = "napcat_send_group_ai_record"    
-        '''发送群AI语音'''
+        '''发送群AI语音
+        
+        Args:
+            group_id (Optional[str|int]): 群号(必需)
+            character (Optional[str]): 角色id(必需)
+            text (Optional[str]): 文本(必需)
+            raw (Optional[dict]): 原始请求体
+
+        Returns:
+            dict: {
+            "status": "ok",
+            "retcode": 0,
+            "data": {
+                "message_id": "string"
+            },
+            "message": "string",
+            "wording": "string",
+            "echo": "string"
+        }
+        '''
 
     class GROUP(Enum):
         """

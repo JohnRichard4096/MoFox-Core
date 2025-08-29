@@ -1,4 +1,3 @@
-
 from src.plugin_system import BaseEventHandler
 from src.plugin_system.base.base_event import HandlerResult
 
@@ -547,4 +546,391 @@ class SetDiyOnlineStatusHandler(BaseEventHandler):
             return HandlerResult(True, True, response)
         else:
             logger.error("事件 napcat_set_diy_online_status 请求失败！")
+            return HandlerResult(False, False, {"status": "error"})
+
+
+class SendPrivateMsgHandler(BaseEventHandler):
+    handler_name: str = "napcat_send_private_msg_handler"
+    handler_description: str = "发送私聊消息"
+    weight: int = 100
+    intercept_message: bool = False
+    init_subscribe = [NapcatEvent.MESSAGE.SEND_PRIVATE_MSG]
+
+    async def execute(self, params: dict):
+        raw = params.get("raw", {})
+        user_id = params.get("user_id", "")
+        message = params.get("message", "")
+
+        if params.get("raw", ""):
+            user_id = raw.get("user_id", "")
+            message = raw.get("message", "")
+
+        if not user_id or not message:
+            logger.error("事件 napcat_send_private_msg 缺少必要参数: user_id 或 message")
+            return HandlerResult(False, False, {"status": "error"})
+
+        payload = {
+            "user_id": str(user_id),
+            "message": message
+        }
+        response = await send_handler.send_message_to_napcat(action="send_private_msg", params=payload)
+        if response.get("status", "") == "ok":
+            return HandlerResult(True, True, response)
+        else:
+            logger.error("事件 napcat_send_private_msg 请求失败！")
+            return HandlerResult(False, False, {"status": "error"})
+
+
+class SendPokeHandler(BaseEventHandler):
+    handler_name: str = "napcat_send_poke_handler"
+    handler_description: str = "发送戳一戳"
+    weight: int = 100
+    intercept_message: bool = False
+    init_subscribe = [NapcatEvent.MESSAGE.SEND_POKE]
+
+    async def execute(self, params: dict):
+        raw = params.get("raw", {})
+        user_id = params.get("user_id", "")
+        group_id = params.get("group_id", None)
+
+        if params.get("raw", ""):
+            user_id = raw.get("user_id", "")
+            group_id = raw.get("group_id", None)
+
+        if not user_id:
+            logger.error("事件 napcat_send_poke 缺少必要参数: user_id")
+            return HandlerResult(False, False, {"status": "error"})
+
+        payload = {
+            "user_id": str(user_id)
+        }
+        if group_id is not None:
+            payload["group_id"] = str(group_id)
+
+        response = await send_handler.send_message_to_napcat(action="send_poke", params=payload)
+        if response.get("status", "") == "ok":
+            return HandlerResult(True, True, response)
+        else:
+            logger.error("事件 napcat_send_poke 请求失败！")
+            return HandlerResult(False, False, {"status": "error"})
+
+
+class DeleteMsgHandler(BaseEventHandler):
+    handler_name: str = "napcat_delete_msg_handler"
+    handler_description: str = "撤回消息"
+    weight: int = 100
+    intercept_message: bool = False
+    init_subscribe = [NapcatEvent.MESSAGE.DELETE_MSG]
+
+    async def execute(self, params: dict):
+        raw = params.get("raw", {})
+        message_id = params.get("message_id", "")
+
+        if params.get("raw", ""):
+            message_id = raw.get("message_id", "")
+
+        if not message_id:
+            logger.error("事件 napcat_delete_msg 缺少必要参数: message_id")
+            return HandlerResult(False, False, {"status": "error"})
+
+        payload = {
+            "message_id": str(message_id)
+        }
+        response = await send_handler.send_message_to_napcat(action="delete_msg", params=payload)
+        if response.get("status", "") == "ok":
+            return HandlerResult(True, True, response)
+        else:
+            logger.error("事件 napcat_delete_msg 请求失败！")
+            return HandlerResult(False, False, {"status": "error"})
+
+
+class GetGroupMsgHistoryHandler(BaseEventHandler):
+    handler_name: str = "napcat_get_group_msg_history_handler"
+    handler_description: str = "获取群历史消息"
+    weight: int = 100
+    intercept_message: bool = False
+    init_subscribe = [NapcatEvent.MESSAGE.GET_GROUP_MSG_HISTORY]
+
+    async def execute(self, params: dict):
+        raw = params.get("raw", {})
+        group_id = params.get("group_id", "")
+        message_seq = params.get("message_seq", 0)
+        count = params.get("count", 20)
+        reverseOrder = params.get("reverseOrder", False)
+
+        if params.get("raw", ""):
+            group_id = raw.get("group_id", "")
+            message_seq = raw.get("message_seq", 0)
+            count = raw.get("count", 20)
+            reverseOrder = raw.get("reverseOrder", False)
+
+        if not group_id:
+            logger.error("事件 napcat_get_group_msg_history 缺少必要参数: group_id")
+            return HandlerResult(False, False, {"status": "error"})
+
+        payload = {
+            "group_id": str(group_id),
+            "message_seq": int(message_seq),
+            "count": int(count),
+            "reverseOrder": bool(reverseOrder)
+        }
+        response = await send_handler.send_message_to_napcat(action="get_group_msg_history", params=payload)
+        if response.get("status", "") == "ok":
+            return HandlerResult(True, True, response)
+        else:
+            logger.error("事件 napcat_get_group_msg_history 请求失败！")
+            return HandlerResult(False, False, {"status": "error"})
+
+
+class GetMsgHandler(BaseEventHandler):
+    handler_name: str = "napcat_get_msg_handler"
+    handler_description: str = "获取消息详情"
+    weight: int = 100
+    intercept_message: bool = False
+    init_subscribe = [NapcatEvent.MESSAGE.GET_MSG]
+
+    async def execute(self, params: dict):
+        raw = params.get("raw", {})
+        message_id = params.get("message_id", "")
+
+        if params.get("raw", ""):
+            message_id = raw.get("message_id", "")
+
+        if not message_id:
+            logger.error("事件 napcat_get_msg 缺少必要参数: message_id")
+            return HandlerResult(False, False, {"status": "error"})
+
+        payload = {
+            "message_id": str(message_id)
+        }
+        response = await send_handler.send_message_to_napcat(action="get_msg", params=payload)
+        if response.get("status", "") == "ok":
+            return HandlerResult(True, True, response)
+        else:
+            logger.error("事件 napcat_get_msg 请求失败！")
+            return HandlerResult(False, False, {"status": "error"})
+
+
+class GetForwardMsgHandler(BaseEventHandler):
+    handler_name: str = "napcat_get_forward_msg_handler"
+    handler_description: str = "获取合并转发消息"
+    weight: int = 100
+    intercept_message: bool = False
+    init_subscribe = [NapcatEvent.MESSAGE.GET_FORWARD_MSG]
+
+    async def execute(self, params: dict):
+        raw = params.get("raw", {})
+        message_id = params.get("message_id", "")
+
+        if params.get("raw", ""):
+            message_id = raw.get("message_id", "")
+
+        if not message_id:
+            logger.error("事件 napcat_get_forward_msg 缺少必要参数: message_id")
+            return HandlerResult(False, False, {"status": "error"})
+
+        payload = {
+            "message_id": str(message_id)
+        }
+        response = await send_handler.send_message_to_napcat(action="get_forward_msg", params=payload)
+        if response.get("status", "") == "ok":
+            return HandlerResult(True, True, response)
+        else:
+            logger.error("事件 napcat_get_forward_msg 请求失败！")
+            return HandlerResult(False, False, {"status": "error"})
+
+
+class SetMsgEmojiLikeHandler(BaseEventHandler):
+    handler_name: str = "napcat_set_msg_emoji_like_handler"
+    handler_description: str = "贴表情"
+    weight: int = 100
+    intercept_message: bool = False
+    init_subscribe = [NapcatEvent.MESSAGE.SET_MSG_EMOJI_LIKE]
+
+    async def execute(self, params: dict):
+        raw = params.get("raw", {})
+        message_id = params.get("message_id", "")
+        emoji_id = params.get("emoji_id", 0)
+        set_flag = params.get("set", True)
+
+        if params.get("raw", ""):
+            message_id = raw.get("message_id", "")
+            emoji_id = raw.get("emoji_id", 0)
+            set_flag = raw.get("set", True)
+
+        if not message_id or emoji_id is None or set_flag is None:
+            logger.error("事件 napcat_set_msg_emoji_like 缺少必要参数")
+            return HandlerResult(False, False, {"status": "error"})
+
+        payload = {
+            "message_id": str(message_id),
+            "emoji_id": int(emoji_id),
+            "set": bool(set_flag)
+        }
+        response = await send_handler.send_message_to_napcat(action="set_msg_emoji_like", params=payload)
+        if response.get("status", "") == "ok":
+            return HandlerResult(True, True, response)
+        else:
+            logger.error("事件 napcat_set_msg_emoji_like 请求失败！")
+            return HandlerResult(False, False, {"status": "error"})
+
+
+class GetFriendMsgHistoryHandler(BaseEventHandler):
+    handler_name: str = "napcat_get_friend_msg_history_handler"
+    handler_description: str = "获取好友历史消息"
+    weight: int = 100
+    intercept_message: bool = False
+    init_subscribe = [NapcatEvent.MESSAGE.GET_FRIEND_MSG_HISTORY]
+
+    async def execute(self, params: dict):
+        raw = params.get("raw", {})
+        user_id = params.get("user_id", "")
+        message_seq = params.get("message_seq", 0)
+        count = params.get("count", 20)
+        reverseOrder = params.get("reverseOrder", False)
+
+        if params.get("raw", ""):
+            user_id = raw.get("user_id", "")
+            message_seq = raw.get("message_seq", 0)
+            count = raw.get("count", 20)
+            reverseOrder = raw.get("reverseOrder", False)
+
+        if not user_id:
+            logger.error("事件 napcat_get_friend_msg_history 缺少必要参数: user_id")
+            return HandlerResult(False, False, {"status": "error"})
+
+        payload = {
+            "user_id": str(user_id),
+            "message_seq": int(message_seq),
+            "count": int(count),
+            "reverseOrder": bool(reverseOrder)
+        }
+        response = await send_handler.send_message_to_napcat(action="get_friend_msg_history", params=payload)
+        if response.get("status", "") == "ok":
+            return HandlerResult(True, True, response)
+        else:
+            logger.error("事件 napcat_get_friend_msg_history 请求失败！")
+            return HandlerResult(False, False, {"status": "error"})
+
+
+class FetchEmojiLikeHandler(BaseEventHandler):
+    handler_name: str = "napcat_fetch_emoji_like_handler"
+    handler_description: str = "获取贴表情详情"
+    weight: int = 100
+    intercept_message: bool = False
+    init_subscribe = [NapcatEvent.MESSAGE.FETCH_EMOJI_LIKE]
+
+    async def execute(self, params: dict):
+        raw = params.get("raw", {})
+        message_id = params.get("message_id", "")
+        emoji_id = params.get("emoji_id", "")
+        emoji_type = params.get("emoji_type", "")
+        count = params.get("count", 20)
+
+        if params.get("raw", ""):
+            message_id = raw.get("message_id", "")
+            emoji_id = raw.get("emoji_id", "")
+            emoji_type = raw.get("emoji_type", "")
+            count = raw.get("count", 20)
+
+        if not message_id or not emoji_id or not emoji_type:
+            logger.error("事件 napcat_fetch_emoji_like 缺少必要参数")
+            return HandlerResult(False, False, {"status": "error"})
+
+        payload = {
+            "message_id": str(message_id),
+            "emojiId": str(emoji_id),
+            "emojiType": str(emoji_type),
+            "count": int(count)
+        }
+        response = await send_handler.send_message_to_napcat(action="fetch_emoji_like", params=payload)
+        if response.get("status", "") == "ok":
+            return HandlerResult(True, True, response)
+        else:
+            logger.error("事件 napcat_fetch_emoji_like 请求失败！")
+            return HandlerResult(False, False, {"status": "error"})
+
+
+class SendForwardMsgHandler(BaseEventHandler):
+    handler_name: str = "napcat_send_forward_msg_handler"
+    handler_description: str = "发送合并转发消息"
+    weight: int = 100
+    intercept_message: bool = False
+    init_subscribe = [NapcatEvent.MESSAGE.SEND_FORWARF_MSG]
+
+    async def execute(self, params: dict):
+        raw = params.get("raw", {})
+        messages = params.get("messages", {})
+        news = params.get("news", {})
+        prompt = params.get("prompt", "")
+        summary = params.get("summary", "")
+        source = params.get("source", "")
+        group_id = params.get("group_id", None)
+        user_id = params.get("user_id", None)
+
+        if params.get("raw", ""):
+            messages = raw.get("messages", {})
+            news = raw.get("news", {})
+            prompt = raw.get("prompt", "")
+            summary = raw.get("summary", "")
+            source = raw.get("source", "")
+            group_id = raw.get("group_id", None)
+            user_id = raw.get("user_id", None)
+
+        if not messages or not news or not prompt or not summary or not source:
+            logger.error("事件 napcat_send_forward_msg 缺少必要参数")
+            return HandlerResult(False, False, {"status": "error"})
+
+        payload = {
+            "messages": messages,
+            "news": news,
+            "prompt": prompt,
+            "summary": summary,
+            "source": source
+        }
+        if group_id is not None:
+            payload["group_id"] = str(group_id)
+        if user_id is not None:
+            payload["user_id"] = str(user_id)
+
+        response = await send_handler.send_message_to_napcat(action="send_forward_msg", params=payload)
+        if response.get("status", "") == "ok":
+            return HandlerResult(True, True, response)
+        else:
+            logger.error("事件 napcat_send_forward_msg 请求失败！")
+            return HandlerResult(False, False, {"status": "error"})
+
+
+class SendGroupAiRecordHandler(BaseEventHandler):
+    handler_name: str = "napcat_send_group_ai_record_handler"
+    handler_description: str = "发送群AI语音"
+    weight: int = 100
+    intercept_message: bool = False
+    init_subscribe = [NapcatEvent.MESSAGE.SEND_GROUP_AI_RECORD]
+
+    async def execute(self, params: dict):
+        raw = params.get("raw", {})
+        group_id = params.get("group_id", "")
+        character = params.get("character", "")
+        text = params.get("text", "")
+
+        if params.get("raw", ""):
+            group_id = raw.get("group_id", "")
+            character = raw.get("character", "")
+            text = raw.get("text", "")
+
+        if not group_id or not character or not text:
+            logger.error("事件 napcat_send_group_ai_record 缺少必要参数")
+            return HandlerResult(False, False, {"status": "error"})
+
+        payload = {
+            "group_id": str(group_id),
+            "character": character,
+            "text": text
+        }
+        response = await send_handler.send_message_to_napcat(action="send_group_ai_record", params=payload)
+        if response.get("status", "") == "ok":
+            return HandlerResult(True, True, response)
+        else:
+            logger.error("事件 napcat_send_group_ai_record 请求失败！")
             return HandlerResult(False, False, {"status": "error"})
