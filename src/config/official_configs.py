@@ -561,13 +561,20 @@ class VideoAnalysisConfig(ValidatedConfigBase):
 
     enable: bool = Field(default=True, description="启用")
     analysis_mode: str = Field(default="batch_frames", description="分析模式")
-    frame_extraction_mode: str = Field(default="fixed_number", description="抽帧模式")
+    frame_extraction_mode: str = Field(default="keyframe", description="抽帧模式：keyframe(关键帧), fixed_number(固定数量), time_interval(时间间隔)")
     frame_interval_seconds: float = Field(default=2.0, description="抽帧时间间隔")
     max_frames: int = Field(default=8, description="最大帧数")
     frame_quality: int = Field(default=85, description="帧质量")
     max_image_size: int = Field(default=800, description="最大图像大小")
     enable_frame_timing: bool = Field(default=True, description="启用帧时间")
     batch_analysis_prompt: str = Field(default="", description="批量分析提示")
+    
+    # Rust模块相关配置
+    rust_keyframe_threshold: float = Field(default=2.0, description="关键帧检测阈值")
+    rust_use_simd: bool = Field(default=True, description="启用SIMD优化")
+    rust_block_size: int = Field(default=8192, description="Rust处理块大小")
+    rust_threads: int = Field(default=0, description="Rust线程数，0表示自动检测")
+    ffmpeg_path: str = Field(default="ffmpeg", description="FFmpeg可执行文件路径")
 
 
 class WebSearchConfig(ValidatedConfigBase):

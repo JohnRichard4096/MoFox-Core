@@ -1,5 +1,5 @@
 [inner]
-version = "6.5.7"
+version = "6.5.8"
 
 #----以下是给开发人员阅读的，如果你只是部署了MoFox-Bot，不需要阅读----
 #如果你想要修改配置文件，请递增version的值
@@ -49,11 +49,11 @@ master_users = []# ["qq", "123456789"],  # 示例：QQ平台的Master用户
 [bot]
 platform = "qq"
 qq_account = 1145141919810 # MoFox-Bot的QQ账号
-nickname = "MoFox-Bot" # MoFox-Bot的昵称
-alias_names = ["麦叠", "牢麦"] # MoFox-Bot的别名
+nickname = "墨狐" # MoFox-Bot的昵称
+alias_names = ["狐狐", "墨墨"] # MoFox-Bot的别名
 
 [command]
-command_prefixes = ['/', '!', '.', '#']
+command_prefixes = ['/']
 
 [personality]
 # 建议50字以内，描述人格的核心特质
@@ -400,15 +400,22 @@ pre_sleep_prompt = "我准备睡觉了，请生成一句简短自然的晚安问
 
 [video_analysis] # 视频分析配置
 enable = true # 是否启用视频分析功能
-analysis_mode = "batch_frames" # 分析模式："frame_by_frame"（逐帧分析，非常慢  "建议frames大于8时不要使用这个"  ...但是详细）、"batch_frames"（批量分析，快但可能略简单  -其实效果也差不多）或 "auto"（自动选择）
-frame_extraction_mode = "fixed_number"  # 抽帧模式: "fixed_number" (固定总帧数) 或 "time_interval" (按时间间隔)
+analysis_mode = "batch_frames" # 分析模式："frame_by_frame"（逐帧分析，非常慢）、"batch_frames"（批量分析，推荐）或 "auto"（自动选择）
+frame_extraction_mode = "keyframe"  # 抽帧模式: "keyframe" (智能关键帧，推荐)、"fixed_number" (固定总帧数) 或 "time_interval" (按时间间隔)
 frame_interval_seconds = 2.0  # 按时间间隔抽帧的秒数（仅在 mode = "time_interval" 时生效）
-max_frames = 16 # 最大分析帧数（仅在 mode = "fixed_number" 时生效）
+max_frames = 16 # 最大分析帧数
 frame_quality = 80 # 帧图像JPEG质量 (1-100)
 max_image_size = 800 # 单帧最大图像尺寸(像素)
 enable_frame_timing = true # 是否在分析中包含帧的时间信息
-use_multiprocessing = true # 是否使用线程池处理视频帧提取（推荐开启，可防止卡死）
-max_workers = 2 # 最大线程数（建议1-2个，避免过度消耗资源）
+
+# Rust模块相关配置
+rust_keyframe_threshold = 2.0 # 关键帧检测阈值，值越大关键帧越少
+rust_use_simd = true # 启用SIMD优化（推荐）
+rust_block_size = 8192 # 处理块大小，较大值可能提高高分辨率视频性能
+rust_threads = 0 # 线程数，0表示自动检测
+ffmpeg_path = "ffmpeg" # FFmpeg可执行文件路径
+
+
 # 批量分析时使用的提示词
 batch_analysis_prompt = """请以第一人称的视角来观看这一个视频，你看到的这些是从视频中按时间顺序提取的关键帧。
 
