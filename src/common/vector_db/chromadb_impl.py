@@ -92,12 +92,14 @@ class ChromaDBImpl(VectorDBBase):
         collection = self.get_or_create_collection(collection_name)
         if collection:
             try:
-                return collection.query(
-                    query_embeddings=query_embeddings,
-                    n_results=n_results,
-                    where=where or {},
+                query_params = {
+                    "query_embeddings": query_embeddings,
+                    "n_results": n_results,
                     **kwargs,
-                )
+                }
+                if where:
+                    query_params["where"] = where
+                return collection.query(**query_params)
             except Exception as e:
                 logger.error(f"查询集合 '{collection_name}' 失败: {e}")
         return {}
