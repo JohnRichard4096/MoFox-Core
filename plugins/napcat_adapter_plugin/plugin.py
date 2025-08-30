@@ -11,13 +11,7 @@ from src.plugin_system import BasePlugin, BaseEventHandler, register_plugin, Eve
 from src.plugin_system.base.base_event import HandlerResult
 from src.plugin_system.core.event_manager import event_manager
 
-from pathlib import Path
 from src.common.logger import get_logger
-logger = get_logger("napcat_adapter")
-
-# 添加当前目录到Python路径，这样可以识别src包
-current_dir = Path(__file__).parent
-sys.path.insert(0, str(current_dir))
 
 from .src.recv_handler.message_handler import message_handler
 from .src.recv_handler.meta_event_handler import meta_event_handler
@@ -30,6 +24,8 @@ from .src.config.migrate_features import auto_migrate_features
 from .src.mmc_com_layer import mmc_start_com, router
 from .src.response_pool import put_response, check_timeout_response
 from .src.websocket_manager import websocket_manager
+
+logger = get_logger("napcat_adapter")
 
 message_queue = asyncio.Queue()
 
