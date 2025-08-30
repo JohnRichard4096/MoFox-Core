@@ -39,7 +39,6 @@ from src.config.official_configs import (
     DependencyManagementConfig,
     WebSearchConfig,
     AntiPromptInjectionConfig,
-    PluginsConfig,
     SleepSystemConfig,
     MonthlyPlanSystemConfig,
     CrossContextConfig,
@@ -403,7 +402,6 @@ class Config(ValidatedConfigBase):
     video_analysis: VideoAnalysisConfig = Field(default_factory=lambda: VideoAnalysisConfig(), description="视频分析配置")
     dependency_management: DependencyManagementConfig = Field(default_factory=lambda: DependencyManagementConfig(), description="依赖管理配置")
     web_search: WebSearchConfig = Field(default_factory=lambda: WebSearchConfig(), description="网络搜索配置")
-    plugins: PluginsConfig = Field(default_factory=lambda: PluginsConfig(), description="插件配置")
     sleep_system: SleepSystemConfig = Field(default_factory=lambda: SleepSystemConfig(), description="睡眠系统配置")
     monthly_plan_system: MonthlyPlanSystemConfig = Field(default_factory=lambda: MonthlyPlanSystemConfig(), description="月层计划系统配置")
     cross_context: CrossContextConfig = Field(default_factory=lambda: CrossContextConfig(), description="跨群聊上下文共享配置")

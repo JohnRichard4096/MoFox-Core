@@ -458,54 +458,35 @@ class PluginBase(ABC):
         加载插件配置文件，实现集中化管理和自动迁移。
 
         处理逻辑:
-        1. 确定插件模板配置文件路径（位于插件目录内）。
-        2. 如果模板不存在，则在插件目录内生成一份默认配置。
-        3. 确定用户配置文件路径（位于 `config/plugins/` 目录下）。
-        4. 如果用户配置文件不存在，则从插件目录复制模板文件过去。
-        5. 加载用户配置文件，并进行版本检查和自动迁移（如果需要）。
-        6. 最终加载的配置是用户配置文件。
+        1. 确定用户配置文件路径（位于 `config/plugins/` 目录下）。
+        2. 如果用户配置文件不存在，则根据 config_schema 直接在中央目录生成一份。
+        3. 加载用户配置文件，并进行版本检查和自动迁移（如果需要）。
+        4. 最终加载的配置是用户配置文件。
         """
         if not self.config_file_name:
             logger.debug(f"{self.log_prefix} 未指定配置文件，跳过加载")
             return
 
-        # 1. 确定插件模板配置文件路径
-        template_config_path = os.path.join(self.plugin_dir, self.config_file_name)
+        # 1. 确定并确保用户配置文件路径存在
+        user_config_path = os.path.join(CONFIG_DIR, "plugins", self.plugin_name, self.config_file_name)
+        os.makedirs(os.path.dirname(user_config_path), exist_ok=True)
 
-        # 2. 如果模板不存在，则在插件目录内生成
-        if not os.path.exists(template_config_path):
-            logger.info(f"{self.log_prefix} 插件目录缺少配置文件 {template_config_path}，将生成默认配置。")
-            self._generate_and_save_default_config(template_config_path)
-
-        # 3. 确定用户配置文件路径
-        plugin_config_dir = os.path.join(CONFIG_DIR, "plugins", self.plugin_name)
-        user_config_path = os.path.join(plugin_config_dir, self.config_file_name)
-
-        # 确保用户插件配置目录存在
-        os.makedirs(plugin_config_dir, exist_ok=True)
-
-        # 4. 如果用户配置文件不存在，从模板复制
+        # 2. 如果用户配置文件不存在，直接在中央目录生成
         if not os.path.exists(user_config_path):
-            try:
-                shutil.copy2(template_config_path, user_config_path)
-                logger.info(f"{self.log_prefix} 已从模板创建用户配置文件: {user_config_path}")
-            except IOError as e:
-                logger.error(f"{self.log_prefix} 复制配置文件失败: {e}", exc_info=True)
-                # 如果复制失败，后续将无法加载，直接返回
-                return
+            logger.info(f"{self.log_prefix} 用户配置文件 {user_config_path} 不存在，将生成默认配置。")
+            self._generate_and_save_default_config(user_config_path)
 
         # 检查最终的用户配置文件是否存在
         if not os.path.exists(user_config_path):
             logger.warning(f"{self.log_prefix} 用户配置文件 {user_config_path} 不存在且无法创建。")
             return
 
-        # 5. 加载、检查和迁移用户配置文件
+        # 3. 加载、检查和迁移用户配置文件
         _, file_ext = os.path.splitext(self.config_file_name)
         if file_ext.lower() != ".toml":
             logger.warning(f"{self.log_prefix} 不支持的配置文件格式: {file_ext}，仅支持 .toml")
             self.config = {}
             return
-
         try:
             with open(user_config_path, "r", encoding="utf-8") as f:
                 existing_config = toml.load(f) or {}

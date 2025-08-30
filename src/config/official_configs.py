@@ -600,13 +600,6 @@ class AntiPromptInjectionConfig(ValidatedConfigBase):
     shield_suffix: str = Field(default=" 🛡️", description="保护后缀")
 
 
-
-class PluginsConfig(ValidatedConfigBase):
-    """插件配置"""
-
-    centralized_config: bool = Field(default=True, description="是否启用插件配置集中化管理")
-
-
 class SleepSystemConfig(ValidatedConfigBase):
     """睡眠系统配置类"""
 

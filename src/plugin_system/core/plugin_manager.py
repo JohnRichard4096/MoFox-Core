@@ -1,5 +1,7 @@
 import asyncio
 import os
+import shutil
+import hashlib
 import traceback
 import importlib
 
@@ -36,6 +38,48 @@ class PluginManager:
         # 确保插件目录存在
         self._ensure_plugin_directories()
         logger.info("插件管理器初始化完成")
+
+    def _synchronize_plugin_config(self, plugin_name: str, plugin_dir: str):
+        """
+        同步单个插件的配置。
+        """
+        central_config_dir = os.path.join("config", "plugins", plugin_name)
+        plugin_config_dir = os.path.join(plugin_dir, "config")
+
+        # 确保中央配置目录存在
+        os.makedirs(central_config_dir, exist_ok=True)
+
+        # 1. 从插件目录同步到中央目录（如果中央配置不存在）
+        if os.path.exists(plugin_config_dir) and os.path.isdir(plugin_config_dir):
+            for filename in os.listdir(plugin_config_dir):
+                central_config_file = os.path.join(central_config_dir, filename)
+                plugin_config_file = os.path.join(plugin_config_dir, filename)
+
+                if not os.path.exists(central_config_file) and os.path.isfile(plugin_config_file):
+                    shutil.copy2(plugin_config_file, central_config_file)
+                    logger.info(f"从 {plugin_name} 复制默认配置到中央目录: {filename}")
+
+        # 2. 从中央目录同步到插件目录（覆盖）
+        if os.path.isdir(central_config_dir):
+            for filename in os.listdir(central_config_dir):
+                central_config_file = os.path.join(central_config_dir, filename)
+                plugin_config_file = os.path.join(plugin_config_dir, filename)
+
+                if not os.path.isfile(central_config_file):
+                    continue
+
+                # 确保插件的 config 目录存在
+                os.makedirs(plugin_config_dir, exist_ok=True)
+
+                should_copy = True
+                if os.path.exists(plugin_config_file):
+                    with open(central_config_file, 'rb') as f1, open(plugin_config_file, 'rb') as f2:
+                        if hashlib.md5(f1.read()).hexdigest() == hashlib.md5(f2.read()).hexdigest():
+                            should_copy = False
+
+                if should_copy:
+                    shutil.copy2(central_config_file, plugin_config_file)
+                    logger.info(f"同步中央配置到 {plugin_name}: {filename}")
 
     # === 插件目录管理 ===
 
@@ -103,6 +147,9 @@ class PluginManager:
             # 如果没有记录，直接返回失败
             if not plugin_dir:
                 return False, 1
+
+            # 同步插件配置
+            self._synchronize_plugin_config(plugin_name, plugin_dir)
 
             plugin_instance = plugin_class(plugin_dir=plugin_dir)  # 实例化插件（可能因为缺少manifest而失败）
             if not plugin_instance:
