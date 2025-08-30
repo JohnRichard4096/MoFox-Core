@@ -23,6 +23,12 @@ else:
 # 最早期初始化日志系统，确保所有后续模块都使用正确的日志格式
 from src.common.logger import initialize_logging, get_logger, shutdown_logging
 
+# UI日志适配器 - 最小侵入式集成
+try:
+    import ui_log_adapter  # 自动设置UI日志传输
+except ImportError:
+    pass
+
 initialize_logging()
 
 from src.main import MainSystem  # noqa
@@ -33,7 +39,6 @@ from src.common.database.database import initialize_sql_database  # noqa
 from src.common.database.sqlalchemy_models import initialize_database as init_db  # noqa
 
 logger = get_logger("main")
-
 
 install(extra_lines=3)
 
