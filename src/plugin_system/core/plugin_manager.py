@@ -42,44 +42,70 @@ class PluginManager:
     def _synchronize_plugin_config(self, plugin_name: str, plugin_dir: str):
         """
         同步单个插件的配置。
+
+        此过程确保中央配置与插件本地配置保持同步，包含两个主要步骤：
+        1. 如果中央配置不存在，则从插件目录复制默认配置到中央配置目录。
+        2. 使用中央配置覆盖插件的本地配置，以确保插件运行时使用的是最新的用户配置。
         """
-        central_config_dir = os.path.join("config", "plugins", plugin_name)
-        plugin_config_dir = os.path.join(plugin_dir)
+        try:
+            plugin_path = Path(plugin_dir)
+            # 修正：插件的配置文件路径应为 config.toml 文件，而不是目录
+            plugin_config_file = plugin_path / "config.toml"
+            central_config_dir = Path("config") / "plugins" / plugin_name
 
-        # 确保中央配置目录存在
-        os.makedirs(central_config_dir, exist_ok=True)
+            # 确保中央配置目录存在
+            central_config_dir.mkdir(parents=True, exist_ok=True)
 
-        # 1. 从插件目录同步到中央目录（如果中央配置不存在）
-        if os.path.exists(plugin_config_dir) and os.path.isdir(plugin_config_dir):
-            for filename in os.listdir(plugin_config_dir):
-                central_config_file = os.path.join(central_config_dir, filename)
-                plugin_config_file = os.path.join(plugin_config_dir, filename)
+            # 步骤 1: 从插件目录复制默认配置到中央目录
+            self._copy_default_config_to_central(plugin_name, plugin_config_file, central_config_dir)
 
-                if not os.path.exists(central_config_file) and os.path.isfile(plugin_config_file):
-                    shutil.copy2(plugin_config_file, central_config_file)
-                    logger.info(f"从 {plugin_name} 复制默认配置到中央目录: {filename}")
+            # 步骤 2: 从中央目录同步配置到插件目录
+            self._sync_central_config_to_plugin(plugin_name, plugin_config_file, central_config_dir)
 
-        # 2. 从中央目录同步到插件目录（覆盖）
-        if os.path.isdir(central_config_dir):
-            for filename in os.listdir(central_config_dir):
-                central_config_file = os.path.join(central_config_dir, filename)
-                plugin_config_file = os.path.join(plugin_config_dir, filename)
+        except OSError as e:
+            logger.error(f"处理插件 '{plugin_name}' 的配置时发生文件操作错误: {e}")
+        except Exception as e:
+            logger.error(f"同步插件 '{plugin_name}' 配置时发生未知错误: {e}")
 
-                if not os.path.isfile(central_config_file):
-                    continue
+    def _copy_default_config_to_central(self, plugin_name: str, plugin_config_file: Path, central_config_dir: Path):
+        """
+        如果中央配置不存在，则将插件的默认 config.toml 复制到中央目录。
+        """
+        if not plugin_config_file.is_file():
+            return  # 插件没有提供默认配置文件，直接跳过
 
-                # 确保插件的 config 目录存在
-                os.makedirs(plugin_config_dir, exist_ok=True)
+        central_config_file = central_config_dir / plugin_config_file.name
+        if not central_config_file.exists():
+            shutil.copy2(plugin_config_file, central_config_file)
+            logger.info(f"为插件 '{plugin_name}' 从模板复制了默认配置: {plugin_config_file.name}")
 
-                should_copy = True
-                if os.path.exists(plugin_config_file):
-                    with open(central_config_file, 'rb') as f1, open(plugin_config_file, 'rb') as f2:
-                        if hashlib.md5(f1.read()).hexdigest() == hashlib.md5(f2.read()).hexdigest():
-                            should_copy = False
+    def _sync_central_config_to_plugin(self, plugin_name: str, plugin_config_file: Path, central_config_dir: Path):
+        """
+        将中央配置同步（覆盖）到插件的本地配置。
+        """
+        # 遍历中央配置目录中的所有文件
+        for central_file in central_config_dir.iterdir():
+            if not central_file.is_file():
+                continue
 
-                if should_copy:
-                    shutil.copy2(central_config_file, plugin_config_file)
-                    logger.info(f"同步中央配置到 {plugin_name}: {filename}")
+            # 目标文件应与中央配置文件同名，这里我们强制它为 config.toml
+            target_plugin_file = plugin_config_file
+
+            # 仅在文件内容不同时才执行复制，以减少不必要的IO操作
+            if not self._is_file_content_identical(central_file, target_plugin_file):
+                shutil.copy2(central_file, target_plugin_file)
+                logger.info(f"已将中央配置 '{central_file.name}' 同步到插件 '{plugin_name}'")
+
+    def _is_file_content_identical(self, file1: Path, file2: Path) -> bool:
+        """
+        通过比较 MD5 哈希值检查两个文件的内容是否相同。
+        """
+        if not file2.exists():
+            return False  # 目标文件不存在，视为不同
+
+        # 使用 'rb' 模式以二进制方式读取文件，确保哈希值计算的一致性
+        with open(file1, 'rb') as f1, open(file2, 'rb') as f2:
+            return hashlib.md5(f1.read()).hexdigest() == hashlib.md5(f2.read()).hexdigest()
 
     # === 插件目录管理 ===
 
