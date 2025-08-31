@@ -79,6 +79,8 @@ class ChatStream:
         self.group_info = group_info
         self.create_time = data.get("create_time", time.time()) if data else time.time()
         self.last_active_time = data.get("last_active_time", self.create_time) if data else self.create_time
+        self.energy_value = data.get("energy_value", 5.0) if data else 5.0
+        self.sleep_pressure = data.get("sleep_pressure", 0.0) if data else 0.0
         self.saved = False
         self.context: ChatMessageContext = None  # type: ignore # 用于存储该聊天的上下文信息
 
@@ -91,6 +93,8 @@ class ChatStream:
             "group_info": self.group_info.to_dict() if self.group_info else None,
             "create_time": self.create_time,
             "last_active_time": self.last_active_time,
+            "energy_value": self.energy_value,
+            "sleep_pressure": self.sleep_pressure,
         }
 
     @classmethod
@@ -251,7 +255,7 @@ class ChatManager:
                     "user_cardname": model_instance.user_cardname or "",
                 }
                 group_info_data = None
-                if model_instance.group_id:  # 假设 group_id 为空字符串表示没有群组信息
+                if model_instance.group_id:
                     group_info_data = {
                         "platform": model_instance.group_platform,
                         "group_id": model_instance.group_id,
@@ -265,6 +269,8 @@ class ChatManager:
                     "group_info": group_info_data,
                     "create_time": model_instance.create_time,
                     "last_active_time": model_instance.last_active_time,
+                    "energy_value": model_instance.energy_value,
+                    "sleep_pressure": model_instance.sleep_pressure,
                 }
                 stream = ChatStream.from_dict(data_for_from_dict)
                 # 更新用户信息和群组信息
@@ -348,6 +354,8 @@ class ChatManager:
                     "group_platform": group_info_d["platform"] if group_info_d else "",
                     "group_id": group_info_d["group_id"] if group_info_d else "",
                     "group_name": group_info_d["group_name"] if group_info_d else "",
+                    "energy_value": s_data_dict.get("energy_value", 5.0),
+                    "sleep_pressure": s_data_dict.get("sleep_pressure", 0.0),
                 }
 
                 # 根据数据库类型选择插入语句
@@ -407,6 +415,8 @@ class ChatManager:
                         "group_info": group_info_data,
                         "create_time": model_instance.create_time,
                         "last_active_time": model_instance.last_active_time,
+                        "energy_value": model_instance.energy_value,
+                        "sleep_pressure": model_instance.sleep_pressure,
                     }
                     loaded_streams_data.append(data_for_from_dict)
                 session.commit()

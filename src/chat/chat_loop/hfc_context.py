@@ -2,7 +2,6 @@ from typing import List, Optional, TYPE_CHECKING
 import time
 from src.chat.message_receive.chat_stream import ChatStream, get_chat_manager
 from src.common.logger import get_logger
-from src.manager.local_store_manager import local_storage
 from src.person_info.relationship_builder_manager import RelationshipBuilder
 from src.chat.express.expression_learner import ExpressionLearner
 from src.plugin_system.base.component_types import ChatMode
@@ -43,10 +42,10 @@ class HfcContext:
         self.expression_learner: Optional[ExpressionLearner] = None
 
         self.loop_mode = ChatMode.NORMAL
-        self.energy_value = 5.0
-        self.sleep_pressure = 0.0
-        self.was_sleeping = False  # 用于检测睡眠状态的切换
-
+        self.energy_value = self.chat_stream.energy_value
+        self.sleep_pressure = self.chat_stream.sleep_pressure
+        self.was_sleeping = False # 用于检测睡眠状态的切换
+        
         self.last_message_time = time.time()
         self.last_read_time = time.time() - 10
 
@@ -62,30 +61,8 @@ class HfcContext:
         self.wakeup_manager: Optional["WakeUpManager"] = None
         self.energy_manager: Optional["EnergyManager"] = None
 
-        self._load_context_state()
-
-    def _get_storage_key(self) -> str:
-        """获取当前聊天流的本地存储键"""
-        return f"hfc_context_state_{self.stream_id}"
-
-    def _load_context_state(self):
-        """从本地存储加载状态"""
-        state = local_storage[self._get_storage_key()]
-        if state and isinstance(state, dict):
-            self.energy_value = state.get("energy_value", 5.0)
-            self.sleep_pressure = state.get("sleep_pressure", 0.0)
-            logger = get_logger("hfc_context")
-            logger.info(f"{self.log_prefix} 成功从本地存储加载HFC上下文状态: {state}")
-        else:
-            logger = get_logger("hfc_context")
-            logger.info(f"{self.log_prefix} 未找到本地HFC上下文状态，将使用默认值初始化。")
-
     def save_context_state(self):
-        """将当前状态保存到本地存储"""
-        state = {
-            "energy_value": self.energy_value,
-            "sleep_pressure": self.sleep_pressure,
-        }
-        local_storage[self._get_storage_key()] = state
-        logger = get_logger("hfc_context")
-        logger.debug(f"{self.log_prefix} 已将HFC上下文状态保存到本地存储: {state}")
+        """将当前状态保存到聊天流"""
+        if self.chat_stream:
+            self.chat_stream.energy_value = self.energy_value
+            self.chat_stream.sleep_pressure = self.sleep_pressure

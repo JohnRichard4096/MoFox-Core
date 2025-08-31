@@ -103,6 +103,7 @@ class EnergyManager:
                 self.context.sleep_pressure -= decay_per_10s
                 self.context.sleep_pressure = max(self.context.sleep_pressure, 0)
                 self._log_sleep_pressure_change("睡眠压力释放")
+                self.context.save_context_state()
             else:
                 # 清醒时：处理能量衰减
                 is_group_chat = self.context.chat_stream.group_info is not None
@@ -123,6 +124,7 @@ class EnergyManager:
                     self.context.energy_value = max(self.context.energy_value, 0.3)
 
                 self._log_energy_change("能量值衰减")
+                self.context.save_context_state()
 
     def _should_log_energy(self) -> bool:
         """
@@ -150,6 +152,7 @@ class EnergyManager:
         self.context.sleep_pressure += increment
         self.context.sleep_pressure = min(self.context.sleep_pressure, 100.0)  # 设置一个100的上限
         self._log_sleep_pressure_change("执行动作，睡眠压力累积")
+        self.context.save_context_state()
 
     def _log_energy_change(self, action: str, reason: str = ""):
         """

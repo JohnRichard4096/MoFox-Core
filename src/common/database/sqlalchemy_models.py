@@ -51,6 +51,8 @@ class ChatStreams(Base):
     user_id = Column(get_string_field(100), nullable=False, index=True)
     user_nickname = Column(Text, nullable=False)
     user_cardname = Column(Text, nullable=True)
+    energy_value = Column(Float, nullable=True, default=5.0)
+    sleep_pressure = Column(Float, nullable=True, default=0.0)
 
     __table_args__ = (
         Index("idx_chatstreams_stream_id", "stream_id"),
