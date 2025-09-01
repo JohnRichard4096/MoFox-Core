@@ -66,6 +66,7 @@ class CycleProcessor:
 
         loop_start_time = time.time()
 
+        # 第一步：动作修改
         with Timer("动作修改", cycle_timers):
             try:
                 await self.action_modifier.modify_actions()
@@ -82,6 +83,7 @@ class CycleProcessor:
         if self.context.loop_mode == ChatMode.FOCUS and at_bot_mentioned and "no_reply" in available_actions:
             available_actions = {k: v for k, v in available_actions.items() if k != "no_reply"}
 
+        # 检查是否在normal模式下没有可用动作（除了reply相关动作）
         skip_planner = False
         if self.context.loop_mode == ChatMode.NORMAL:
             non_reply_actions = {
@@ -89,33 +91,37 @@ class CycleProcessor:
             }
             if not non_reply_actions:
                 skip_planner = True
+                logger.info(f"{self.log_prefix} Normal模式下没有可用动作，直接回复")
                 plan_result = self._get_direct_reply_plan(loop_start_time)
                 target_message = message_data
 
-        gen_task = None
-        if not skip_planner and self.context.loop_mode == ChatMode.NORMAL:
-            reply_to_str = await self._build_reply_to_str(message_data)
-            gen_task = asyncio.create_task(
-                self.response_handler.generate_response(
-                    message_data=message_data,
-                    available_actions=available_actions,
-                    reply_to=reply_to_str,
-                    request_type="chat.replyer.normal",
+            gen_task = None
+            # 如果normal模式且不跳过规划器，开始一个回复生成进程，先准备好回复（其实是和planer同时进行的）
+            if not skip_planner:
+                reply_to_str = await self._build_reply_to_str(message_data)
+                gen_task = asyncio.create_task(
+                    self.response_handler.generate_response(
+                        message_data=message_data,
+                        available_actions=available_actions,
+                        reply_to=reply_to_str,
+                        request_type="chat.replyer.normal",
+                    )
                 )
-            )
 
+        # Focus模式
         if not skip_planner:
-            plan_result, target_message = await self.action_planner.plan(mode=self.context.loop_mode)
+            from src.plugin_system.core.event_manager import event_manager
+            from src.plugin_system.base.component_types import EventType
 
-        from src.plugin_system.core.event_manager import event_manager
-        from src.plugin_system.base.component_types import EventType
-
-        # 触发 ON_PLAN 事件
-        result = await event_manager.trigger_event(
-            EventType.ON_PLAN, plugin_name="SYSTEM", stream_id=self.context.stream_id
-        )
-        if result and not result.all_continue_process():
-            return
+            # 触发 ON_PLAN 事件
+            result = await event_manager.trigger_event(
+                EventType.ON_PLAN, plugin_name="SYSTEM", stream_id=self.context.stream_id
+            )
+            if result and not result.all_continue_process():
+                return
+            
+            with Timer("规划器", cycle_timers):
+                plan_result, target_message = await self.action_planner.plan(mode=self.context.loop_mode)
 
         action_result = plan_result.get("action_result", {}) if isinstance(plan_result, dict) else {}
         if not isinstance(action_result, dict):
