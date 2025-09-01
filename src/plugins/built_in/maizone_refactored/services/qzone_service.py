@@ -51,12 +51,14 @@ class QZoneService:
         content_service: ContentService,
         image_service: ImageService,
         cookie_service: CookieService,
+        reply_tracker: ReplyTrackerService = None,
     ):
         self.get_config = get_config
         self.content_service = content_service
         self.image_service = image_service
         self.cookie_service = cookie_service
-        self.reply_tracker = ReplyTrackerService()
+        # 如果没有提供 reply_tracker 实例，则创建一个新的
+        self.reply_tracker = reply_tracker if reply_tracker is not None else ReplyTrackerService()
 
     # --- Public Methods (High-Level Business Logic) ---
 
@@ -260,10 +262,7 @@ class QZoneService:
         if not user_comments:
             return
 
-        # 2. 验证已记录的回复是否仍然存在，清理已删除的回复记录
-        await self._validate_and_cleanup_reply_records(fid, my_replies)
-
-        # 3. 使用验证后的持久化记录来筛选未回复的评论
+        # 直接检查评论是否已回复，不做验证清理
         comments_to_reply = []
         for comment in user_comments:
             comment_tid = comment.get("comment_tid")
@@ -272,10 +271,13 @@ class QZoneService:
 
             # 检查是否已经在持久化记录中标记为已回复
             if not self.reply_tracker.has_replied(fid, comment_tid):
+                # 记录日志以便追踪
+                logger.debug(f"发现新评论需要回复 - 说说ID: {fid}, 评论ID: {comment_tid}, "
+                           f"评论人: {comment.get('nickname', '')}, 内容: {comment.get('content', '')}")
                 comments_to_reply.append(comment)
 
         if not comments_to_reply:
-            logger.debug(f"说说 {fid} 下的所有评论都已回复过")
+            logger.debug(f"说说 {fid} 下的所有评论都已回复过或无需回复")
             return
 
         logger.info(f"发现自己说说下的 {len(comments_to_reply)} 条新评论，准备回复...")
@@ -801,6 +803,10 @@ class QZoneService:
                     "richval": "",
                     "paramstr": f"@{target_name} {content}",
                 }
+                
+                # 记录详细的请求参数用于调试
+                logger.info(f"子回复请求参数: topicId={data['topicId']}, parent_tid={data['parent_tid']}, content='{content[:50]}...'")
+                
                 await _request("POST", self.REPLY_URL, params={"g_tk": gtk}, data=data)
                 return True
             except Exception as e:

@@ -90,11 +90,20 @@ class MaiZoneRefactoredPlugin(BasePlugin):
         permission_api.register_permission_node(
             "plugin.maizone.read_feed", "是否可以使用机器人读取QQ空间说说", "maiZone", True
         )
+        # 创建所有服务实例
         content_service = ContentService(self.get_config)
         image_service = ImageService(self.get_config)
         cookie_service = CookieService(self.get_config)
         reply_tracker_service = ReplyTrackerService()
-        qzone_service = QZoneService(self.get_config, content_service, image_service, cookie_service)
+        
+        # 使用已创建的 reply_tracker_service 实例
+        qzone_service = QZoneService(
+            self.get_config, 
+            content_service, 
+            image_service, 
+            cookie_service,
+            reply_tracker_service  # 传入已创建的实例
+        )
         scheduler_service = SchedulerService(self.get_config, qzone_service)
         monitor_service = MonitorService(self.get_config, qzone_service)
 
