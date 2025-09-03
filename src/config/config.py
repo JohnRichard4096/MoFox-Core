@@ -80,8 +80,8 @@ def get_key_comment(toml_table, key):
             return item.trivia.comment
     if hasattr(toml_table, "keys"):
         for k in toml_table.keys():
-            if isinstance(k, KeyType) and k.key == key:  # type: ignore
-                return k.trivia.comment  # type: ignore
+            if isinstance(k, KeyType) and k.key == key: # type: ignore
+                return k.trivia.comment # type: ignore
     return None
 
 

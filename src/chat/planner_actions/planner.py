@@ -39,7 +39,7 @@ def init_prompt():
 {identity_block}
 
 {custom_prompt_block}
-{chat_context_description}，以下是具体的聊天内容，其中[mxxx]是消息id。
+{chat_context_description}，以下是具体的聊天内容。
 {chat_content_block}
 
 {moderation_prompt}

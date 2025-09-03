@@ -739,7 +739,7 @@ class EmojiManager:
             emoji = await self.get_emoji_from_manager(emoji_hash)
             if emoji and emoji.emotion:
                 logger.info(f"[缓存命中] 从内存获取表情包描述: {emoji.emotion}...")
-                return emoji.emotion
+                return ",".join(emoji.emotion)
 
             # 如果内存中没有，从数据库查找
             try:
