@@ -57,26 +57,6 @@ class EnergyManager:
             await asyncio.sleep(0)
             logger.info(f"{self.context.log_prefix} 能量管理器已停止")
 
-    def _handle_energy_completion(self, task: asyncio.Task):
-        """
-        处理能量循环任务完成
-
-        Args:
-            task: 完成的异步任务对象
-
-        功能说明:
-        - 处理任务正常完成或异常情况
-        - 记录相应的日志信息
-        - 区分取消和异常终止的情况
-        """
-        try:
-            if exception := task.exception():
-                logger.error(f"{self.context.log_prefix} 能量循环异常: {exception}")
-            else:
-                logger.info(f"{self.context.log_prefix} 能量循环正常结束")
-        except asyncio.CancelledError:
-            logger.info(f"{self.context.log_prefix} 能量循环被取消")
-
     async def _energy_loop(self):
         """
         能量与睡眠压力管理的主循环

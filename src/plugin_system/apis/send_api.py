@@ -32,7 +32,7 @@ import traceback
 import time
 import difflib
 import asyncio
-from typing import Optional, Union, Dict
+from typing import Optional, Union, Dict, Any
 from src.common.logger import get_logger
 
 # 导入依赖
@@ -87,8 +87,9 @@ async def _send_to_target(
     stream_id: str,
     display_message: str = "",
     typing: bool = False,
+    reply_to: str = "",
     set_reply: bool = False,
-    reply_message: Optional[Dict[str, Any]] = None,
+    reply_to_message: Optional[Dict[str, Any]] = None,
     storage_message: bool = True,
     show_log: bool = True,
     selected_expressions:List[int] = None,
@@ -109,10 +110,9 @@ async def _send_to_target(
         bool: 是否发送成功
     """
     try:
-        if set_reply and not reply_message:
-            logger.warning("[SendAPI] 使用引用回复，但未提供回复消息")
-            return False
-        
+        if reply_to:
+            logger.warning("[SendAPI] 在0.10.0, reply_to 参数已弃用，请使用 reply_to_message 参数")
+
         if show_log:
             logger.debug(f"[SendAPI] 发送{message_type}消息到 {stream_id}")
 
@@ -139,16 +139,13 @@ async def _send_to_target(
         # 创建消息段
         message_segment = Seg(type=message_type, data=content)  # type: ignore
 
-        if reply_message:
-            anchor_message = message_dict_to_message_recv(reply_message)
-            if anchor_message:
-                anchor_message.update_chat_stream(target_stream)
-                assert anchor_message.message_info.user_info, "用户信息缺失"
-                reply_to_platform_id = (
-                    f"{anchor_message.message_info.platform}:{anchor_message.message_info.user_info.user_id}"
-                )            
+        if reply_to_message:
+            anchor_message = MessageRecv(message_dict=reply_to_message)
+            anchor_message.update_chat_stream(target_stream)
+            reply_to_platform_id = (
+                f"{anchor_message.message_info.platform}:{anchor_message.message_info.user_info.user_id}"
+            )            
         else:
-            reply_to_platform_id = ""
             anchor_message = None
 
         # 构建发送消息对象
@@ -249,8 +246,9 @@ async def text_to_stream(
     text: str,
     stream_id: str,
     typing: bool = False,
+    reply_to: str = "",
+    reply_to_message: Optional[Dict[str, Any]] = None,
     set_reply: bool = False,
-    reply_message: Optional[Dict[str, Any]] = None,
     storage_message: bool = True,
     selected_expressions:List[int] = None,
 ) -> bool:
@@ -272,14 +270,15 @@ async def text_to_stream(
         stream_id,
         "",
         typing,
+        reply_to,
         set_reply=set_reply,
-        reply_message=reply_message,
+        reply_to_message=reply_to_message,
         storage_message=storage_message,
         selected_expressions=selected_expressions,
     )
 
 
-async def emoji_to_stream(emoji_base64: str, stream_id: str, storage_message: bool = True, set_reply: bool = False,reply_message: Optional[Dict[str, Any]] = None) -> bool:
+async def emoji_to_stream(emoji_base64: str, stream_id: str, storage_message: bool = True, set_reply: bool = False) -> bool:
     """向指定流发送表情包
 
     Args:
@@ -290,10 +289,10 @@ async def emoji_to_stream(emoji_base64: str, stream_id: str, storage_message: bo
     Returns:
         bool: 是否发送成功
     """
-    return await _send_to_target("emoji", emoji_base64, stream_id, "", typing=False, storage_message=storage_message, set_reply=set_reply,reply_message=reply_message)
+    return await _send_to_target("emoji", emoji_base64, stream_id, "", typing=False, storage_message=storage_message, set_reply=set_reply)
 
 
-async def image_to_stream(image_base64: str, stream_id: str, storage_message: bool = True, set_reply: bool = False,reply_message: Optional[Dict[str, Any]] = None) -> bool:
+async def image_to_stream(image_base64: str, stream_id: str, storage_message: bool = True, set_reply: bool = False) -> bool:
     """向指定流发送图片
 
     Args:
@@ -304,11 +303,11 @@ async def image_to_stream(image_base64: str, stream_id: str, storage_message: bo
     Returns:
         bool: 是否发送成功
     """
-    return await _send_to_target("image", image_base64, stream_id, "", typing=False, storage_message=storage_message, set_reply=set_reply,reply_message=reply_message)
+    return await _send_to_target("image", image_base64, stream_id, "", typing=False, storage_message=storage_message, set_reply=set_reply)
 
 
 async def command_to_stream(
-    command: Union[str, dict], stream_id: str, storage_message: bool = True, display_message: str = "", set_reply: bool = False,reply_message: Optional[Dict[str, Any]] = None
+    command: Union[str, dict], stream_id: str, storage_message: bool = True, display_message: str = "", set_reply: bool = False
 ) -> bool:
     """向指定流发送命令
 
@@ -331,7 +330,8 @@ async def custom_to_stream(
     stream_id: str,
     display_message: str = "",
     typing: bool = False,
-    reply_message: Optional[Dict[str, Any]] = None,
+    reply_to: str = "",
+    reply_to_message: Optional[Dict[str, Any]] = None,
     set_reply: bool = False,
     storage_message: bool = True,
     show_log: bool = True,
@@ -356,7 +356,8 @@ async def custom_to_stream(
         stream_id=stream_id,
         display_message=display_message,
         typing=typing,
-        reply_message=reply_message,
+        reply_to=reply_to,
+        reply_to_message=reply_to_message,
         set_reply=set_reply,
         storage_message=storage_message,
         show_log=show_log,

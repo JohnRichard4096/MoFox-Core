@@ -61,7 +61,7 @@ def init_prompt() -> None:
 class ExpressionLearner:
     def __init__(self, chat_id: str) -> None:
         self.express_learn_model: LLMRequest = LLMRequest(
-            model_set=model_config.model_task_config.replyer, request_type="expression.learner"
+            model_set=model_config.model_task_config.replyer, request_type="expressor.learner"
         )
         self.chat_id = chat_id
         self.chat_name = get_chat_manager().get_stream_name(chat_id) or chat_id

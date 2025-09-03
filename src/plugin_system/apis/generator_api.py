@@ -73,6 +73,7 @@ async def generate_reply(
     chat_stream: Optional[ChatStream] = None,
     chat_id: Optional[str] = None,
     action_data: Optional[Dict[str, Any]] = None,
+    reply_to: str = "",
     reply_message: Optional[Dict[str, Any]] = None,
     extra_info: str = "",
     reply_reason: str = "",
@@ -92,7 +93,8 @@ async def generate_reply(
         chat_stream: 聊天流对象（优先）
         chat_id: 聊天ID（备用）
         action_data: 动作数据（向下兼容，包含reply_to和extra_info）
-        reply_message: 回复的消息对象
+        reply_to: 回复对象，格式为 "发送者:消息内容"
+        reply_message: 回复的原始消息
         extra_info: 额外信息，用于补充上下文
         reply_reason: 回复原因
         available_actions: 可用动作
@@ -133,6 +135,7 @@ async def generate_reply(
             reply_reason=reply_reason,
             from_plugin=from_plugin,
             stream_id=chat_stream.stream_id if chat_stream else chat_id,
+            reply_message=reply_message,
         )
         if not success:
             logger.warning("[GeneratorAPI] 回复生成失败")
@@ -188,7 +191,6 @@ async def rewrite_reply(
         chat_id: 聊天ID（备用）
         enable_splitter: 是否启用消息分割器
         enable_chinese_typo: 是否启用错字生成器
-        model_set_with_weight: 模型配置列表，每个元素为 (TaskConfig, weight) 元组
         raw_reply: 原始回复内容
         reason: 回复原因
         reply_to: 回复对象

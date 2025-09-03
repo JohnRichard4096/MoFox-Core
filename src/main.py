@@ -189,6 +189,7 @@ MoFox_Bot(第三方修改版)
         get_emoji_manager().initialize()
         logger.info("表情包管理器初始化成功")
 
+
         # 启动情绪管理器
         await mood_manager.start()
         logger.info("情绪管理器初始化成功")

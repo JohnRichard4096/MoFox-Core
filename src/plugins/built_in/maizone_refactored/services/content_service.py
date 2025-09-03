@@ -48,7 +48,7 @@ class ContentService:
         try:
             # 获取模型配置
             models = llm_api.get_available_models()
-            text_model = str(self.get_config("models.text_model", "replyer_1"))
+            text_model = str(self.get_config("models.text_model", "replyer"))
             model_config = models.get(text_model)
 
             if not model_config:
@@ -278,7 +278,7 @@ class ContentService:
         try:
             # 获取模型配置
             models = llm_api.get_available_models()
-            text_model = str(self.get_config("models.text_model", "replyer_1"))
+            text_model = str(self.get_config("models.text_model", "replyer"))
             model_config = models.get(text_model)
 
             if not model_config:

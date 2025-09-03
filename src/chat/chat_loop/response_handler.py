@@ -105,7 +105,7 @@ class ResponseHandler:
 
         return loop_info, reply_text, cycle_timers
 
-    async def send_response(self, reply_set, reply_to, thinking_start_time, message_data) -> str:
+    async def send_response(self, reply_set, thinking_start_time, message_data) -> str:
         """
         发送回复内容的具体实现
 
@@ -129,9 +129,6 @@ class ResponseHandler:
         new_message_count = message_api.count_new_messages(
             chat_id=self.context.stream_id, start_time=thinking_start_time, end_time=current_time
         )
-        platform = message_data.get("user_platform", "")
-        user_id = message_data.get("user_id", "")
-        reply_to_platform_id = f"{platform}:{user_id}"
 
         need_reply = new_message_count >= random.randint(2, 4)
 
@@ -157,32 +154,26 @@ class ResponseHandler:
                 continue
 
             if not first_replied:
-                if need_reply:
-                    await send_api.text_to_stream(
-                        text=data,
-                        stream_id=self.context.stream_id,
-                        reply_to=reply_to,
-                        reply_to_platform_id=reply_to_platform_id,
-                        typing=False,
-                    )
-                else:
-                    await send_api.text_to_stream(
-                        text=data,
-                        stream_id=self.context.stream_id,
-                        reply_to_platform_id=reply_to_platform_id,
-                        typing=False,
-                    )
+                await send_api.text_to_stream(
+                    text=data,
+                    stream_id=self.context.stream_id,
+                    reply_to_message = message_data,
+                    set_reply=need_reply,
+                    typing=False,
+                )
                 first_replied = True
             else:
                 await send_api.text_to_stream(
                     text=data,
                     stream_id=self.context.stream_id,
-                    reply_to_platform_id=reply_to_platform_id,
+                    reply_to_message = message_data,
+                    set_reply=need_reply,
                     typing=True,
                 )
 
         return reply_text
 
+    # TODO: 已废弃
     async def generate_response(
         self,
         message_data: dict,

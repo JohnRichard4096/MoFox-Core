@@ -13,12 +13,29 @@ logger = get_logger("s4u_stream_generator")
 
 class S4UStreamGenerator:
     def __init__(self):
-        # 使用LLMRequest替代AsyncOpenAIClient
-        self.llm_request = LLMRequest(
-            model_set=model_config.model_task_config.replyer, 
-            request_type="s4u_replyer"
-        )
-        
+        replyer_config = model_config.model_task_config.replyer
+        model_to_use = replyer_config.model_list[0]
+        model_info = model_config.get_model_info(model_to_use)
+        if not model_info:
+            logger.error(f"模型 {model_to_use} 在配置中未找到")
+            raise ValueError(f"模型 {model_to_use} 在配置中未找到")
+        provider_name = model_info.api_provider
+        provider_info = model_config.get_provider(provider_name)
+        if not provider_info:
+            logger.error("`replyer` 找不到对应的Provider")
+            raise ValueError("`replyer` 找不到对应的Provider")
+
+        api_key = provider_info.api_key
+        base_url = provider_info.base_url
+
+        if not api_key:
+            logger.error(f"{provider_name}没有配置API KEY")
+            raise ValueError(f"{provider_name}没有配置API KEY")
+
+        self.client_1 = AsyncOpenAIClient(api_key=api_key, base_url=base_url)
+        self.model_1_name = model_to_use
+        self.replyer_config = replyer_config
+
         self.current_model_name = "unknown model"
         self.partial_response = ""
 
@@ -83,8 +100,18 @@ class S4UStreamGenerator:
             f"{self.current_model_name}思考:{message_txt[:30] + '...' if len(message_txt) > 30 else message_txt}"
         )  # noqa: E501
 
-        # 使用LLMRequest进行流式生成
-        async for chunk in self._generate_response_with_llm_request(prompt):
+        current_client = self.client_1
+        self.current_model_name = self.model_1_name
+
+        extra_kwargs = {}
+        if self.replyer_config.get("enable_thinking") is not None:
+            extra_kwargs["enable_thinking"] = self.replyer_config.get("enable_thinking")
+        if self.replyer_config.get("thinking_budget") is not None:
+            extra_kwargs["thinking_budget"] = self.replyer_config.get("thinking_budget")
+
+        async for chunk in self._generate_response_with_model(
+            prompt, current_client, self.current_model_name, **extra_kwargs
+        ):
             yield chunk
 
     async def _generate_response_with_llm_request(self, prompt: str) -> AsyncGenerator[str, None]:

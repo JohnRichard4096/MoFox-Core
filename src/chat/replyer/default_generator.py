@@ -240,14 +240,6 @@ class DefaultReplyer:
 
         self.tool_executor = ToolExecutor(chat_id=self.chat_stream.stream_id)
 
-    def _select_weighted_models_config(self) -> Tuple[TaskConfig, float]:
-        """使用加权随机选择来挑选一个模型配置"""
-        configs = self.model_set
-        # 提取权重，如果模型配置中没有'weight'键，则默认为1.0
-        weights = [weight for _, weight in configs]
-
-        return random.choices(population=configs, weights=weights, k=1)[0]
-
     async def generate_reply_with_context(
         self,
         extra_info: str = "",
@@ -258,7 +250,7 @@ class DefaultReplyer:
         from_plugin: bool = True,
         stream_id: Optional[str] = None,
         reply_message: Optional[Dict[str, Any]] = None,
-    ) -> Tuple[bool, Optional[Dict[str, Any]], Optional[str], List[Dict[str, Any]]]:
+    ) -> Tuple[bool, Optional[Dict[str, Any]], Optional[str]]:
         # sourcery skip: merge-nested-ifs
         """
         回复器 (Replier): 负责生成回复文本的核心逻辑。
@@ -290,7 +282,6 @@ class DefaultReplyer:
                     choosen_actions=choosen_actions,
                     enable_tool=enable_tool,
                     reply_message=reply_message,
-                    reply_reason=reply_reason,
                 )
 
             if not prompt:
@@ -579,7 +570,6 @@ class DefaultReplyer:
         if not enable_tool:
             return ""
 
-
         try:
             # 使用工具执行器获取信息
             tool_results, _, _ = await self.tool_executor.execute_from_chat_message(
@@ -826,7 +816,7 @@ class DefaultReplyer:
         choosen_actions: Optional[List[Dict[str, Any]]] = None,
         enable_tool: bool = True,
         reply_message: Optional[Dict[str, Any]] = None,
-    ) -> Tuple[str, List[int]]:
+    ) -> str:
         """
         构建回复器上下文
 
@@ -838,6 +828,7 @@ class DefaultReplyer:
             enable_timeout: 是否启用超时处理
             enable_tool: 是否启用工具调用
             reply_message: 回复的原始消息
+
         Returns:
             str: 构建好的上下文
         """
@@ -870,7 +861,29 @@ class DefaultReplyer:
                 mood_prompt = f"{mood_prompt}。{angry_prompt_addition}"
         else:
             mood_prompt = ""
-            
+
+        if reply_to:
+            #兼容旧的reply_to
+            sender, target = self._parse_reply_target(reply_to)
+        else:
+            # 获取 platform，如果不存在则从 chat_stream 获取，如果还是 None 则使用默认值
+            platform = reply_message.get("chat_info_platform")
+            person_id = person_info_manager.get_person_id(
+                platform,  # type: ignore
+                reply_message.get("user_id"),  # type: ignore
+            )
+            person_name = await person_info_manager.get_value(person_id, "person_name")
+            sender = person_name
+            target = reply_message.get('processed_plain_text')
+
+        person_info_manager = get_person_info_manager()
+        person_id = person_info_manager.get_person_id_by_person_name(sender)
+        user_id = person_info_manager.get_value_sync(person_id, "user_id")
+        platform = chat_stream.platform
+        if user_id == global_config.bot.qq_account and platform == global_config.bot.platform:
+            logger.warning("选取了自身作为回复对象，跳过构建prompt")
+            return ""
+
         target = replace_user_references_sync(target, chat_stream.platform, replace_bot_name=True)
 
 
@@ -905,11 +918,11 @@ class DefaultReplyer:
                 self.build_expression_habits(chat_talking_prompt_short, target), "expression_habits"
             ),
             self._time_and_run_task(self.build_relation_info(sender, target), "relation_info"),
-            self._time_and_run_task(self.build_memory_block(message_list_before_short, target), "memory_block"),
+            self._time_and_run_task(self.build_memory_block(chat_talking_prompt_short, target), "memory_block"),
             self._time_and_run_task(
                 self.build_tool_info(chat_talking_prompt_short, sender, target, enable_tool=enable_tool), "tool_info"
             ),
-            self._time_and_run_task(self.get_prompt_info(chat_talking_prompt_short, reply_to), "prompt_info"),
+            self._time_and_run_task(self.get_prompt_info(chat_talking_prompt_short, sender, target), "prompt_info"),
             self._time_and_run_task(
                 PromptUtils.build_cross_context(chat_id, target_user_info, global_config.personality.prompt_mode),
                 "cross_context",
@@ -1034,14 +1047,14 @@ class DefaultReplyer:
         reason: str,
         reply_to: str,
         reply_message: Optional[Dict[str, Any]] = None,
-    ) -> Tuple[str, List[int]]:  # sourcery skip: merge-else-if-into-elif, remove-redundant-if
+    ) -> str:  # sourcery skip: merge-else-if-into-elif, remove-redundant-if
         chat_stream = self.chat_stream
         chat_id = chat_stream.stream_id
         is_group_chat = bool(chat_stream.group_info)
-
+            
         if reply_message:
-            sender = reply_message.get("sender", "")
-            target = reply_message.get("target", "")
+            sender = reply_message.get("sender")
+            target = reply_message.get("target")
         else:
             sender, target = self._parse_reply_target(reply_to)
 
@@ -1206,7 +1219,6 @@ class DefaultReplyer:
         start_time = time.time()
         from src.plugins.built_in.knowledge.lpmm_get_knowledge import SearchKnowledgeFromLPMMTool
 
-
         logger.debug(f"获取知识库内容，元消息：{message[:30]}...，消息长度: {len(message)}")
         # 从LPMM知识库获取知识
         try:
@@ -1253,16 +1265,11 @@ class DefaultReplyer:
             logger.error(f"获取知识库内容时发生异常: {str(e)}")
             return ""
 
-    async def build_relation_info(self, reply_to: str = ""):
+    async def build_relation_info(self, sender: str, target: str):
         if not global_config.relationship.enable_relationship:
             return ""
 
         relationship_fetcher = relationship_fetcher_manager.get_fetcher(self.chat_stream.stream_id)
-        if not reply_to:
-            return ""
-        sender, text = self._parse_reply_target(reply_to)
-        if not sender or not text:
-            return ""
 
         # 获取用户ID
         person_info_manager = get_person_info_manager()

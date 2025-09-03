@@ -12,14 +12,12 @@ from src.chat.express.expression_learner import expression_learner_manager
 from src.plugin_system.base.component_types import ChatMode
 from src.schedule.schedule_manager import schedule_manager, SleepState
 from src.plugin_system.apis import message_api
-from src.chat.willing.willing_manager import get_willing_manager
 
 from .hfc_context import HfcContext
 from .energy_manager import EnergyManager
 from .proactive_thinker import ProactiveThinker
 from .cycle_processor import CycleProcessor
 from .response_handler import ResponseHandler
-from .normal_mode_handler import NormalModeHandler
 from .cycle_tracker import CycleTracker
 from .wakeup_manager import WakeUpManager
 
@@ -47,7 +45,6 @@ class HeartFChatting:
         self.cycle_processor = CycleProcessor(self.context, self.response_handler, self.cycle_tracker)
         self.energy_manager = EnergyManager(self.context)
         self.proactive_thinker = ProactiveThinker(self.context, self.cycle_processor)
-        self.normal_mode_handler = NormalModeHandler(self.context, self.cycle_processor)
         self.wakeup_manager = WakeUpManager(self.context)
 
         # 将唤醒度管理器设置到上下文中
@@ -60,7 +57,6 @@ class HeartFChatting:
         
         # 记录最近3次的兴趣度
         self.recent_interest_records: deque = deque(maxlen=3)
-        self.willing_manager = get_willing_manager()
         self._initialize_chat_mode()
         logger.info(f"{self.context.log_prefix} HeartFChatting 初始化完成")
 
@@ -97,7 +93,7 @@ class HeartFChatting:
         self.context.relationship_builder = relationship_builder_manager.get_or_create_builder(self.context.stream_id)
         self.context.expression_learner = expression_learner_manager.get_expression_learner(self.context.stream_id)
 
-        await self.energy_manager.start()
+        #await self.energy_manager.start()
         await self.proactive_thinker.start()
         await self.wakeup_manager.start()
 
@@ -120,7 +116,7 @@ class HeartFChatting:
             return
         self.context.running = False
 
-        await self.energy_manager.stop()
+        #await self.energy_manager.stop()
         await self.proactive_thinker.stop()
         await self.wakeup_manager.stop()
 
@@ -245,8 +241,6 @@ class HeartFChatting:
             # 统一使用 _should_process_messages 判断是否应该处理
             should_process,interest_value = await self._should_process_messages(recent_messages if has_new_messages else None)
             if should_process:
-                #earliest_message_data = recent_messages[0]
-                #self.last_read_time = earliest_message_data.get("time")
                 self.context.last_read_time = time.time()
                 await self.cycle_processor.observe(interest_value = interest_value)
             else:
@@ -418,6 +412,7 @@ class HeartFChatting:
         # talk_frequency = global_config.chat.get_current_talk_frequency(self.context.chat_stream.stream_id)
         modified_exit_count_threshold = self.context.focus_energy / global_config.chat.focus_value
 
+        modified_exit_interest_threshold = 3 / global_config.chat.focus_value
         total_interest = 0.0
         for msg_dict in new_message:
             interest_value = msg_dict.get("interest_value", 0.0)
@@ -441,11 +436,11 @@ class HeartFChatting:
             if not hasattr(self, "_last_accumulated_interest") or total_interest != self._last_accumulated_interest:
                 logger.info(f"{self.context.log_prefix} breaking形式当前累计兴趣值: {total_interest:.2f}, 专注度: {global_config.chat.focus_value:.1f}")
                 self._last_accumulated_interest = total_interest
-            if total_interest >= 3 / global_config.chat.focus_value:
+            if total_interest >= modified_exit_interest_threshold:
                 # 记录兴趣度到列表      
                 self.recent_interest_records.append(total_interest)
                 logger.info(
-                    f"{self.context.log_prefix} 累计兴趣值达到{total_interest:.2f}(>{3 / global_config.chat.focus_value})，结束等待"
+                    f"{self.context.log_prefix} 累计兴趣值达到{total_interest:.2f}(>{modified_exit_interest_threshold:.1f})，结束等待"
                 )
                 return True,total_interest/new_message_count
             

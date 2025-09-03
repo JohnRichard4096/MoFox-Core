@@ -1,6 +1,8 @@
 import asyncio
 import time
 import traceback
+import math
+import random
 from typing import Optional, Dict, Any, Tuple
 
 from src.chat.message_receive.chat_stream import get_chat_manager
@@ -10,7 +12,7 @@ from src.config.config import global_config
 from src.chat.planner_actions.planner import ActionPlanner
 from src.chat.planner_actions.action_modifier import ActionModifier
 from src.person_info.person_info import get_person_info_manager
-from src.plugin_system.apis import database_api
+from src.plugin_system.apis import database_api, generator_api
 from src.plugin_system.base.component_types import ChatMode
 from src.mais4u.constant_s4u import ENABLE_S4U
 from src.chat.chat_loop.hfc_utils import send_typing, stop_typing
@@ -44,7 +46,6 @@ class CycleProcessor:
     async def _send_and_store_reply(
         self,
         response_set,
-        reply_to_str,
         loop_start_time,
         action_message,
         cycle_timers: Dict[str, float],
@@ -52,7 +53,7 @@ class CycleProcessor:
         actions,
     ) -> Tuple[Dict[str, Any], str, Dict[str, float]]:
         with Timer("回复发送", cycle_timers):
-            reply_text = await self.response_handler.send_response(response_set, reply_to_str, loop_start_time, action_message)
+            reply_text = await self.response_handler.send_response(response_set, loop_start_time, action_message)
 
             # 存储reply action信息
         person_info_manager = get_person_info_manager()
@@ -60,7 +61,7 @@ class CycleProcessor:
         # 获取 platform，如果不存在则从 chat_stream 获取，如果还是 None 则使用默认值
         platform = action_message.get("chat_info_platform")
         if platform is None:
-            platform = getattr(self.chat_stream, "platform", "unknown")
+            platform = getattr(self.context.chat_stream, "platform", "unknown")
         
         person_id = person_info_manager.get_person_id(
             platform,
@@ -75,7 +76,7 @@ class CycleProcessor:
             action_prompt_display=action_prompt_display,
             action_done=True,
             thinking_id=thinking_id,
-            action_data={"reply_text": reply_text, "reply_to": reply_to_str},
+            action_data={"reply_text": reply_text},
             action_name="reply",
         )
 
@@ -113,12 +114,6 @@ class CycleProcessor:
         """
         action_type = "no_action"
         reply_text = ""  # 初始化reply_text变量，避免UnboundLocalError
-        reply_to_str = ""  # 初始化reply_to_str变量
-
-        # 根据interest_value计算概率，决定使用哪种planner模式
-        # interest_value越高，越倾向于使用Normal模式
-        import random
-        import math
         
         # 使用sigmoid函数将interest_value转换为概率
         # 当interest_value为0时，概率接近0（使用Focus模式）
@@ -224,40 +219,23 @@ class CycleProcessor:
                         "command": command
                     }
                 else:
-                    # 执行回复动作
                     try:
-                        reply_to_str = await self._build_reply_to_str(action_info["action_message"])
-                    except UserWarning:
-                        logger.warning("选取了自己作为回复对象，跳过回复生成")
-                        return {
-                            "action_type": "reply",
-                            "success": False,
-                            "reply_text": "",
-                            "loop_info": None
-                        }
-                    
-                    # 生成回复
-                    gather_timeout = global_config.chat.thinking_timeout
-                    try:
-                        response_set = await asyncio.wait_for(
-                            self.response_handler.generate_response(
-                                message_data=action_info["action_message"],
-                                available_actions=action_info["available_actions"],
-                                reply_to=reply_to_str,
-                                request_type="chat.replyer",
-                            ),
-                            timeout=gather_timeout
-                        )
-                    except asyncio.TimeoutError:
-                        logger.warning(
-                            f"{self.log_prefix} 并行执行：回复生成超时>{global_config.chat.thinking_timeout}s，已跳过"
-                        )
-                        return {
-                            "action_type": "reply",
-                            "success": False,
-                            "reply_text": "",
-                            "loop_info": None
-                        }
+                        success, response_set, _ = await generator_api.generate_reply(
+                            chat_stream=self.context.chat_stream,
+                            reply_message = action_info["action_message"],
+                            available_actions=available_actions,
+                            enable_tool=global_config.tool.enable_tool,
+                            request_type="chat.replyer",
+                            from_plugin=False,
+                        )     
+                        if not success or not response_set:
+                            logger.info(f"对 {action_info['action_message'].get('processed_plain_text')} 的回复生成失败")
+                            return {
+                                "action_type": "reply",
+                                "success": False,
+                                "reply_text": "",
+                                "loop_info": None
+                            }
                     except asyncio.CancelledError:
                         logger.debug(f"{self.log_prefix} 并行执行：回复生成任务已被取消")
                         return {
@@ -267,18 +245,8 @@ class CycleProcessor:
                             "loop_info": None
                         }
 
-                    if not response_set:
-                        logger.warning(f"{self.log_prefix} 模型超时或生成回复内容为空")
-                        return {
-                            "action_type": "reply",
-                            "success": False,
-                            "reply_text": "",
-                            "loop_info": None
-                        }
-
                     loop_info, reply_text, cycle_timers_reply = await self._send_and_store_reply(
                         response_set,
-                        reply_to_str,
                         loop_start_time,
                         action_info["action_message"],
                         cycle_timers,
@@ -303,7 +271,6 @@ class CycleProcessor:
                 }
             
         # 创建所有动作的后台任务
-
         action_tasks = [asyncio.create_task(execute_action(action)) for action in actions]
 
         # 并行执行所有任务
@@ -367,7 +334,6 @@ class CycleProcessor:
         self.context.chat_instance.cycle_tracker.end_cycle(loop_info, cycle_timers)
         self.context.chat_instance.cycle_tracker.print_cycle_info(cycle_timers)
 
-        # await self.willing_manager.after_generate_reply_handle(message_data.get("message_id", ""))
         action_type = actions[0]["action_type"] if actions else "no_action"
         # 管理no_reply计数器：当执行了非no_reply动作时，重置计数器
         if action_type != "no_reply":
@@ -687,36 +653,6 @@ class CycleProcessor:
             },
             "action_prompt": "",
         }
-
-    async def _build_reply_to_str(self, message_data: dict):
-        """
-        构建回复目标字符串
-
-        Args:
-            message_data: 消息数据字典
-
-        Returns:
-            str: 格式化的回复目标字符串，格式为"用户名:消息内容"
-
-        功能说明:
-        - 从消息数据中提取平台和用户ID信息
-        - 通过人员信息管理器获取用户昵称
-        - 构建用于回复显示的格式化字符串
-        """
-        from src.person_info.person_info import get_person_info_manager
-
-        person_info_manager = get_person_info_manager()
-        platform = (
-            message_data.get("chat_info_platform")
-            or message_data.get("user_platform")
-            or (self.context.chat_stream.platform if self.context.chat_stream else "default")
-        )
-        user_id = message_data.get("user_id", "")
-        if user_id == str(global_config.bot.qq_account) and platform == global_config.bot.platform:
-            raise UserWarning
-        person_id = person_info_manager.get_person_id(platform, user_id)
-        person_name = await person_info_manager.get_value(person_id, "person_name")
-        return f"{person_name}:{message_data.get('processed_plain_text')}"
 
     def _build_final_loop_info(self, reply_loop_info, action_success, action_reply_text, action_command, plan_result):
         """

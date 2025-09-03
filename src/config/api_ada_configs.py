@@ -106,8 +106,7 @@ class ModelTaskConfig(ValidatedConfigBase):
     # 必需配置项
     utils: TaskConfig = Field(..., description="组件模型配置")
     utils_small: TaskConfig = Field(..., description="组件小模型配置")
-    replyer_1: TaskConfig = Field(..., description="normal_chat首要回复模型模型配置")
-    replyer_2: TaskConfig = Field(..., description="normal_chat次要回复模型配置")
+    replyer: TaskConfig = Field(..., description="normal_chat首要回复模型模型配置")
     maizone: TaskConfig = Field(..., description="maizone专用模型")
     emotion: TaskConfig = Field(..., description="情绪模型配置")
     vlm: TaskConfig = Field(..., description="视觉语言模型配置")

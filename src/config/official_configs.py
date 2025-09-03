@@ -258,7 +258,6 @@ class MessageReceiveConfig(ValidatedConfigBase):
 class NormalChatConfig(ValidatedConfigBase):
     """普通聊天配置类"""
 
-    willing_mode: str = Field(default="classical", description="意愿模式")
 
 
 class ExpressionRule(ValidatedConfigBase):
