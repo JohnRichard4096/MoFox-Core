@@ -225,7 +225,16 @@ class CycleProcessor:
                     }
                 else:
                     # 执行回复动作
-                    reply_to_str = await self._build_reply_to_str(action_info["action_message"])
+                    try:
+                        reply_to_str = await self._build_reply_to_str(action_info["action_message"])
+                    except UserWarning:
+                        logger.warning("选取了自己作为回复对象，跳过回复生成")
+                        return {
+                            "action_type": "reply",
+                            "success": False,
+                            "reply_text": "",
+                            "loop_info": None
+                        }
                     
                     # 生成回复
                     gather_timeout = global_config.chat.thinking_timeout
@@ -703,6 +712,8 @@ class CycleProcessor:
             or (self.context.chat_stream.platform if self.context.chat_stream else "default")
         )
         user_id = message_data.get("user_id", "")
+        if user_id == str(global_config.bot.qq_account) and platform == global_config.bot.platform:
+            raise UserWarning
         person_id = person_info_manager.get_person_id(platform, user_id)
         person_name = await person_info_manager.get_value(person_id, "person_name")
         return f"{person_name}:{message_data.get('processed_plain_text')}"
