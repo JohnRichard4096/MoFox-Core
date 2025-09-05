@@ -85,6 +85,7 @@ class ChatStream:
         self.context: ChatMessageContext = None  # type: ignore # 用于存储该聊天的上下文信息
         self.focus_energy = 1
         self.no_reply_consecutive = 0
+        self.breaking_accumulated_interest = 0.0
 
     def to_dict(self) -> dict:
         """转换为字典格式"""
@@ -97,6 +98,7 @@ class ChatStream:
             "last_active_time": self.last_active_time,
             "energy_value": self.energy_value,
             "sleep_pressure": self.sleep_pressure,
+            "breaking_accumulated_interest": self.breaking_accumulated_interest,
         }
 
     @classmethod
@@ -257,7 +259,7 @@ class ChatManager:
                     "user_cardname": model_instance.user_cardname or "",
                 }
                 group_info_data = None
-                if model_instance.group_id:
+                if model_instance and getattr(model_instance, 'group_id', None):
                     group_info_data = {
                         "platform": model_instance.group_platform,
                         "group_id": model_instance.group_id,
@@ -403,7 +405,7 @@ class ChatManager:
                         "user_cardname": model_instance.user_cardname or "",
                     }
                     group_info_data = None
-                    if model_instance.group_id:
+                    if model_instance and getattr(model_instance, 'group_id', None):
                         group_info_data = {
                             "platform": model_instance.group_platform,
                             "group_id": model_instance.group_id,

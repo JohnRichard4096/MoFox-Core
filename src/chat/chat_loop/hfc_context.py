@@ -11,6 +11,7 @@ from src.chat.chat_loop.hfc_utils import CycleDetail
 if TYPE_CHECKING:
     from .wakeup_manager import WakeUpManager
     from .energy_manager import EnergyManager
+    from .heartFC_chat import HeartFChatting
 
 
 class HfcContext:
@@ -69,7 +70,7 @@ class HfcContext:
         # breaking形式下的累积兴趣值
         self.breaking_accumulated_interest = 0.0
         # 引用HeartFChatting实例，以便其他组件可以调用其方法
-        self.chat_instance = None
+        self.chat_instance: Optional["HeartFChatting"] = None
 
     def save_context_state(self):
         """将当前状态保存到聊天流"""
