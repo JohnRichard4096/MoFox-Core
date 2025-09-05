@@ -123,8 +123,6 @@ class MainSystem:
                 else:
                     loop.run_until_complete(async_memory_manager.shutdown())
                 logger.info("🛑 记忆管理器已停止")
-        except ImportError:
-            pass  # 异步记忆优化器不存在
         except Exception as e:
             logger.error(f"停止记忆管理器时出错: {e}")
 
