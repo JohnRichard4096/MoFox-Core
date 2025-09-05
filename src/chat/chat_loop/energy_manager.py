@@ -3,7 +3,6 @@ import time
 from typing import Optional
 from src.common.logger import get_logger
 from src.config.config import global_config
-from src.plugin_system.base.component_types import ChatMode
 from .hfc_context import HfcContext
 from src.schedule.schedule_manager import schedule_manager
 

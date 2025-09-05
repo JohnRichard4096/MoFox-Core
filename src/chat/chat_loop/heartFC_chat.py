@@ -2,14 +2,13 @@ import asyncio
 import time
 import traceback
 import random
-from typing import Optional, List, Dict, Any, Tuple
+from typing import Optional, List, Dict, Any
 from collections import deque
 
 from src.common.logger import get_logger
 from src.config.config import global_config
 from src.person_info.relationship_builder_manager import relationship_builder_manager
 from src.chat.express.expression_learner import expression_learner_manager
-from src.plugin_system.base.component_types import ChatMode
 from src.schedule.schedule_manager import schedule_manager, SleepState
 from src.plugin_system.apis import message_api
 

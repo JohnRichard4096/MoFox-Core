@@ -5,7 +5,6 @@ import math
 import random
 from typing import Optional, Dict, Any, Tuple
 
-from src.chat.message_receive.chat_stream import get_chat_manager
 from src.chat.utils.timer_calculator import Timer
 from src.common.logger import get_logger
 from src.config.config import global_config

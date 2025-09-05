@@ -200,7 +200,7 @@ class PluginManager:
 
                 # 检查并调用 on_plugin_loaded 钩子（如果存在）
                 if hasattr(plugin_instance, "on_plugin_loaded") and callable(
-                    getattr(plugin_instance, "on_plugin_loaded")
+                    plugin_instance.on_plugin_loaded
                 ):
                     logger.debug(f"为插件 '{plugin_name}' 调用 on_plugin_loaded 钩子")
                     try:

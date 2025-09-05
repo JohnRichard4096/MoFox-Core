@@ -1,10 +1,8 @@
 from typing import List, Optional, TYPE_CHECKING
 import time
 from src.chat.message_receive.chat_stream import ChatStream, get_chat_manager
-from src.common.logger import get_logger
 from src.person_info.relationship_builder_manager import RelationshipBuilder
 from src.chat.express.expression_learner import ExpressionLearner
-from src.plugin_system.base.component_types import ChatMode
 from src.chat.planner_actions.action_manager import ActionManager
 from src.chat.chat_loop.hfc_utils import CycleDetail
 

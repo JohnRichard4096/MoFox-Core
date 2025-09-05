@@ -7,7 +7,6 @@ from . import event_types, CONSTS, event_handlers
 from typing import List
 
 from src.plugin_system import BasePlugin, BaseEventHandler, register_plugin, EventType, ConfigField
-from src.plugin_system.base.base_event import HandlerResult
 from src.plugin_system.core.event_manager import event_manager
 
 from src.common.logger import get_logger

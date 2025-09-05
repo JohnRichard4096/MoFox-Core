@@ -1,4 +1,3 @@
-import json
 import asyncio
 
 from src.common.logger import get_logger
@@ -30,7 +29,7 @@ class MessageSending:
             message_dict = message_base.to_dict()
 
             if chunker.should_chunk_message(message_dict):
-                logger.info(f"消息过大，进行切片发送到 MaiBot")
+                logger.info("消息过大，进行切片发送到 MaiBot")
 
                 # 切片消息
                 chunks = chunker.chunk_message(message_dict)
