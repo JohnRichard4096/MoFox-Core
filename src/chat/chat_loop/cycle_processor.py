@@ -369,7 +369,7 @@ class CycleProcessor:
         self.context.chat_instance.cycle_tracker.end_cycle(loop_info, cycle_timers)
         self.context.chat_instance.cycle_tracker.print_cycle_info(cycle_timers)
 
-        action_type = actions["action_type"] if actions else "no_action"
+        action_type = actions[0]["action_type"] if actions else "no_action"
         return action_type
 
     async def _handle_action(
