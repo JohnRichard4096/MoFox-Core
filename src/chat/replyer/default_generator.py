@@ -35,7 +35,6 @@ from src.mood.mood_manager import mood_manager
 from src.person_info.person_info import Person, is_person_known
 from src.plugin_system.base.component_types import ActionInfo, EventType
 from src.plugin_system.apis import llm_api
-from src.schedule.schedule_manager import schedule_manager
 
 # 导入新的智能Prompt系统
 from src.chat.utils.smart_prompt import SmartPrompt, SmartPromptParameters
@@ -977,6 +976,7 @@ class DefaultReplyer:
 
         schedule_block = ""
         if global_config.schedule.enable:
+            from src.schedule.schedule_manager import schedule_manager
             current_activity = schedule_manager.get_current_activity()
             if current_activity:
                 schedule_block = f"你当前正在：{current_activity}。"

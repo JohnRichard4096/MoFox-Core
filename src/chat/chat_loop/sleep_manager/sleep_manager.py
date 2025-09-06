@@ -26,8 +26,8 @@ class SleepState(Enum):
 
 
 class SleepManager:
-    def __init__(self, schedule_manager):
-        self.schedule_manager = schedule_manager
+    def __init__(self, bridge):
+        self.bridge = bridge
         self.last_sleep_log_time = 0
         self.sleep_log_interval = 35  # 日志记录间隔，单位秒
 
@@ -54,7 +54,8 @@ class SleepManager:
         核心状态机：根据当前情况更新睡眠状态
         """
         # --- 基础检查 ---
-        if not global_config.sleep_system.enable or not self.schedule_manager.today_schedule:
+        today_schedule = self.bridge.get_today_schedule()
+        if not global_config.sleep_system.enable or not today_schedule:
             if self._current_state != SleepState.AWAKE:
                 logger.debug("睡眠系统禁用或无日程，强制设为 AWAKE")
                 self._current_state = SleepState.AWAKE
@@ -218,8 +219,9 @@ class SleepManager:
     def _is_in_theoretical_sleep_time(self, now_time: time) -> tuple[bool, Optional[str]]:
         """检查当前时间是否落在日程表的任何一个睡眠活动中"""
         sleep_keywords = ["休眠", "睡觉", "梦乡"]
-        if self.schedule_manager.today_schedule:
-            for event in self.schedule_manager.today_schedule:
+        today_schedule = self.bridge.get_today_schedule()
+        if today_schedule:
+            for event in today_schedule:
                 try:
                     activity = event.get("activity", "").strip()
                     time_range = event.get("time_range")

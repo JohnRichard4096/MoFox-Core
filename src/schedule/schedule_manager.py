@@ -15,7 +15,7 @@ from src.llm_models.utils_model import LLMRequest
 from src.common.logger import get_logger
 from json_repair import repair_json
 from src.manager.async_task_manager import AsyncTask, async_task_manager
-from ..chat.chat_loop.sleep_manager.sleep_manager import SleepManager, SleepState
+from ..chat.chat_loop.sleep_manager.schedule_bridge import schedule_sleep_bridge
 
 if TYPE_CHECKING:
     from src.chat.chat_loop.sleep_manager.wakeup_manager import WakeUpManager
@@ -134,7 +134,6 @@ class ScheduleManager:
         self.max_retries = -1  # 无限重试，直到成功生成标准日程表
         self.daily_task_started = False
         self.schedule_generation_running = False  # 防止重复生成任务
-        self.sleep_manager = SleepManager(self)
 
     async def start_daily_schedule_generation(self):
         """启动每日零点自动生成新日程的任务"""
@@ -162,6 +161,7 @@ class ScheduleManager:
                     schedule_data = orjson.loads(str(schedule_record.schedule_data))
                     if self._validate_schedule_with_pydantic(schedule_data):
                         self.today_schedule = schedule_data
+                        schedule_sleep_bridge.update_today_schedule(self.today_schedule)  # 更新桥接器中的日程
                         schedule_str = f"已成功加载今天的日程 ({today_str})：\n"
                         if self.today_schedule:
                             for item in self.today_schedule:
@@ -338,6 +338,7 @@ class ScheduleManager:
                         logger.info(schedule_str)
 
                         self.today_schedule = schedule_data
+                        schedule_sleep_bridge.update_today_schedule(self.today_schedule)
 
                         # 成功生成日程后，更新使用过的月度计划的统计信息
                         if used_plan_ids and global_config.monthly_plan_system:
@@ -394,22 +395,6 @@ class ScheduleManager:
                 logger.warning(f"解析日程事件失败: {event}, 错误: {e}")
                 continue
         return None
-
-    def get_current_sleep_state(self) -> SleepState:
-        """获取当前的睡眠状态"""
-        return self.sleep_manager.get_current_sleep_state()
-
-    def is_sleeping(self) -> bool:
-        """检查当前是否处于正式休眠状态"""
-        return self.sleep_manager.is_sleeping()
-
-    async def update_sleep_state(self, wakeup_manager: Optional["WakeUpManager"] = None):
-        """更新睡眠状态"""
-        await self.sleep_manager.update_sleep_state(wakeup_manager)
-
-    def reset_sleep_state_after_wakeup(self):
-        """被唤醒后，将状态切换到 WOKEN_UP"""
-        self.sleep_manager.reset_sleep_state_after_wakeup()
 
     def _validate_schedule_with_pydantic(self, schedule_data) -> bool:
         """使用Pydantic验证日程数据格式和完整性"""
