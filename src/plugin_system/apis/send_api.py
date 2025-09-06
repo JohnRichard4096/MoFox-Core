@@ -180,7 +180,7 @@ async def _send_to_target(
 
         # 构建机器人用户信息
         bot_user_info = UserInfo(
-            user_id=str(global_config.bot.qq_account),
+            user_id=global_config.bot.qq_account,
             user_nickname=global_config.bot.nickname,
             platform=target_stream.platform,
         )
@@ -191,13 +191,10 @@ async def _send_to_target(
         # 处理回复消息
         if reply_to_message:
             anchor_message = message_dict_to_message_recv(message_dict=reply_to_message)
-            if anchor_message and anchor_message.message_info and anchor_message.message_info.user_info:
-                anchor_message.update_chat_stream(target_stream)
-                reply_to_platform_id = (
-                    f"{anchor_message.message_info.platform}:{anchor_message.message_info.user_info.user_id}"
-                )
-            else:
-                reply_to_platform_id = None
+            anchor_message.update_chat_stream(target_stream)
+            reply_to_platform_id = (
+                f"{anchor_message.message_info.platform}:{anchor_message.message_info.user_info.user_id}"
+            )
         else:
             anchor_message = None
             reply_to_platform_id = None
@@ -430,10 +427,10 @@ async def adapter_command_to_stream(
 
                 # 创建临时的用户信息和聊天流
 
-                temp_user_info = UserInfo(user_id="system", user_nickname="System", platform=platform or "qq")
+                temp_user_info = UserInfo(user_id="system", user_nickname="System", platform=platform)
 
                 temp_chat_stream = ChatStream(
-                    stream_id=stream_id, platform=platform or "qq", user_info=temp_user_info, group_info=None
+                    stream_id=stream_id, platform=platform, user_info=temp_user_info, group_info=None
                 )
 
                 target_stream = temp_chat_stream
@@ -450,7 +447,7 @@ async def adapter_command_to_stream(
 
         # 构建机器人用户信息
         bot_user_info = UserInfo(
-            user_id=str(global_config.bot.qq_account),
+            user_id=global_config.bot.qq_account,
             user_nickname=global_config.bot.nickname,
             platform=target_stream.platform,
         )
@@ -503,23 +500,3 @@ async def adapter_command_to_stream(
         logger.error(f"[SendAPI] 发送适配器命令时出错: {e}")
         traceback.print_exc()
         return {"status": "error", "message": f"发送适配器命令时出错: {str(e)}"}
-
-
-async def recall_message(message_id: str, stream_id: str) -> bool:
-    """撤回消息
-
-    Args:
-        message_id: 消息ID
-        stream_id: 聊天流ID
-
-    Returns:
-        bool: 是否成功
-    """
-    command_data = {"name": "delete_msg", "args": message_id}
-
-    success = await command_to_stream(
-                command=command_data,
-                stream_id=stream_id,
-                storage_message=True,
-            )
-    return success

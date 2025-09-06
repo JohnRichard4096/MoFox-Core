@@ -71,12 +71,7 @@ class CycleProcessor:
         """
         # 发送回复
         with Timer("回复发送", cycle_timers):
-            reply_text, sent_messages = await self.response_handler.send_response(
-                response_set, loop_start_time, action_message
-            )
-            if sent_messages:
-                # 异步处理错别字修正
-                asyncio.create_task(self.response_handler.handle_typo_correction(sent_messages))
+            reply_text = await self.response_handler.send_response(response_set, loop_start_time, action_message)
 
         # 存储reply action信息
         person_info_manager = get_person_info_manager()
@@ -185,8 +180,7 @@ class CycleProcessor:
         cycle_timers, thinking_id = self.cycle_tracker.start_cycle()
         logger.info(f"{self.log_prefix} 开始第{self.context.cycle_counter}次思考")
 
-        # 发送正在输入状态
-        if ENABLE_S4U and self.context.chat_stream and self.context.chat_stream.user_info:
+        if ENABLE_S4U:
             await send_typing(self.context.chat_stream.user_info.user_id)
 
         loop_start_time = time.time()
@@ -214,7 +208,7 @@ class CycleProcessor:
             result = await event_manager.trigger_event(
                 EventType.ON_PLAN, plugin_name="SYSTEM", stream_id=self.context.chat_stream
             )
-            if result and not result.all_continue_process():
+            if not result.all_continue_process():
                 raise UserWarning(f"插件{result.get_summary().get('stopped_handlers', '')}于规划前中断了内容生成")
 
             # 规划动作
@@ -427,7 +421,7 @@ class CycleProcessor:
                 if fallback_action and fallback_action != action:
                     logger.info(f"{self.context.log_prefix} 使用回退动作: {fallback_action}")
                     action_handler = self.context.action_manager.create_action(
-                        action_name=str(fallback_action),
+                        action_name=fallback_action if isinstance(fallback_action, list) else fallback_action,
                         action_data=action_data,
                         reasoning=f"原动作'{action}'不可用，自动回退。{reasoning}",
                         cycle_timers=cycle_timers,

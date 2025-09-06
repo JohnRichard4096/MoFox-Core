@@ -86,7 +86,7 @@ async def generate_reply(
     return_prompt: bool = False,
     request_type: str = "generator_api",
     from_plugin: bool = True,
-) -> Tuple[bool, List[Dict[str, Any]], Optional[str]]:
+) -> Tuple[bool, List[Tuple[str, Any]], Optional[str]]:
     """生成回复
 
     Args:
@@ -185,7 +185,7 @@ async def rewrite_reply(
     reply_to: str = "",
     return_prompt: bool = False,
     request_type: str = "generator_api",
-) -> Tuple[bool, List[Dict[str, Any]], Optional[str]]:
+) -> Tuple[bool, List[Tuple[str, Any]], Optional[str]]:
     """重写回复
 
     Args:
@@ -244,9 +244,7 @@ async def rewrite_reply(
         return False, [], None
 
 
-def process_human_text(
-    content: str, enable_splitter: bool, enable_chinese_typo: bool
-) -> List[Dict[str, Any]]:
+def process_human_text(content: str, enable_splitter: bool, enable_chinese_typo: bool) -> List[Tuple[str, Any]]:
     """将文本处理为更拟人化的文本
 
     Args:
@@ -263,11 +261,9 @@ def process_human_text(
         processed_response = process_llm_response(content, enable_splitter, enable_chinese_typo)
 
         reply_set = []
-        for item in processed_response:
-            if item["type"] == "typo":
-                reply_set.append(item)
-            else:
-                reply_set.append({"type": "text", "content": item["content"]})
+        for text in processed_response:
+            reply_seg = ("text", text)
+            reply_set.append(reply_seg)
 
         return reply_set
 

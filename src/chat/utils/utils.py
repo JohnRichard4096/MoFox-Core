@@ -293,11 +293,9 @@ def random_remove_punctuation(text: str) -> str:
     return result
 
 
-def process_llm_response(
-    text: str, enable_splitter: bool = True, enable_chinese_typo: bool = True
-) -> list[dict[str, str]]:
+def process_llm_response(text: str, enable_splitter: bool = True, enable_chinese_typo: bool = True) -> list[str]:
     if not global_config.response_post_process.enable_response_post_process:
-        return [{"type": "text", "content": text}]
+        return [text]
 
     # 先保护颜文字
     if global_config.response_splitter.enable_kaomoji_protection:
@@ -313,7 +311,7 @@ def process_llm_response(
     cleaned_text = pattern.sub("", protected_text)
 
     if cleaned_text == "":
-        return [{"type": "text", "content": "呃呃"}]
+        return ["呃呃"]
 
     logger.debug(f"{text}去除括号处理后的文本: {cleaned_text}")
 
@@ -323,7 +321,7 @@ def process_llm_response(
     # 如果基本上是中文，则进行长度过滤
     if get_western_ratio(cleaned_text) < 0.1 and len(cleaned_text) > max_length:
         logger.warning(f"回复过长 ({len(cleaned_text)} 字符)，返回默认回复")
-        return [{"type": "text", "content": "懒得说"}]
+        return ["懒得说"]
 
     typo_generator = ChineseTypoGenerator(
         error_rate=global_config.chinese_typo.error_rate,
@@ -340,24 +338,16 @@ def process_llm_response(
     sentences = []
     for sentence in split_sentences:
         if global_config.chinese_typo.enable and enable_chinese_typo:
-            original_sentence, typo_sentence, typo_corrections = typo_generator.create_typo_sentence(sentence)
+            typoed_text, typo_corrections = typo_generator.create_typo_sentence(sentence)
+            sentences.append(typoed_text)
             if typo_corrections:
-                sentences.append(
-                    {
-                        "type": "typo",
-                        "original": original_sentence,
-                        "typo": typo_sentence,
-                        "correction": typo_corrections,
-                    }
-                )
-            else:
-                sentences.append({"type": "text", "content": sentence})
+                sentences.append(typo_corrections)
         else:
-            sentences.append({"type": "text", "content": sentence})
+            sentences.append(sentence)
 
     if len(sentences) > max_sentence_num:
         logger.warning(f"分割后消息数量过多 ({len(sentences)} 条)，返回默认回复")
-        return [{"type": "text", "content": f"{global_config.bot.nickname}不知道哦"}]
+        return [f"{global_config.bot.nickname}不知道哦"]
 
     # if extracted_contents:
     #     for content in extracted_contents:
@@ -365,20 +355,7 @@ def process_llm_response(
 
     # 在所有句子处理完毕后，对包含占位符的列表进行恢复
     if global_config.response_splitter.enable_kaomoji_protection:
-        # sentences中的元素可能是dict，也可能是str，所以要分开处理
-        recovered_sentences = []
-        for s in sentences:
-            if isinstance(s, dict) and s.get("type") == "typo":
-                s["original"] = recover_kaomoji(s["original"], kaomoji_mapping)
-                s["typo"] = recover_kaomoji(s["typo"], kaomoji_mapping)
-                s["correction"] = recover_kaomoji(s["correction"], kaomoji_mapping)
-                recovered_sentences.append(s)
-            elif isinstance(s, dict) and s.get("type") == "text":
-                s["content"] = recover_kaomoji(s["content"], kaomoji_mapping)
-                recovered_sentences.append(s)
-            else:
-                recovered_sentences.append(recover_kaomoji([s], kaomoji_mapping))
-        sentences = recovered_sentences
+        sentences = recover_kaomoji(sentences, kaomoji_mapping)
 
     return sentences
 
