@@ -70,7 +70,7 @@ class HfcContext:
         # breaking形式下的累积兴趣值
         self.breaking_accumulated_interest = 0.0
         # 引用HeartFChatting实例，以便其他组件可以调用其方法
-        self.chat_instance: Optional["HeartFChatting"] = None
+        self.chat_instance: "HeartFChatting"
 
     def save_context_state(self):
         """将当前状态保存到聊天流"""

@@ -76,6 +76,8 @@ class ProactiveThinker:
                 new_mood = "深夜emo，胡思乱想"
             elif trigger_event.reason == "goodnight":
                 new_mood = "有点困了，准备睡觉了"
+            elif trigger_event.reason == "post_sleep_insomnia":
+                new_mood = "可恶，刚刚好像睡着了又醒了，现在睡不着了"
 
             if new_mood:
                 mood_obj.mood_state = new_mood

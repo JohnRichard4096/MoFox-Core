@@ -4,8 +4,7 @@ from typing import Optional
 from src.common.logger import get_logger
 from src.config.config import global_config
 from .hfc_context import HfcContext
-from src.schedule.schedule_manager import schedule_manager
-
+from src.chat.chat_loop.sleep_manager import sleep_manager
 logger = get_logger("hfc")
 
 
@@ -74,7 +73,7 @@ class EnergyManager:
                 continue
 
             # 判断当前是否为睡眠时间
-            is_sleeping = schedule_manager.is_sleeping()
+            is_sleeping = sleep_manager.SleepManager().is_sleeping()
 
             if is_sleeping:
                 # 睡眠中：减少睡眠压力

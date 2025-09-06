@@ -625,7 +625,12 @@ class SleepSystemConfig(ValidatedConfigBase):
 
     # --- 失眠机制相关参数 ---
     enable_insomnia_system: bool = Field(default=True, description="是否启用失眠系统")
-    insomnia_duration_minutes: int = Field(default=30, ge=1, description="单次失眠状态的持续时间（分钟）")
+    insomnia_trigger_delay_minutes: List[int] = Field(
+        default_factory=lambda:[30, 60], description="入睡后触发失眠判定的延迟时间范围（分钟）"
+    )
+    insomnia_duration_minutes: List[int] = Field(
+        default_factory=lambda:[15, 45], description="单次失眠状态的持续时间范围（分钟）"
+    )
     sleep_pressure_threshold: float = Field(default=30.0, description="触发“压力不足型失眠”的睡眠压力阈值")
     deep_sleep_threshold: float = Field(default=80.0, description="进入“深度睡眠”的睡眠压力阈值")
     insomnia_chance_low_pressure: float = Field(default=0.6, ge=0.0, le=1.0, description="压力不足时的失眠基础概率")
