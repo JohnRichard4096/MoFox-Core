@@ -1,4 +1,5 @@
 import time
+import orjson
 import random
 from typing import Dict, Any, Tuple
 
@@ -154,7 +155,7 @@ class ResponseHandler:
 
             if isinstance(data, list):
                 data = "".join(map(str, data))
-            reply_text += data.get("data",{}).get("text","")
+            reply_text += data
 
             # 如果是主动思考且内容为“沉默”，则不发送
             if is_proactive_thinking and data.strip() == "沉默":

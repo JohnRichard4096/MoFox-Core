@@ -219,8 +219,8 @@ class ProactiveThinker:
             )
 
             if response_text:
-                # 将纯文本包装成 ResponseSet 格式
-                response_set = [{"type": "text", "data": {"text": response_text}}]
+                # 不要将纯文本包装成 ResponseSet 格式！
+                response_set = [response_text]
                 await self.cycle_processor.response_handler.send_response(
                     response_set, time.time(), action_result.get("action_message")
                 )
