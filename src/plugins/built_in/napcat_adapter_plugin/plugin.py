@@ -40,7 +40,9 @@ async def message_recv(server_connection: Server.ServerConnection):
     asyncio.create_task(notice_handler.set_server_connection(server_connection))
     await send_handler.set_server_connection(server_connection)
     async for raw_message in server_connection:
-        logger.debug(f"{raw_message[:1500]}..." if (len(raw_message) > 1500) else raw_message)
+        # 只在debug模式下记录原始消息
+        if logger.level <= 10:  # DEBUG level
+            logger.debug(f"{raw_message[:1500]}..." if (len(raw_message) > 1500) else raw_message)
         decoded_raw_message: dict = json.loads(raw_message)
         try:
             # 首先尝试解析原始消息
@@ -225,12 +227,37 @@ class LauchNapcatAdapterHandler(BaseEventHandler):
         await reassembler.start_cleanup_task()
 
         logger.info("开始启动Napcat Adapter")
-        message_send_instance.maibot_router = router
+        
         # 创建单独的异步任务，防止阻塞主线程
+        asyncio.create_task(self._start_maibot_connection())
         asyncio.create_task(napcat_server(self.plugin_config))
-        asyncio.create_task(mmc_start_com(self.plugin_config))
         asyncio.create_task(message_process())
         asyncio.create_task(check_timeout_response())
+
+    async def _start_maibot_connection(self):
+        """非阻塞方式启动MaiBot连接，等待主服务启动后再连接"""
+        # 等待一段时间让MaiBot主服务完全启动
+        await asyncio.sleep(5)
+        
+        max_attempts = 10
+        attempt = 0
+        
+        while attempt < max_attempts:
+            try:
+                logger.info(f"尝试连接MaiBot (第{attempt + 1}次)")
+                await mmc_start_com(self.plugin_config)
+                message_send_instance.maibot_router = router
+                logger.info("MaiBot router连接已建立")
+                return
+            except Exception as e:
+                attempt += 1
+                if attempt >= max_attempts:
+                    logger.error(f"MaiBot连接失败，已达到最大重试次数: {e}")
+                    return
+                else:
+                    delay = min(2 + attempt, 10)  # 逐渐增加延迟，最大10秒
+                    logger.warning(f"MaiBot连接失败: {e}，{delay}秒后重试")
+                    await asyncio.sleep(delay)
 
 
 class StopNapcatAdapterHandler(BaseEventHandler):

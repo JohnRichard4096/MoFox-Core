@@ -159,7 +159,7 @@ class SimpleMessageBuffer:
 
             # 检查是否超过最大组件数量
             if len(session.messages) >= config_api.get_plugin_config(self.plugin_config, "features.message_buffer_max_components", 5):
-                logger.info(f"会话 {session_id} 消息数量达到上限，强制合并")
+                logger.debug(f"会话 {session_id} 消息数量达到上限，强制合并")
                 asyncio.create_task(self._force_merge_session(session_id))
                 self.buffer_pool[session_id] = BufferedSession(session_id=session_id, original_event=original_event)
                 session = self.buffer_pool[session_id]
@@ -240,7 +240,7 @@ class SimpleMessageBuffer:
                 merged_text = "，".join(text_parts)  # 使用中文逗号连接
                 message_count = len(session.messages)
 
-                logger.info(f"合并会话 {session_id} 的 {message_count} 条文本消息: {merged_text[:100]}...")
+                logger.debug(f"合并会话 {session_id} 的 {message_count} 条文本消息: {merged_text[:100]}...")
 
                 # 调用回调函数
                 if self.merge_callback:
@@ -294,13 +294,13 @@ class SimpleMessageBuffer:
                     expired_sessions.append(session_id)
 
         for session_id in expired_sessions:
-            logger.info(f"清理过期会话: {session_id}")
+            logger.debug(f"清理过期会话: {session_id}")
             await self._force_merge_session(session_id)
 
     async def shutdown(self):
         """关闭消息缓冲器"""
         self._shutdown = True
-        logger.info("正在关闭简化消息缓冲器...")
+        logger.debug("正在关闭简化消息缓冲器...")
 
         # 刷新所有缓冲区
         await self.flush_all()
@@ -311,4 +311,4 @@ class SimpleMessageBuffer:
                 await self._cancel_session_timers(session)
             self.buffer_pool.clear()
 
-        logger.info("简化消息缓冲器已关闭")
+        logger.debug("简化消息缓冲器已关闭")

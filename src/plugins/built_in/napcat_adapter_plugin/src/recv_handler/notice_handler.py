@@ -119,7 +119,7 @@ class NoticeHandler:
                         if config_api.get_plugin_config(self.plugin_config, "features.poke_enabled", True) and await message_handler.check_allow_to_chat(
                             user_id, group_id, False, False
                         ):
-                            logger.info("处理戳一戳消息")
+                            logger.debug("处理戳一戳消息")
                             handled_message, user_info = await self.handle_poke_notify(raw_message, group_id, user_id)
                         else:
                             logger.warning("戳一戳消息被禁用，取消戳一戳处理")
@@ -191,7 +191,7 @@ class NoticeHandler:
         if system_notice:
             await self.put_notice(message_base)
         else:
-            logger.info("发送到Maibot处理通知信息")
+            logger.debug("发送到Maibot处理通知信息")
             await message_send_instance.message_send(message_base)
 
     async def handle_poke_notify(
@@ -215,7 +215,7 @@ class NoticeHandler:
             if self.last_poke_time > 0:
                 time_diff = current_time - self.last_poke_time
                 if time_diff < debounce_seconds:
-                    logger.info(f"戳一戳防抖：用户 {user_id} 的戳一戳被忽略（距离上次戳一戳 {time_diff:.2f} 秒）")
+                    logger.debug(f"戳一戳防抖：用户 {user_id} 的戳一戳被忽略（距离上次戳一戳 {time_diff:.2f} 秒）")
                     return None, None
 
             # 记录这次戳一戳的时间
@@ -234,7 +234,7 @@ class NoticeHandler:
         else:
             user_name = "QQ用户"
             user_cardname = "QQ用户"
-            logger.info("无法获取戳一戳对方的用户昵称")
+            logger.debug("无法获取戳一戳对方的用户昵称")
 
         # 计算Seg
         if self_id == target_id:
@@ -248,7 +248,7 @@ class NoticeHandler:
         else:
             # 如果配置为忽略不是针对自己的戳一戳，则直接返回None
             if config_api.get_plugin_config(self.plugin_config, "features.non_self_poke_ignored", False):
-                logger.info("忽略不是针对自己的戳一戳消息")
+                logger.debug("忽略不是针对自己的戳一戳消息")
                 return None, None
 
             # 老实说这一步判定没啥意义，毕竟私聊是没有其他人之间的戳一戳，但是感觉可以有这个判定来强限制群聊环境
@@ -258,7 +258,7 @@ class NoticeHandler:
                     target_name = fetched_member_info.get("nickname")
                 else:
                     target_name = "QQ用户"
-                    logger.info("无法获取被戳一戳方的用户昵称")
+                    logger.debug("无法获取被戳一戳方的用户昵称")
                 display_name = user_name
             else:
                 return None, None
@@ -521,7 +521,7 @@ class NoticeHandler:
                     continue
                 if ban_record.lift_time <= int(time.time()):
                     # 触发自然解除禁言
-                    logger.info(f"检测到用户 {ban_record.user_id} 在群 {ban_record.group_id} 的禁言已解除")
+                    logger.debug(f"检测到用户 {ban_record.user_id} 在群 {ban_record.group_id} 的禁言已解除")
                     self.lifted_list.append(ban_record)
                     self.banned_list.remove(ban_record)
             await asyncio.sleep(5)

@@ -20,7 +20,7 @@ def set_plugin_config(config: dict):
 async def get_response(request_id: str, timeout: int = 10) -> dict:
     response = await asyncio.wait_for(_get_response(request_id), timeout)
     _ = response_time_dict.pop(request_id)
-    logger.info(f"响应信息id: {request_id} 已从响应字典中取出")
+    logger.debug(f"响应信息id: {request_id} 已从响应字典中取出")
     return response
 
 
@@ -38,7 +38,7 @@ async def put_response(response: dict):
     now_time = time.time()
     response_dict[echo_id] = response
     response_time_dict[echo_id] = now_time
-    logger.info(f"响应信息id: {echo_id} 已存入响应字典")
+    logger.debug(f"响应信息id: {echo_id} 已存入响应字典")
 
 
 async def check_timeout_response() -> None:
@@ -57,5 +57,6 @@ async def check_timeout_response() -> None:
                 response_dict.pop(echo_id)
                 response_time_dict.pop(echo_id)
                 logger.warning(f"响应消息 {echo_id} 超时，已删除")
-        logger.info(f"已删除 {cleaned_message_count} 条超时响应消息")
+        if cleaned_message_count > 0:
+            logger.info(f"已删除 {cleaned_message_count} 条超时响应消息")
         await asyncio.sleep(heartbeat_interval)

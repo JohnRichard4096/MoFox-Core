@@ -300,7 +300,6 @@ class MessageHandler:
 
             if should_use_buffer:
                 logger.debug(f"尝试缓冲消息，消息类型: {message_type}, 用户: {user_info.user_id}")
-                logger.debug(f"原始消息段: {raw_message.get('message', [])}")
 
                 # 尝试添加到缓冲器
                 buffered = await self.message_buffer.add_text_message(
@@ -314,10 +313,10 @@ class MessageHandler:
                 )
 
                 if buffered:
-                    logger.info(f"✅ 文本消息已成功缓冲: {user_info.user_id}")
+                    logger.debug(f"✅ 文本消息已成功缓冲: {user_info.user_id}")
                     return None  # 缓冲成功，不立即发送
                 # 如果缓冲失败（消息包含非文本元素），走正常处理流程
-                logger.info(f"❌ 消息缓冲失败，包含非文本元素，走正常处理流程: {user_info.user_id}")
+                logger.debug(f"❌ 消息缓冲失败，包含非文本元素，走正常处理流程: {user_info.user_id}")
                 # 缓冲失败时继续执行后面的正常处理流程，不要直接返回
 
         logger.debug(f"准备发送消息到MaiBot，消息段数量: {len(seg_message)}")
@@ -335,7 +334,7 @@ class MessageHandler:
             raw_message=raw_message.get("raw_message"),
         )
 
-        logger.info("发送到Maibot处理信息")
+        logger.debug("发送到Maibot处理信息")
         await message_send_instance.message_send(message_base)
 
     async def handle_real_message(self, raw_message: dict, in_reply: bool = False) -> List[Seg] | None:
@@ -530,9 +529,7 @@ class MessageHandler:
         message_data: dict = raw_message.get("data")
         image_sub_type = message_data.get("sub_type")
         try:
-            logger.debug(f"开始下载图片: {message_data.get('url')}")
             image_base64 = await get_image_base64(message_data.get("url"))
-            logger.debug(f"图片下载成功，大小: {len(image_base64)} 字符")
         except Exception as e:
             logger.error(f"图片消息处理失败: {str(e)}")
             return None
@@ -623,8 +620,8 @@ class MessageHandler:
         video_url = message_data.get("url")
         file_path = message_data.get("filePath") or message_data.get("file_path")
 
-        logger.info(f"视频URL: {video_url}")
-        logger.info(f"视频文件路径: {file_path}")
+        logger.debug(f"视频URL: {video_url}")
+        logger.debug(f"视频文件路径: {file_path}")
 
         # 优先使用本地文件路径，其次使用URL
         video_source = file_path if file_path else video_url
@@ -637,14 +634,14 @@ class MessageHandler:
         try:
             # 检查是否为本地文件路径
             if file_path and Path(file_path).exists():
-                logger.info(f"使用本地视频文件: {file_path}")
+                logger.debug(f"使用本地视频文件: {file_path}")
                 # 直接读取本地文件
                 with open(file_path, "rb") as f:
                     video_data = f.read()
 
                 # 将视频数据编码为base64用于传输
                 video_base64 = base64.b64encode(video_data).decode("utf-8")
-                logger.info(f"视频文件大小: {len(video_data) / (1024 * 1024):.2f} MB")
+                logger.debug(f"视频文件大小: {len(video_data) / (1024 * 1024):.2f} MB")
 
                 # 返回包含详细信息的字典格式
                 return Seg(
@@ -657,7 +654,7 @@ class MessageHandler:
                 )
 
             elif video_url:
-                logger.info(f"使用视频URL下载: {video_url}")
+                logger.debug(f"使用视频URL下载: {video_url}")
                 # 使用video_handler下载视频
                 video_downloader = get_video_downloader()
                 download_result = await video_downloader.download_video(video_url)
@@ -669,7 +666,7 @@ class MessageHandler:
 
                 # 将视频数据编码为base64用于传输
                 video_base64 = base64.b64encode(download_result["data"]).decode("utf-8")
-                logger.info(f"视频下载成功，大小: {len(download_result['data']) / (1024 * 1024):.2f} MB")
+                logger.debug(f"视频下载成功，大小: {len(download_result['data']) / (1024 * 1024):.2f} MB")
 
                 # 返回包含详细信息的字典格式
                 return Seg(
@@ -738,15 +735,15 @@ class MessageHandler:
         processed_message: Seg
         if image_count < 5 and image_count > 0:
             # 处理图片数量小于5的情况，此时解析图片为base64
-            logger.info("图片数量小于5，开始解析图片为base64")
+            logger.debug("图片数量小于5，开始解析图片为base64")
             processed_message = await self._recursive_parse_image_seg(handled_message, True)
         elif image_count > 0:
-            logger.info("图片数量大于等于5，开始解析图片为占位符")
+            logger.debug("图片数量大于等于5，开始解析图片为占位符")
             # 处理图片数量大于等于5的情况，此时解析图片为占位符
             processed_message = await self._recursive_parse_image_seg(handled_message, False)
         else:
             # 处理没有图片的情况，此时直接返回
-            logger.info("没有图片，直接返回")
+            logger.debug("没有图片，直接返回")
             processed_message = handled_message
 
         # 添加转发消息提示
@@ -880,7 +877,7 @@ class MessageHandler:
                     return Seg(type="text", data="[表情包]")
                 return Seg(type="emoji", data=encoded_image)
             else:
-                logger.info(f"不处理类型: {seg_data.type}")
+                logger.debug(f"不处理类型: {seg_data.type}")
                 return seg_data
         else:
             if seg_data.type == "seglist":
@@ -894,7 +891,7 @@ class MessageHandler:
             elif seg_data.type == "emoji":
                 return Seg(type="text", data="[动画表情]")
             else:
-                logger.info(f"不处理类型: {seg_data.type}")
+                logger.debug(f"不处理类型: {seg_data.type}")
                 return seg_data
 
     async def _handle_forward_message(self, message_list: list, layer: int) -> Tuple[Seg, int] | Tuple[None, int]:
@@ -1069,7 +1066,7 @@ class MessageHandler:
                 raw_message=raw_message.get("raw_message", ""),
             )
 
-            logger.info(f"发送缓冲合并消息到Maibot处理: {session_id}")
+            logger.debug(f"发送缓冲合并消息到Maibot处理: {session_id}")
             await message_send_instance.message_send(message_base)
 
         except Exception as e:
