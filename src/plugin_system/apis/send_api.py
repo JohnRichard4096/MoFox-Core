@@ -515,9 +515,11 @@ async def recall_message(message_id: str, stream_id: str) -> bool:
     Returns:
         bool: 是否成功
     """
-    response = await adapter_command_to_stream(
-        action="delete_msg",
-        params={"message_id": message_id},
-        stream_id=stream_id,
-    )
-    return response.get("status") == "ok"
+    command_data = {"name": "delete_msg", "args": message_id}
+
+    success = await command_to_stream(
+                command=command_data,
+                stream_id=stream_id,
+                storage_message=True,
+            )
+    return success
