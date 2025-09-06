@@ -233,21 +233,6 @@ class LauchNapcatAdapterHandler(BaseEventHandler):
         logger.info("功能配置已迁移到插件系统")
         logger.info("开始启动Napcat Adapter")
         message_send_instance.maibot_router = router
-        # 设置插件配置
-        message_send_instance.set_plugin_config(self.plugin_config)
-        # 设置chunker的插件配置
-        chunker.set_plugin_config(self.plugin_config)
-        # 设置response_pool的插件配置
-        from .src.response_pool import set_plugin_config as set_response_pool_config
-        set_response_pool_config(self.plugin_config)
-        # 设置send_handler的插件配置
-        send_handler.set_plugin_config(self.plugin_config)
-        # 设置message_handler的插件配置
-        message_handler.set_plugin_config(self.plugin_config)
-        # 设置notice_handler的插件配置
-        notice_handler.set_plugin_config(self.plugin_config)
-        # 设置meta_event_handler的插件配置
-        meta_event_handler.set_plugin_config(self.plugin_config)
         # 创建单独的异步任务，防止阻塞主线程
         asyncio.create_task(napcat_server(self.plugin_config))
         asyncio.create_task(mmc_start_com(self.plugin_config))
@@ -355,3 +340,21 @@ class NapcatAdapterPlugin(BasePlugin):
             if issubclass(handler, BaseEventHandler):
                 components.append((handler.get_handler_info(), handler))
         return components
+
+    async def on_plugin_loaded(self):
+        # 设置插件配置
+        message_send_instance.set_plugin_config(self.config)
+        # 设置chunker的插件配置
+        chunker.set_plugin_config(self.config)
+        # 设置response_pool的插件配置
+        from .src.response_pool import set_plugin_config as set_response_pool_config
+        set_response_pool_config(self.config)
+        # 设置send_handler的插件配置
+        send_handler.set_plugin_config(self.config)
+        # 设置message_handler的插件配置
+        message_handler.set_plugin_config(self.config)
+        # 设置notice_handler的插件配置
+        notice_handler.set_plugin_config(self.config)
+        # 设置meta_event_handler的插件配置
+        meta_event_handler.set_plugin_config(self.config)
+        # 设置其他handler的插件配置（现在由component_registry在注册时自动设置）

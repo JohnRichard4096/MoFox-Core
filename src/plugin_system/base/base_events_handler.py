@@ -34,8 +34,14 @@ class BaseEventHandler(ABC):
         if EventType.UNKNOWN in self.init_subscribe:
             raise NotImplementedError("事件处理器必须指定 event_type")
 
-        from src.plugin_system.core.component_registry import component_registry
-        self.plugin_config = component_registry.get_plugin_config(self.plugin_name)
+        # 优先使用实例级别的 plugin_config，如果没有则使用类级别的配置
+        # 事件管理器会在注册时通过 set_plugin_config 设置实例级别的配置
+        instance_config = getattr(self, "plugin_config", None)
+        if instance_config is not None:
+            self.plugin_config = instance_config
+        else:
+            # 如果实例级别没有配置，则使用类级别的配置（向后兼容）
+            self.plugin_config = getattr(self.__class__, "plugin_config", {})
 
     @abstractmethod
     async def execute(self, kwargs: dict | None) -> Tuple[bool, bool, Optional[str]]:
@@ -101,6 +107,9 @@ class BaseEventHandler(ABC):
         """
         self.plugin_name = plugin_name
 
+    def set_plugin_config(self,plugin_config) -> None:
+        self.plugin_config = plugin_config
+        
     def get_config(self, key: str, default=None):
         """获取插件配置值，支持嵌套键访问
 

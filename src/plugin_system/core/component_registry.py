@@ -1,3 +1,4 @@
+from pathlib import Path
 import re
 
 from typing import Dict, List, Optional, Any, Pattern, Tuple, Union, Type
@@ -170,6 +171,8 @@ class ComponentRegistry:
             return False
 
         action_class.plugin_name = action_info.plugin_name
+        # 设置插件配置
+        action_class.plugin_config = self.get_plugin_config(action_info.plugin_name) or {}
         self._action_registry[action_name] = action_class
 
         # 如果启用，添加到默认动作集
@@ -188,6 +191,8 @@ class ComponentRegistry:
             return False
 
         command_class.plugin_name = command_info.plugin_name
+        # 设置插件配置
+        command_class.plugin_config = self.get_plugin_config(command_info.plugin_name) or {}
         self._command_registry[command_name] = command_class
 
         # 如果启用了且有匹配模式
@@ -220,6 +225,8 @@ class ComponentRegistry:
             self._plus_command_registry: Dict[str, Type[PlusCommand]] = {}
 
         plus_command_class.plugin_name = plus_command_info.plugin_name
+        # 设置插件配置
+        plus_command_class.plugin_config = self.get_plugin_config(plus_command_info.plugin_name) or {}
         self._plus_command_registry[plus_command_name] = plus_command_class
 
         logger.debug(f"已注册PlusCommand组件: {plus_command_name}")
@@ -230,6 +237,8 @@ class ComponentRegistry:
         tool_name = tool_info.name
 
         tool_class.plugin_name = tool_info.plugin_name
+        # 设置插件配置
+        tool_class.plugin_config = self.get_plugin_config(tool_info.plugin_name) or {}
         self._tool_registry[tool_name] = tool_class
 
         # 如果是llm可用的且启用的工具,添加到 llm可用工具列表
@@ -249,6 +258,8 @@ class ComponentRegistry:
             return False
 
         handler_class.plugin_name = handler_info.plugin_name
+        # 设置插件配置
+        handler_class.plugin_config = self.get_plugin_config(handler_info.plugin_name) or {}
         self._event_handler_registry[handler_name] = handler_class
 
         if not handler_info.enabled:
@@ -259,7 +270,7 @@ class ComponentRegistry:
         # 使用EventManager进行事件处理器注册
         from src.plugin_system.core.event_manager import event_manager
 
-        return event_manager.register_event_handler(handler_class)
+        return event_manager.register_event_handler(handler_class,self.get_plugin_config(handler_info.plugin_name) or {})
 
     # === 组件移除相关 ===
 
@@ -656,20 +667,35 @@ class ComponentRegistry:
         plugin_info = self.get_plugin_info(plugin_name)
         return plugin_info.components if plugin_info else []
 
-    def get_plugin_config(self, plugin_name: str) -> Optional[dict]:
+    def get_plugin_config(self, plugin_name: str) -> dict:
         """获取插件配置
 
         Args:
             plugin_name: 插件名称
 
         Returns:
-            Optional[dict]: 插件配置字典或None
+            dict: 插件配置字典，如果插件实例不存在或配置为空，返回空字典
         """
         # 从插件管理器获取插件实例的配置
         from src.plugin_system.core.plugin_manager import plugin_manager
 
         plugin_instance = plugin_manager.get_plugin_instance(plugin_name)
-        return plugin_instance.config if plugin_instance else None
+        if plugin_instance and plugin_instance.config:
+            return plugin_instance.config
+        
+        # 如果插件实例不存在，尝试从配置文件读取
+        try:
+            import toml
+            config_path = Path("config") / "plugins" / plugin_name / "config.toml"
+            if config_path.exists():
+                with open(config_path, 'r', encoding='utf-8') as f:
+                    config_data = toml.load(f)
+                    logger.debug(f"从配置文件读取插件 {plugin_name} 的配置")
+                    return config_data
+        except Exception as e:
+            logger.debug(f"读取插件 {plugin_name} 配置文件失败: {e}")
+        
+        return {}
 
     def get_registry_stats(self) -> Dict[str, Any]:
         """获取注册中心统计信息"""

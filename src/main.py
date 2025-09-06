@@ -114,6 +114,9 @@ class MainSystem:
         """清理资源"""
         try:
             # 停止消息重组器
+            from src.plugin_system.core.event_manager import event_manager
+            from src.plugin_system import EventType
+            asyncio.run(event_manager.trigger_event(EventType.ON_STOP,plugin_name="SYSTEM"))
             from src.utils.message_chunker import reassembler
             import asyncio
 

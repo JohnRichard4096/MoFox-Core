@@ -166,6 +166,7 @@ class EventManager:
 
         # 创建事件处理器实例，传递插件配置
         handler_instance = handler_class()
+        handler_instance.plugin_config = plugin_config
         if plugin_config is not None and hasattr(handler_instance, 'set_plugin_config'):
             handler_instance.set_plugin_config(plugin_config)
 

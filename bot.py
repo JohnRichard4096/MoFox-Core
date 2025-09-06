@@ -82,7 +82,6 @@ def easter_egg():
 async def graceful_shutdown():
     try:
         logger.info("正在优雅关闭麦麦...")
-
         # 停止所有异步任务
         await async_task_manager.stop_and_wait_all_tasks()
 
