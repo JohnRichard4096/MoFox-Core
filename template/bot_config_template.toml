@@ -1,5 +1,5 @@
 [inner]
-version = "6.7.5"
+version = "6.7.6"
 
 #----以下是给开发人员阅读的，如果你只是部署了MoFox-Bot，不需要阅读----
 #如果你想要修改配置文件，请递增version的值
@@ -432,6 +432,9 @@ search_strategy = "single" # 搜索策略: "single"(使用第一个可用引擎)
 
 [sleep_system]
 enable = false #"是否启用睡眠系统"
+sleep_by_schedule = true #"是否根据日程表进行睡觉"
+fixed_sleep_time = "23:00" #"固定的睡觉时间"
+fixed_wake_up_time = "07:00" #"固定的起床时间"
 wakeup_threshold = 15.0 #唤醒阈值，达到此值时会被唤醒"
 private_message_increment = 3.0 #"私聊消息增加的唤醒度"
 group_mention_increment = 2.0 #"群聊艾特增加的唤醒度"
@@ -439,6 +442,7 @@ decay_rate = 0.2 #"每次衰减的唤醒度数值"
 decay_interval = 30.0 #"唤醒度衰减间隔(秒)"
 angry_duration = 300.0 #"愤怒状态持续时间(秒)"
 angry_prompt = "你被人吵醒了非常生气，说话带着怒气" # "被吵醒后的愤怒提示词"
+re_sleep_delay_minutes = 5 # "被唤醒后，如果多久没有新消息则尝试重新入睡（分钟）"
 
 # --- 失眠机制相关参数 ---
 enable_insomnia_system = false # 是否启用失眠系统
