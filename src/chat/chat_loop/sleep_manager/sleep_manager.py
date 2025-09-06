@@ -148,19 +148,26 @@ class SleepManager:
             if wakeup_manager:
                 sleep_pressure = wakeup_manager.context.sleep_pressure
                 pressure_threshold = global_config.sleep_system.flexible_sleep_pressure_threshold
-                # 如果睡眠压力低于阈值，则触发失眠
+                # 检查是否触发失眠
+                insomnia_reason = None
                 if sleep_pressure < pressure_threshold:
+                    insomnia_reason = "low_pressure"
                     logger.info(f"睡眠压力 ({sleep_pressure:.1f}) 低于阈值 ({pressure_threshold})，触发睡后失眠。")
+                elif random.random() < getattr(global_config.sleep_system, "random_insomnia_chance", 0.1):
+                    insomnia_reason = "random"
+                    logger.info("随机触发失眠。")
+
+                if insomnia_reason:
                     self._current_state = SleepState.INSOMNIA
                     
                     # 设置失眠的持续时间
                     duration_minutes_range = global_config.sleep_system.insomnia_duration_minutes
-                    duration_minutes = random.randint(duration_minutes_range[0], duration_minutes_range[1])
+                    duration_minutes = random.randint(*duration_minutes_range)
                     self._sleep_buffer_end_time = now + timedelta(minutes=duration_minutes)
                     
                     # 发送失眠通知
-                    asyncio.create_task(NotificationSender.send_insomnia_notification(wakeup_manager.context))
-                    logger.info(f"进入失眠状态，将持续 {duration_minutes} 分钟。")
+                    asyncio.create_task(NotificationSender.send_insomnia_notification(wakeup_manager.context, insomnia_reason))
+                    logger.info(f"进入失眠状态 (原因: {insomnia_reason})，将持续 {duration_minutes} 分钟。")
                 else:
                     # 睡眠压力正常，不触发失眠，清除检查时间点
                     logger.info(f"睡眠压力 ({sleep_pressure:.1f}) 正常，未触发睡后失眠。")

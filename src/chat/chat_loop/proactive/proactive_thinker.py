@@ -89,8 +89,6 @@ class ProactiveThinker:
                 new_mood = "深夜emo，胡思乱想"
             elif trigger_event.reason == "goodnight":
                 new_mood = "有点困了，准备睡觉了"
-            elif trigger_event.reason == "post_sleep_insomnia":
-                new_mood = "可恶，刚刚好像睡着了又醒了，现在睡不着了"
 
             # 如果成功匹配到了新的情绪，则更新情绪状态
             if new_mood:
@@ -117,7 +115,7 @@ class ProactiveThinker:
             actions, target_message = await self.cycle_processor.action_planner.plan(mode=ChatMode.PROACTIVE)
 
             # 通常只关心规划出的第一个动作
-            action_result = actions if actions else {}
+            action_result = actions[0] if actions else {}
 
             # 检查规划出的动作是否是“什么都不做”
             if action_result and action_result.get("action_type") != "do_nothing":

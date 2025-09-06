@@ -20,13 +20,13 @@ class NotificationSender:
             logger.error(f"发送晚安通知失败: {e}")
 
     @staticmethod
-    async def send_insomnia_notification(context: HfcContext):
+    async def send_insomnia_notification(context: HfcContext, reason: str):
         """发送失眠通知"""
         try:
             from ..proactive.events import ProactiveTriggerEvent
             from ..proactive.proactive_thinker import ProactiveThinker
 
-            event = ProactiveTriggerEvent(source="sleep_manager", reason="post_sleep_insomnia")
+            event = ProactiveTriggerEvent(source="sleep_manager", reason=reason)
             proactive_thinker = ProactiveThinker(context, context.chat_instance.cycle_processor)
             await proactive_thinker.think(event)
         except Exception as e:

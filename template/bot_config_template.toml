@@ -227,11 +227,6 @@ willing_mode = "classical" # 回复意愿模式 —— 经典模式：classical�
 [tool]
 enable_tool = true # 是否在普通聊天中启用工具
 
-[tool.history]
-enable_history = true # 是否启用工具调用历史记录
-enable_prompt_history = true # 是否在提示词中加入工具历史记录
-max_history = 5 # 每个会话最多保留的历史记录数
-
 [mood]
 enable_mood = true # 是否启用情绪系统
 mood_update_threshold = 1 # 情绪更新阈值,越高，更新越慢
@@ -448,8 +443,6 @@ enable_insomnia_system = false # 是否启用失眠系统
 sleep_pressure_threshold = 30.0
 # 进入“深度睡眠”的睡眠压力阈值
 deep_sleep_threshold = 80.0
-# 压力不足时的失眠基础概率 (0.0 to 1.0)
-insomnia_chance_low_pressure = 0.6
 # 压力正常时的失眠基础概率 (0.0 to 1.0)
 insomnia_chance_normal_pressure = 0.1
 # 每次AI执行动作后，增加的睡眠压力值
