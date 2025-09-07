@@ -1,5 +1,5 @@
 [inner]
-version = "6.7.6"
+version = "6.7.7"
 
 #----以下是给开发人员阅读的，如果你只是部署了MoFox-Bot，不需要阅读----
 #如果你想要修改配置文件，请递增version的值
@@ -435,6 +435,8 @@ enable = false #"是否启用睡眠系统"
 sleep_by_schedule = true #"是否根据日程表进行睡觉"
 fixed_sleep_time = "23:00" #"固定的睡觉时间"
 fixed_wake_up_time = "07:00" #"固定的起床时间"
+sleep_time_offset_minutes = 15 #"睡觉时间随机偏移量范围（分钟），实际睡觉时间会在±该值范围内随机"
+wake_up_time_offset_minutes = 15 #"起床时间随机偏移量范围（分钟），实际起床时间会在±该值范围内随机"
 wakeup_threshold = 15.0 #唤醒阈值，达到此值时会被唤醒"
 private_message_increment = 3.0 #"私聊消息增加的唤醒度"
 group_mention_increment = 2.0 #"群聊艾特增加的唤醒度"
