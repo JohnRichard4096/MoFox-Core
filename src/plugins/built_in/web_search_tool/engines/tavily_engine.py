@@ -25,7 +25,7 @@ class TavilySearchEngine(BaseSearchEngine):
     def _initialize_clients(self):
         """初始化Tavily客户端"""
         # 从主配置文件读取API密钥
-        tavily_api_keys = config_api.get_global_config("tavily.api_keys", None)
+        tavily_api_keys = config_api.get_global_config("web_search.tavily_api_keys", None)
         
         # 创建API密钥管理器
         self.api_manager = create_api_key_manager_from_config(
