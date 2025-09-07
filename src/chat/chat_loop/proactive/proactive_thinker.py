@@ -181,7 +181,12 @@ class ProactiveThinker:
 
             # 4. 构建最终的生成提示词
             bot_name = global_config.bot.nickname
-            identity_block = f"你的名字是{bot_name}，你{global_config.personality.personality_core}："
+            personality = global_config.personality
+            identity_block = (
+                f"你的名字是{bot_name}。\n"
+                f"关于你：{personality.personality_core}，并且{personality.personality_side}。\n"
+                f"你的身份是{personality.identity}，平时说话风格是{personality.reply_style}。"
+            )
             mood_block = f"你现在的心情是：{mood_manager.get_mood_by_chat_id(self.context.stream_id).mood_state}"
 
             final_prompt = f"""
