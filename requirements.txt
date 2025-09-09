@@ -65,6 +65,6 @@ asyncio
 tavily-python
 google-generativeai
 lunar_python
-
+fuzzywuzzy
 python-multipart
 aiofiles
