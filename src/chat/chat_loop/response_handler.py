@@ -139,7 +139,7 @@ class ResponseHandler:
         need_reply = new_message_count >= random.randint(2, 4)
 
         reply_text = ""
-        is_proactive_thinking = message_data.get("message_type") == "proactive_thinking"
+        is_proactive_thinking = (message_data.get("message_type") == "proactive_thinking") if message_data else True
 
         first_replied = False
         for reply_seg in reply_set:
