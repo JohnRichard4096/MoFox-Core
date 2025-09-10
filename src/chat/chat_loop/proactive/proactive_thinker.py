@@ -133,7 +133,8 @@ class ProactiveThinker:
                 full_content = trigger_event.reason
                 logger.info(f"{self.context.log_prefix} 解析提醒内容: '{full_content}'")
                 
-                target_user_name = await self._extract_target_user_with_llm(full_content)
+                sender_name = metadata.get("sender_name")
+                target_user_name = await self._extract_target_user_with_llm(full_content, sender_name)
 
                 if not target_user_name:
                     logger.warning(f"无法从提醒 '{reminder_content}' 中确定目标用户，回退")
@@ -198,12 +199,13 @@ class ProactiveThinker:
         except Exception as e:
             logger.error(f"{self.context.log_prefix} 主动思考执行异常: {e}")
             logger.error(traceback.format_exc())
-    async def _extract_target_user_with_llm(self, reminder_content: str) -> str:
+    async def _extract_target_user_with_llm(self, reminder_content: str, sender_name: str) -> str:
         """
         使用LLM从提醒内容中提取目标用户名
 
         Args:
             reminder_content: 完整的提醒内容
+            sender_name: 消息发送者的昵称
 
         Returns:
             提取出的用户名，如果找不到则返回None
@@ -216,20 +218,23 @@ class ProactiveThinker:
             user_extraction_prompt = f'''
 从以下提醒消息中提取需要被提醒的目标用户名。
 
-**重要认知**：你的名字是"{bot_name}"。当消息中提到"{bot_name}"时，通常是在称呼你，而不是要提醒的目标。你需要找出除了你自己之外的那个目标用户。
+**重要认知**:
+- 你的名字是"{bot_name}"。当消息中提到"{bot_name}"时，通常是在称呼你。
+- 消息的发送者是"{sender_name}"。当消息中出现"我"、"咱"等第一人称代词时，指代的就是"{sender_name}"。
 
 提醒消息: "{reminder_content}"
 
 规则:
-1. 用户名通常在"提醒"、"艾特"、"叫"等动词后面。
-2. **绝对不能**提取你自己的名字("{bot_name}")作为目标。
-3. 只提取最关键的人名，不要包含多余的词语（比如时间、动作）。
-4. 如果消息中除了你自己的名字外，没有明确提到其他目标用户名，请回答"无"。
+1. 分析消息，找出真正需要被提醒的人。
+2. 如果提醒目标是第一人称（如"我"），那么目标就是发送者"{sender_name}"。
+3. **绝对不能**提取你自己的名字("{bot_name}")作为目标。
+4. 只提取最关键的人名，不要包含多余的词语。
+5. 如果没有明确的提醒目标（既不是其他人，也不是发送者自己），请回答"无"。
 
 示例:
+- 消息: "定时提醒：{bot_name}，10分钟后提醒我去打深渊" -> "{sender_name}"
 - 消息: "定时提醒：{bot_name}，提醒阿范一分钟后去写模组" -> "阿范"
 - 消息: "定时提醒：一分钟后提醒一闪喝水" -> "一闪"
-- 消息: "定时提醒：艾特绿皮" -> "绿皮"
 - 消息: "定时提醒：喝水" -> "无"
 - 消息: "定时提醒：{bot_name}，记得休息" -> "无"
 

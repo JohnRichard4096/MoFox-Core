@@ -131,7 +131,13 @@ class AtAction(BaseAction):
             reminder_task = at_message.replace("定时提醒：", "").strip()
             extra_info = f"""你之前记下了一个提醒任务：'{reminder_task}'
 现在时间到了，你需要去提醒用户 '{user_name}'。
-请像一个朋友一样，自然地完成这个提醒，而不是生硬地复述任务。"""
+
+**重要规则**：
+- 你的任务**只**是生成提醒的**内容**。
+- **绝对不要**在你的回复中包含任何`@`符号或者目标用户的名字。真正的@操作会由系统自动完成。
+- 像一个朋友一样，自然地完成这个提醒，而不是生硬地复述任务。
+
+请直接输出提醒的**内容**。"""
 
             success, llm_response, _ = await replyer.generate_reply_with_context(
                 reply_to=f"是时候提醒'{user_name}'了",  # 内部上下文，更符合执行任务的语境

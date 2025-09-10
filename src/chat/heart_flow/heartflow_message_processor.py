@@ -178,6 +178,7 @@ class HeartFCMessageReceiver:
                     metadata = {
                         "type": "reminder",
                         "user_id": reminder_event.user_id,
+                        "sender_name": userinfo.user_nickname,  # 添加发送者昵称
                         "platform": chat.platform,
                         "chat_id": chat.stream_id,
                         "content": reminder_event.content,
