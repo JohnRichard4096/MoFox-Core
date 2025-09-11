@@ -73,6 +73,7 @@ class ChatConfig(ValidatedConfigBase):
     talk_frequency: float = Field(default=1.0, description="聊天频率")
     mentioned_bot_inevitable_reply: bool = Field(default=False, description="提到机器人的必然回复")
     at_bot_inevitable_reply: bool = Field(default=False, description="@机器人的必然回复")
+    allow_reply_self: bool = Field(default=False, description="是否允许回复自己说的话")
     talk_frequency_adjust: list[list[str]] = Field(default_factory=lambda: [], description="聊天频率调整")
     focus_value: float = Field(default=1.0, description="专注值")
     focus_mode_quiet_groups: List[str] = Field(

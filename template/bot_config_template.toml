@@ -1,5 +1,5 @@
 [inner]
-version = "6.8.1"
+version = "6.8.2"
 
 #----以下是给开发人员阅读的，如果你只是部署了MoFox-Bot，不需要阅读----
 #如果你想要修改配置文件，请递增version的值
@@ -122,6 +122,8 @@ enable_breaking_mode = true # 是否启用自动进入breaking模式，关闭后
 
 # 强制私聊回复
 force_reply_private = false # 是否强制私聊回复，开启后私聊将强制回复
+
+allow_reply_self = false # 是否允许回复自己说的话
 
 max_context_size = 25 # 上下文长度
 thinking_timeout = 40 # MoFox-Bot一次回复最长思考规划时间，超过这个时间的思考会放弃（往往是api反应太慢）

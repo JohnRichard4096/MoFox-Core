@@ -311,6 +311,10 @@ class CycleProcessor:
         if reply_actions:
             logger.info(f"{self.log_prefix} 正在执行文本回复...")
             for action in reply_actions:
+                target_user_id = action.get("action_message",{}).get("chat_info_user_id","")
+                if target_user_id == global_config.bot.qq_account and not global_config.chat.allow_reply_self:
+                    logger.warning("选取的reply的目标为bot自己，跳过reply action")
+                    continue
                 result = await execute_action(action)
                 if isinstance(result, Exception):
                     logger.error(f"{self.log_prefix} 回复动作执行异常: {result}")
