@@ -1,4 +1,3 @@
-import orjson
 
 from src.plugin_system import BaseEventHandler
 from src.plugin_system.base.base_event import HandlerResult

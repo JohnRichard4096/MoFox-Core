@@ -1,10 +1,7 @@
 import orjson
 import time
 import traceback
-import asyncio
-import math
 import random
-import json
 from typing import Dict, Any, Optional, Tuple, List, TYPE_CHECKING
 from rich.traceback import install
 from datetime import datetime
@@ -27,7 +24,6 @@ from src.plugin_system.base.component_types import (
     ActionInfo,
     ChatMode,
     ComponentType,
-    ActionActivationType,
 )
 from src.plugin_system.core.component_registry import component_registry
 from src.schedule.schedule_manager import schedule_manager

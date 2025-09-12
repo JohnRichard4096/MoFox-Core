@@ -91,7 +91,7 @@ class FrequencyBasedTrigger:
                         # 6. 直接调用 proactive_thinker
                         event = ProactiveTriggerEvent(
                             source="frequency_analyzer",
-                            reason=f"User is in a high-frequency chat period."
+                            reason="User is in a high-frequency chat period."
                         )
                         await sub_heartflow.heart_fc_instance.proactive_thinker.think(event)
                         

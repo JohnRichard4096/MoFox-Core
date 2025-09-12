@@ -8,7 +8,6 @@ from src.plugin_system import (
     ActionInfo,
     ActionActivationType,
 )
-from src.person_info.person_info import get_person_info_manager
 from src.common.logger import get_logger
 from src.plugin_system.base.component_types import ChatType
 

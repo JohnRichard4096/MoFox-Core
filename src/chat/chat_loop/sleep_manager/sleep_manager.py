@@ -1,7 +1,7 @@
 import asyncio
 import random
 from datetime import datetime, timedelta, date
-from typing import Optional, TYPE_CHECKING, List, Dict, Any
+from typing import Optional, TYPE_CHECKING
 
 from src.common.logger import get_logger
 from src.config.config import global_config

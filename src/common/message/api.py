@@ -1,5 +1,4 @@
 from src.common.server import get_global_server
-import os
 import importlib.metadata
 from maim_message import MessageServer
 from src.common.logger import get_logger

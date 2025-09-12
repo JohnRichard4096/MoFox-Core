@@ -16,7 +16,6 @@ from src.chat.utils.timer_calculator import Timer
 from src.chat.utils.chat_message_builder import replace_user_references_sync
 from src.common.logger import get_logger
 from src.mood.mood_manager import mood_manager
-from src.chat.message_receive.chat_stream import get_chat_manager
 
 if TYPE_CHECKING:
     from src.chat.heart_flow.sub_heartflow import SubHeartflow
