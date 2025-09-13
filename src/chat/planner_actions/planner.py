@@ -72,8 +72,8 @@ class ActionPlanner:
         # 2. 筛选 Plan
         filtered_plan = await self.filter.filter(initial_plan)
 
-        # 3. 执行 Plan
-        await self.executor.execute(filtered_plan)
+        # 3. 执行 Plan(临时引爆因为它暂时还跑不了)
+        #await self.executor.execute(filtered_plan)
 
         # 4. 返回结果 (与旧版 planner 的返回值保持兼容)
         final_actions = filtered_plan.decided_actions or []
