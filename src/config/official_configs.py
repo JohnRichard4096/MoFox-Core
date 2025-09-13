@@ -343,30 +343,10 @@ class ExpressionConfig(ValidatedConfigBase):
         # 如果都没有匹配，返回默认值
         return True, True, 1.0
 
-
-class ToolHistoryConfig(ValidatedConfigBase):
-    """工具历史记录配置类"""
-
-    enable_history: bool = True
-    """是否启用工具历史记录"""
-
-    enable_prompt_history: bool = True
-    """是否在提示词中加入工具历史记录"""
-
-    max_history: int = 5
-    """注入到提示词中的最大工具历史记录数量"""
-
-    data_dir: str = "data/tool_history"
-    """历史记录保存目录"""
-
-
 class ToolConfig(ValidatedConfigBase):
     """工具配置类"""
 
     enable_tool: bool = Field(default=False, description="启用工具")
-
-    history: ToolHistoryConfig = Field(default_factory=ToolHistoryConfig)
-    """工具历史记录配置"""
 
 
 class VoiceConfig(ValidatedConfigBase):
