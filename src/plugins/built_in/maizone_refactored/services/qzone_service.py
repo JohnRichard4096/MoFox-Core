@@ -346,8 +346,8 @@ class QZoneService:
     def _load_local_images(self, image_dir: str) -> List[bytes]:
         """随机加载本地图片（不删除文件）"""
         images = []
-        if not os.path.exists(image_dir):
-            logger.warning(f"图片目录不存在: {image_dir}")
+        if not image_dir or not os.path.exists(image_dir):
+            logger.warning(f"图片目录不存在或未配置: {image_dir}")
             return images
 
         try:
