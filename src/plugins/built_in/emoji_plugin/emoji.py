@@ -12,6 +12,7 @@ from src.plugin_system.apis import llm_api, message_api
 from src.chat.emoji_system.emoji_manager import get_emoji_manager, MaiEmoji
 from src.chat.utils.utils_image import image_path_to_base64
 from src.config.config import global_config
+from src.chat.emoji_system.emoji_history import get_recent_emojis, add_emoji_to_history
 
 
 logger = get_logger("emoji")
@@ -74,9 +75,22 @@ class EmojiAction(BaseAction):
                 logger.warning(f"{self.log_prefix} 无法获取任何带有描述的有效表情包")
                 return False, "无法获取任何带有描述的有效表情包"
 
-            # 3. 准备情感数据和后备列表
+            # 3. 根据历史记录筛选表情
+            try:
+                recent_emojis_desc = get_recent_emojis(self.chat_id, limit=10)
+                if recent_emojis_desc:
+                    filtered_emojis = [emoji for emoji in all_emojis_obj if emoji.description not in recent_emojis_desc]
+                    if filtered_emojis:
+                        all_emojis_obj = filtered_emojis
+                        logger.info(f"{self.log_prefix} 根据历史记录过滤后，剩余 {len(all_emojis_obj)} 个表情可用")
+                    else:
+                        logger.warning(f"{self.log_prefix} 过滤后没有可用的表情包，将使用所有表情包")
+            except Exception as e:
+                logger.error(f"{self.log_prefix} 获取或处理表情发送历史时出错: {e}")
+
+            # 4. 准备情感数据和后备列表
             emotion_map = {}
-            all_emojis_data = [] 
+            all_emojis_data = []
             
             for emoji in all_emojis_obj:
                 b64 = image_path_to_base64(emoji.full_path)
@@ -236,13 +250,20 @@ class EmojiAction(BaseAction):
                 logger.error(f"{self.log_prefix} 无效的表情选择模式: {global_config.emoji.emoji_selection_mode}")
                 return False, "无效的表情选择模式"
 
-            # 7. 发送表情包
+            # 7. 发送表情包并记录历史
             success = await self.send_emoji(emoji_base64)
 
             if not success:
                 logger.error(f"{self.log_prefix} 表情包发送失败")
                 await self.store_action_info(action_build_into_prompt = True,action_prompt_display =f"发送了一个表情包,但失败了",action_done= False)
                 return False, "表情包发送失败"
+
+            # 发送成功后，记录到历史
+            try:
+                add_emoji_to_history(self.chat_id, emoji_description)
+            except Exception as e:
+                logger.error(f"{self.log_prefix} 添加表情到历史记录时出错: {e}")
+            
             await self.store_action_info(action_build_into_prompt = True,action_prompt_display =f"发送了一个表情包",action_done= True)
 
             return True, f"发送表情包: {emoji_description}"
