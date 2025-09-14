@@ -205,7 +205,7 @@ class CycleProcessor:
             raise UserWarning(f"插件{result.get_summary().get('stopped_handlers', '')}于规划前中断了内容生成")
         with Timer("规划器", cycle_timers):
             actions, _ = await self.action_planner.plan(mode=mode)
-        logger.info(str(actions))
+        logger.info(f"如果你探到这条日志请把它复制下来发到Q群里,如果你探到这条日志请把它复制下来发到Q群里,如果你探到这条日志请把它复制下来发到Q群里,调试内容",str(actions))
         async def execute_action(action_info):
             """执行单个动作的通用函数"""
             try:
