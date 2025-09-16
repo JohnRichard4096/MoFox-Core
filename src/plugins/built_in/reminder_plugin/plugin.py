@@ -1,6 +1,6 @@
 import asyncio
 from datetime import datetime
-from typing import List, Tuple, Type
+from typing import List, Tuple, Type, Optional
 from dateutil.parser import parse as parse_datetime
 
 from src.common.logger import get_logger
@@ -22,10 +22,11 @@ logger = get_logger(__name__)
 # ============================ AsyncTask ============================
 
 class ReminderTask(AsyncTask):
-    def __init__(self, delay: float, stream_id: str, is_group: bool, target_user_id: str, target_user_name: str, event_details: str, creator_name: str):
+    def __init__(self, delay: float, stream_id: str, group_id: Optional[str], is_group: bool, target_user_id: str, target_user_name: str, event_details: str, creator_name: str):
         super().__init__(task_name=f"ReminderTask_{target_user_id}_{datetime.now().timestamp()}")
         self.delay = delay
         self.stream_id = stream_id
+        self.group_id = group_id
         self.is_group = is_group
         self.target_user_id = target_user_id
         self.target_user_name = target_user_name
@@ -44,14 +45,13 @@ class ReminderTask(AsyncTask):
 
             if self.is_group:
                 # 在群聊中，构造 @ 消息段并发送
-                group_id = self.stream_id.split('_')[-1] if '_' in self.stream_id else self.stream_id
                 message_payload = [
                     {"type": "at", "data": {"qq": self.target_user_id}},
                     {"type": "text", "data": {"text": f" {reminder_text}"}}
                 ]
                 await send_api.adapter_command_to_stream(
                     action="send_group_msg",
-                    params={"group_id": group_id, "message": message_payload},
+                    params={"group_id": self.group_id, "message": message_payload},
                     stream_id=self.stream_id
                 )
             else:
@@ -83,35 +83,8 @@ class RemindAction(BaseAction):
         )
 
     # === LLM 判断与参数提取 ===
-    llm_judge_prompt = """
-    你是一个严格的提醒意图分类器。你的任务是判断用户是否明确意图设置一个未来的提醒。这是一个最高优先级的任务。
-    
-    **规则：**
-    1.  必须包含一个明确的、指向未来的时间点或时间段（例如：“十分钟后”、“明天下午3点”、“周五”、“待会儿”、“一分钟后”）。
-    2.  必须包含一个需要被提醒的具体事件或动作（例如：“开会”、“喝水”、“睡觉”、“去吃饭”）。
-    3.  如果文本同时满足规则1和2，你必须，且只能回答“是”。
-    4.  任何不满足上述两个核心规则的文本，都回答“否”。
-
-    **正面示例（必须回答“是”）：**
-    - "半小时后提醒我开会"
-    - "两分钟后叫我喝水"
-    - "爱莉，提醒一闪一分钟后去睡觉"
-    - "别忘了周五把报告交了"
-    - "待会儿记得和我说一声"
-
-    **负面示例（必须回答“否”）：**
-    - "现在几点了？" (只是询问时间)
-    - "我明天下午有空" (陈述事实，没有要求提醒)
-    - "提醒呢？" (询问提醒状态，而不是设置新提醒)
-    - "我记得了" (表示自己记住了，而不是让bot记住)
-
-    请严格按照规则进行分类，只回答"是"或"否"。
-    """
-    action_parameters = {
-        "user_name": "需要被提醒的人的称呼或名字，如果没有明确指定给某人，则默认为'自己'",
-        "remind_time": "描述提醒时间的自然语言字符串，例如'十分钟后'或'明天下午3点'",
-        "event_details": "需要提醒的具体事件内容"
-    }
+    llm_judge_prompt = ""
+    action_parameters = {}
     action_require = [
         "当用户请求在未来的某个时间点提醒他/她或别人某件事时使用",
         "适用于包含明确时间信息和事件描述的对话",
@@ -120,9 +93,52 @@ class RemindAction(BaseAction):
 
     async def execute(self) -> Tuple[bool, str]:
         """执行设置提醒的动作"""
-        user_name = self.action_data.get("user_name")
-        remind_time_str = self.action_data.get("remind_time")
-        event_details = self.action_data.get("event_details")
+        try:
+            # 获取所有可用的模型配置
+            available_models = llm_api.get_available_models()
+            if "planner" not in available_models:
+                raise ValueError("未找到 'planner' 决策模型配置，无法解析时间")
+            model_to_use = available_models["planner"]
+
+            prompt = f"""
+            从以下用户输入中提取提醒事件的关键信息。
+            用户输入: "{self.chat_stream.context.message.processed_plain_text}"
+
+            请以JSON格式返回提取的信息，包含以下字段:
+            - "user_name": 需要被提醒的人的姓名。如果未指定，则默认为"自己"。
+            - "remind_time": 描述提醒时间的自然语言字符串。
+            - "event_details": 需要提醒的具体事件内容。
+
+            如果无法提取完整信息，请返回一个包含空字符串的JSON对象，例如：{{"user_name": "", "remind_time": "", "event_details": ""}}
+            """
+
+            success, response, _, _ = await llm_api.generate_with_model(
+                prompt,
+                model_config=model_to_use,
+                request_type="plugin.reminder.parameter_extractor"
+            )
+
+            if not success or not response:
+                raise ValueError(f"LLM未能返回有效的参数: {response}")
+
+            import json
+            import re
+            try:
+                # 提取JSON部分
+                json_match = re.search(r"\{.*\}", response, re.DOTALL)
+                if not json_match:
+                    raise ValueError("LLM返回的内容中不包含JSON")
+                action_data = json.loads(json_match.group(0))
+            except json.JSONDecodeError:
+                logger.error(f"[ReminderPlugin] LLM返回的不是有效的JSON: {response}")
+                return False, "LLM返回的不是有效的JSON"
+            user_name = action_data.get("user_name")
+            remind_time_str = action_data.get("remind_time")
+            event_details = action_data.get("event_details")
+
+        except Exception as e:
+            logger.error(f"[ReminderPlugin] 解析参数时出错: {e}", exc_info=True)
+            return False, "解析参数时出错"
 
         if not all([user_name, remind_time_str, event_details]):
             missing_params = [p for p, v in {"user_name": user_name, "remind_time": remind_time_str, "event_details": event_details}.items() if not v]
@@ -208,7 +224,8 @@ class RemindAction(BaseAction):
             
             reminder_task = ReminderTask(
                 delay=delay_seconds,
-                stream_id=self.chat_id,
+                stream_id=self.chat_stream.stream_id,
+                group_id=self.chat_stream.group_info.group_id if self.is_group and self.chat_stream.group_info else None,
                 is_group=self.is_group,
                 target_user_id=str(user_id_to_remind),
                 target_user_name=str(user_name_to_remind),
