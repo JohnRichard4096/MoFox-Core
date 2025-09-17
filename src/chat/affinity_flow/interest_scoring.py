@@ -30,7 +30,7 @@ class InterestScoringSystem:
         }
 
         # 评分阈值
-        self.reply_threshold = 0.6    # 默认回复阈值
+        self.reply_threshold = 0.55    # 默认回复阈值
         self.mention_threshold = 0.3   # 提及阈值
 
         # 连续不回复概率提升
@@ -147,9 +147,10 @@ class InterestScoringSystem:
                 logger.debug(f"   📈 置信度: {match_result.confidence:.3f}")
                 logger.debug(f"   🔢 匹配详情: {match_result.match_scores}")
 
-                # 返回匹配分数，考虑置信度
-                final_score = match_result.overall_score * 1.15 * match_result.confidence
-                logger.debug(f"⚖️  最终分数(总分×置信度): {final_score:.3f}")
+                # 返回匹配分数，考虑置信度和匹配标签数量
+                match_count_bonus = min(len(match_result.matched_tags) * 0.05, 0.3)  # 每多匹配一个标签+0.05，最高+0.3
+                final_score = match_result.overall_score * 1.3 * match_result.confidence + match_count_bonus
+                logger.debug(f"⚖️  最终分数计算: 总分({match_result.overall_score:.3f}) × 1.3 × 置信度({match_result.confidence:.3f}) + 标签数量奖励({match_count_bonus:.3f}) = {final_score:.3f}")
                 return final_score
             else:
                 logger.warning("⚠️ 智能兴趣匹配未返回结果")
@@ -265,7 +266,7 @@ class InterestScoringSystem:
         logger.info(f"🎯 回复决策: {decision}")
         logger.info(f"📊 决策依据: {score.total_score:.3f} {'>=' if should_reply else '<'} {effective_threshold:.3f}")
 
-        return should_reply
+        return should_reply, score.total_score
 
     def record_reply_action(self, did_reply: bool):
         """记录回复动作"""
@@ -273,10 +274,10 @@ class InterestScoringSystem:
 
         if did_reply:
             self.no_reply_count = max(0, self.no_reply_count - 1)
-            action = "✅ 回复了消息"
+            action = "✅ reply动作可用"
         else:
             self.no_reply_count += 1
-            action = "❌ 选择不回复"
+            action = "❌ reply动作不可用"
 
         # 限制最大计数
         self.no_reply_count = min(self.no_reply_count, self.max_no_reply_count)

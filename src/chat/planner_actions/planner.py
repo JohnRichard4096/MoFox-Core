@@ -104,16 +104,38 @@ class ActionPlanner:
                 # 3. 根据兴趣度调整可用动作
                 if interest_scores:
                     latest_score = max(interest_scores, key=lambda s: s.total_score)
-                    should_reply = self.interest_scoring.should_reply(latest_score)
+                    should_reply, score = self.interest_scoring.should_reply(latest_score)
 
+                    reply_not_available = False
                     if not should_reply and "reply" in initial_plan.available_actions:
                         logger.info(f"消息兴趣度不足({latest_score.total_score:.2f})，移除reply动作")
-                        del initial_plan.available_actions["reply"]
-                        self.interest_scoring.record_reply_action(False)
-                    else:
-                        self.interest_scoring.record_reply_action(True)
-            # 4. 筛选 Plan
-            filtered_plan = await self.filter.filter(initial_plan)
+                        reply_not_available = True
+
+            base_threshold = self.interest_scoring.reply_threshold
+            # 检查兴趣度是否达到阈值的0.8
+            threshold_requirement = base_threshold * 0.8
+            if score < threshold_requirement:
+                logger.info(f"❌ 兴趣度不足阈值的80%: {score:.3f} < {threshold_requirement:.3f}，直接返回no_action")
+                logger.info(f"📊 最低要求: 阈值({base_threshold:.3f}) × 0.8 = {threshold_requirement:.3f}")
+                # 直接返回 no_action
+                no_action = {
+                    "action_type": "no_action",
+                    "reason": f"兴趣度评分 {score:.3f} 未达阈值80% {threshold_requirement:.3f}",
+                    "action_data": {},
+                    "action_message": None,
+                }
+                filtered_plan = initial_plan
+                filtered_plan.decided_actions = [no_action]
+            else:
+                # 4. 筛选 Plan
+                filtered_plan = await self.filter.filter(reply_not_available,initial_plan)
+
+            # 检查filtered_plan是否有reply动作，以便记录reply action
+            has_reply_action = False
+            for decision in filtered_plan.decided_actions:
+                if decision.action_type == "reply":
+                    has_reply_action = True
+            self.interest_scoring.record_reply_action(has_reply_action)
 
             # 5. 使用 PlanExecutor 执行 Plan
             execution_result = await self.executor.execute(filtered_plan)

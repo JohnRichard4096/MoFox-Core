@@ -429,26 +429,64 @@ class BotInterestManager:
         # 计算与每个兴趣标签的相似度
         match_count = 0
         high_similarity_count = 0
-        similarity_threshold = 0.3
+        medium_similarity_count = 0
+        low_similarity_count = 0
 
-        logger.debug(f"🔍 使用相似度阈值: {similarity_threshold}")
+        # 分级相似度阈值
+        high_threshold = 0.5
+        medium_threshold = 0.3
+        low_threshold = 0.15
+
+        logger.debug(f"🔍 使用分级相似度阈值: 高={high_threshold}, 中={medium_threshold}, 低={low_threshold}")
 
         for tag in active_tags:
             if tag.embedding:
                 similarity = self._calculate_cosine_similarity(message_embedding, tag.embedding)
+
+                # 基础加权分数
                 weighted_score = similarity * tag.weight
 
-                if similarity > similarity_threshold:
+                # 根据相似度等级应用不同的加成
+                if similarity > high_threshold:
+                    # 高相似度：强加成
+                    enhanced_score = weighted_score * 1.5
                     match_count += 1
-                    result.add_match(tag.tag_name, weighted_score, [tag.tag_name])
+                    high_similarity_count += 1
+                    result.add_match(tag.tag_name, enhanced_score, [tag.tag_name])
+                    logger.debug(f"   🏷️  '{tag.tag_name}': 相似度={similarity:.3f}, 权重={tag.weight:.2f}, 基础分数={weighted_score:.3f}, 增强分数={enhanced_score:.3f} [高匹配]")
 
-                    if similarity > 0.7:
-                        high_similarity_count += 1
+                elif similarity > medium_threshold:
+                    # 中相似度：中等加成
+                    enhanced_score = weighted_score * 1.2
+                    match_count += 1
+                    medium_similarity_count += 1
+                    result.add_match(tag.tag_name, enhanced_score, [tag.tag_name])
+                    logger.debug(f"   🏷️  '{tag.tag_name}': 相似度={similarity:.3f}, 权重={tag.weight:.2f}, 基础分数={weighted_score:.3f}, 增强分数={enhanced_score:.3f} [中匹配]")
 
-                    logger.debug(f"   🏷️  '{tag.tag_name}': 相似度={similarity:.3f}, 权重={tag.weight:.2f}, 加权分数={weighted_score:.3f}")
+                elif similarity > low_threshold:
+                    # 低相似度：轻微加成
+                    enhanced_score = weighted_score * 1.05
+                    match_count += 1
+                    low_similarity_count += 1
+                    result.add_match(tag.tag_name, enhanced_score, [tag.tag_name])
+                    logger.debug(f"   🏷️  '{tag.tag_name}': 相似度={similarity:.3f}, 权重={tag.weight:.2f}, 基础分数={weighted_score:.3f}, 增强分数={enhanced_score:.3f} [低匹配]")
 
         logger.info(f"📈 匹配统计: {match_count}/{len(active_tags)} 个标签超过阈值")
-        logger.info(f"🔥 高相似度匹配(>0.7): {high_similarity_count} 个")
+        logger.info(f"🔥 高相似度匹配(>{high_threshold}): {high_similarity_count} 个")
+        logger.info(f"⚡ 中相似度匹配(>{medium_threshold}): {medium_similarity_count} 个")
+        logger.info(f"🌊 低相似度匹配(>{low_threshold}): {low_similarity_count} 个")
+
+        # 添加直接关键词匹配奖励
+        keyword_bonus = self._calculate_keyword_match_bonus(keywords, result.matched_tags)
+        logger.debug(f"🎯 关键词直接匹配奖励: {keyword_bonus}")
+
+        # 应用关键词奖励到匹配分数
+        for tag_name in result.matched_tags:
+            if tag_name in keyword_bonus:
+                original_score = result.match_scores[tag_name]
+                bonus = keyword_bonus[tag_name]
+                result.match_scores[tag_name] = original_score + bonus
+                logger.debug(f"   🏷️  '{tag_name}': 原始分数={original_score:.3f}, 奖励={bonus:.3f}, 最终分数={result.match_scores[tag_name]:.3f}")
 
         # 计算总体分数
         result.calculate_overall_score()
@@ -463,6 +501,79 @@ class BotInterestManager:
         return result
 
     
+    def _calculate_keyword_match_bonus(self, keywords: List[str], matched_tags: List[str]) -> Dict[str, float]:
+        """计算关键词直接匹配奖励"""
+        if not keywords or not matched_tags:
+            return {}
+
+        bonus_dict = {}
+
+        for tag_name in matched_tags:
+            bonus = 0.0
+
+            # 检查关键词与标签的直接匹配
+            for keyword in keywords:
+                keyword_lower = keyword.lower().strip()
+                tag_name_lower = tag_name.lower()
+
+                # 完全匹配
+                if keyword_lower == tag_name_lower:
+                    bonus += 0.3
+                    logger.debug(f"   🎯 关键词完全匹配: '{keyword}' == '{tag_name}' (+0.3)")
+
+                # 包含匹配
+                elif keyword_lower in tag_name_lower or tag_name_lower in keyword_lower:
+                    bonus += 0.15
+                    logger.debug(f"   🎯 关键词包含匹配: '{keyword}' ⊃ '{tag_name}' (+0.15)")
+
+                # 部分匹配（编辑距离）
+                elif self._calculate_partial_match(keyword_lower, tag_name_lower):
+                    bonus += 0.08
+                    logger.debug(f"   🎯 关键词部分匹配: '{keyword}' ≈ '{tag_name}' (+0.08)")
+
+            if bonus > 0:
+                bonus_dict[tag_name] = min(bonus, 0.5)  # 最大奖励限制为0.5
+
+        return bonus_dict
+
+    def _calculate_partial_match(self, text1: str, text2: str) -> bool:
+        """计算部分匹配（基于编辑距离）"""
+        try:
+            # 简单的编辑距离计算
+            max_len = max(len(text1), len(text2))
+            if max_len == 0:
+                return False
+
+            # 计算编辑距离
+            distance = self._levenshtein_distance(text1, text2)
+
+            # 如果编辑距离小于较短字符串长度的一半，认为是部分匹配
+            min_len = min(len(text1), len(text2))
+            return distance <= min_len // 2
+
+        except Exception:
+            return False
+
+    def _levenshtein_distance(self, s1: str, s2: str) -> int:
+        """计算莱文斯坦距离"""
+        if len(s1) < len(s2):
+            return self._levenshtein_distance(s2, s1)
+
+        if len(s2) == 0:
+            return len(s1)
+
+        previous_row = range(len(s2) + 1)
+        for i, c1 in enumerate(s1):
+            current_row = [i + 1]
+            for j, c2 in enumerate(s2):
+                insertions = previous_row[j + 1] + 1
+                deletions = current_row[j] + 1
+                substitutions = previous_row[j] + (c1 != c2)
+                current_row.append(min(insertions, deletions, substitutions))
+            previous_row = current_row
+
+        return previous_row[-1]
+
     def _calculate_cosine_similarity(self, vec1: List[float], vec2: List[float]) -> float:
         """计算余弦相似度"""
         try:

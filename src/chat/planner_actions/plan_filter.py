@@ -38,7 +38,7 @@ class PlanFilter:
         )
         self.last_obs_time_mark = 0.0
 
-    async def filter(self, plan: Plan) -> Plan:
+    async def filter(self, reply_not_available: bool, plan: Plan) -> Plan:
         """
         执行筛选逻辑，并填充 Plan 对象的 decided_actions 字段。
         """
@@ -58,6 +58,16 @@ class PlanFilter:
                     prased_json = {"action": "no_action", "reason": "返回内容无法解析为JSON"}
                 logger.debug(f"墨墨在这里加了日志 -> 解析后的 JSON: {parsed_json}")
                 
+                if "reply" in plan.available_actions and reply_not_available:
+                    # 如果reply动作不可用，但llm返回的仍然有reply，则改为no_reply
+                    if isinstance(parsed_json, dict) and parsed_json.get("action") == "reply":
+                        parsed_json["action"] = "no_reply"
+                    elif isinstance(parsed_json, list):
+                        for item in parsed_json:
+                            if isinstance(item, dict) and item.get("action") == "reply":
+                                item["action"] = "no_reply"
+                                item["reason"] += " (但由于兴趣度不足，reply动作不可用，已改为no_reply)"
+
                 if isinstance(parsed_json, dict):
                     parsed_json = [parsed_json]
 
