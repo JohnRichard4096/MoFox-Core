@@ -721,6 +721,7 @@ class BotInterestManager:
                         last_updated=interests.last_updated
                     )
                     session.add(new_record)
+                    session.commit()
                     logger.info(f"✅ 成功创建兴趣标签配置，版本: {interests.version}")
 
             logger.info("✅ 兴趣标签已成功保存到数据库")
