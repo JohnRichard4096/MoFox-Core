@@ -137,16 +137,16 @@ class ActionPlanner:
 
             base_threshold = self.interest_scoring.reply_threshold
             # 检查兴趣度是否达到阈值的0.8
-            threshold_requirement = base_threshold * 0.8
-            if score < threshold_requirement:
-                logger.info(f"❌ 兴趣度不足阈值的80%: {score:.3f} < {threshold_requirement:.3f}，直接返回no_action")
-                logger.info(f"📊 最低要求: 阈值({base_threshold:.3f}) × 0.8 = {threshold_requirement:.3f}")
+            non_reply_action_interest_threshold = global_config.affinity_flow.non_reply_action_interest_threshold
+            if score < non_reply_action_interest_threshold:
+                logger.info(f"❌ 兴趣度不足非回复动作阈值: {score:.3f} < {non_reply_action_interest_threshold:.3f}，直接返回no_action")
+                logger.info(f"📊 最低要求: {non_reply_action_interest_threshold:.3f}")
                 # 直接返回 no_action
                 from src.common.data_models.info_data_model import ActionPlannerInfo
 
                 no_action = ActionPlannerInfo(
                     action_type="no_action",
-                    reasoning=f"兴趣度评分 {score:.3f} 未达阈值80% {threshold_requirement:.3f}",
+                    reasoning=f"兴趣度评分 {score:.3f} 未达阈值 {non_reply_action_interest_threshold:.3f}",
                     action_data={},
                     action_message=None,
                 )
