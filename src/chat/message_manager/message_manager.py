@@ -11,7 +11,8 @@ from typing import Dict, Optional, Any, TYPE_CHECKING
 from src.common.logger import get_logger
 from src.common.data_models.database_data_model import DatabaseMessages
 from src.common.data_models.message_manager_data_model import StreamContext, MessageManagerStats, StreamStats
-from src.chat.affinity_flow.afc_manager import afc_manager
+from src.chat.chatter_manager import ChatterManager
+from src.chat.planner_actions.action_manager import ActionManager
 
 if TYPE_CHECKING:
     from src.common.data_models.message_manager_data_model import StreamContext
@@ -30,6 +31,10 @@ class MessageManager:
 
         # 统计信息
         self.stats = MessageManagerStats()
+
+        # 初始化chatter manager
+        self.action_manager = ActionManager()
+        self.chatter_manager = ChatterManager(self.action_manager)
 
     async def start(self):
         """启动消息管理器"""
@@ -125,15 +130,23 @@ class MessageManager:
             # 直接使用StreamContext对象进行处理
             if unread_messages:
                 try:
-                    # 发送到AFC处理器，传递StreamContext对象
-                    results = await afc_manager.process_stream_context(stream_id, context)
+                    # 记录当前chat type用于调试
+                    logger.debug(f"聊天流 {stream_id} 检测到的chat type: {context.chat_type.value}")
+
+                    # 发送到chatter manager，传递StreamContext对象
+                    results = await self.chatter_manager.process_stream_context(stream_id, context)
 
                     # 处理结果，标记消息为已读
                     if results.get("success", False):
                         self._clear_all_unread_messages(context)
+                        logger.debug(f"聊天流 {stream_id} 处理成功，清除了 {len(unread_messages)} 条未读消息")
+                    else:
+                        logger.warning(f"聊天流 {stream_id} 处理失败: {results.get('error_message', '未知错误')}")
 
                 except Exception as e:
                     logger.error(f"处理聊天流 {stream_id} 时发生异常，将清除所有未读消息: {e}")
+                    # 出现异常时也清除未读消息，避免重复处理
+                    self._clear_all_unread_messages(context)
                     raise
 
             logger.debug(f"聊天流 {stream_id} 消息处理完成")

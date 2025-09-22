@@ -1,26 +1,28 @@
 """
 亲和力聊天处理器
-单个聊天流的处理器，负责处理特定聊天流的完整交互流程
+基于现有的AffinityFlowChatter重构为插件化组件
 """
 
 import time
 import traceback
 from datetime import datetime
-from typing import Dict
+from typing import Dict, Any
 
-from src.chat.planner_actions.action_manager import ActionManager
-from src.chat.planner_actions.planner import ActionPlanner
-from src.common.data_models.message_manager_data_model import StreamContext
 from src.plugin_system.base.base_chatter import BaseChatter
-from src.plugin_system.base.component_types import ChatMode
-
+from src.plugin_system.base.component_types import ChatType, ChatMode
+from src.common.data_models.message_manager_data_model import StreamContext
+from src.chat.planner_actions.planner import ActionPlanner
+from src.chat.planner_actions.action_manager import ActionManager
 from src.common.logger import get_logger
 
 logger = get_logger("affinity_chatter")
 
 
-class AffinityFlowChatter(BaseChatter):
-    """单个亲和力聊天处理器"""
+class AffinityChatter(BaseChatter):
+    """亲和力聊天处理器"""
+    chatter_name: str = "AffinityChatter"
+    chatter_description: str = "基于亲和力模型的智能聊天处理器，支持多种聊天类型"
+    chat_types: list[ChatType] = [ChatType.ALL]  # 支持所有聊天类型
 
     def __init__(self, stream_id: str, planner: ActionPlanner, action_manager: ActionManager):
         """
@@ -31,9 +33,7 @@ class AffinityFlowChatter(BaseChatter):
             planner: 动作规划器
             action_manager: 动作管理器
         """
-        self.stream_id = stream_id
-        self.planner = planner
-        self.action_manager = action_manager
+        super().__init__(stream_id, planner, action_manager)
 
         # 处理器统计
         self.stats = {
@@ -101,7 +101,7 @@ class AffinityFlowChatter(BaseChatter):
                 "executed_count": 0,
             }
 
-    def get_stats(self) -> Dict[str, any]:
+    def get_stats(self) -> Dict[str, Any]:
         """
         获取处理器统计信息
 
@@ -110,7 +110,7 @@ class AffinityFlowChatter(BaseChatter):
         """
         return self.stats.copy()
 
-    def get_planner_stats(self) -> Dict[str, any]:
+    def get_planner_stats(self) -> Dict[str, Any]:
         """
         获取规划器统计信息
 
@@ -119,7 +119,7 @@ class AffinityFlowChatter(BaseChatter):
         """
         return self.planner.get_planner_stats()
 
-    def get_interest_scoring_stats(self) -> Dict[str, any]:
+    def get_interest_scoring_stats(self) -> Dict[str, Any]:
         """
         获取兴趣度评分统计信息
 
@@ -128,7 +128,7 @@ class AffinityFlowChatter(BaseChatter):
         """
         return self.planner.get_interest_scoring_stats()
 
-    def get_relationship_stats(self) -> Dict[str, any]:
+    def get_relationship_stats(self) -> Dict[str, Any]:
         """
         获取用户关系统计信息
 
@@ -194,12 +194,12 @@ class AffinityFlowChatter(BaseChatter):
 
     def __str__(self) -> str:
         """字符串表示"""
-        return f"AffinityFlowChatter(stream_id={self.stream_id}, messages={self.stats['messages_processed']})"
+        return f"AffinityChatter(stream_id={self.stream_id}, messages={self.stats['messages_processed']})"
 
     def __repr__(self) -> str:
         """详细字符串表示"""
         return (
-            f"AffinityFlowChatter(stream_id={self.stream_id}, "
+            f"AffinityChatter(stream_id={self.stream_id}, "
             f"messages_processed={self.stats['messages_processed']}, "
             f"plans_created={self.stats['plans_created']}, "
             f"last_activity={datetime.fromtimestamp(self.last_activity_time)})"

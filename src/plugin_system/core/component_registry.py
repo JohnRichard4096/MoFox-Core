@@ -1,7 +1,7 @@
 from pathlib import Path
 import re
 
-from typing import Dict, List, Optional, Any, Pattern, Tuple, Union, Type
+from typing import TYPE_CHECKING, Dict, List, Optional, Any, Pattern, Tuple, Union, Type
 
 from src.common.logger import get_logger
 from src.plugin_system.base.component_types import (
@@ -11,14 +11,17 @@ from src.plugin_system.base.component_types import (
     CommandInfo,
     PlusCommandInfo,
     EventHandlerInfo,
+    ChatterInfo,
     PluginInfo,
     ComponentType,
 )
+
 from src.plugin_system.base.base_command import BaseCommand
 from src.plugin_system.base.base_action import BaseAction
 from src.plugin_system.base.base_tool import BaseTool
 from src.plugin_system.base.base_events_handler import BaseEventHandler
 from src.plugin_system.base.plus_command import PlusCommand
+from src.plugin_system.base.base_chatter import BaseChatter
 
 logger = get_logger("component_registry")
 
@@ -31,42 +34,45 @@ class ComponentRegistry:
 
     def __init__(self):
         # 命名空间式组件名构成法 f"{component_type}.{component_name}"
-        self._plus_command_registry: Dict[str, Type[PlusCommand]] = {}
-        self._components: Dict[str, ComponentInfo] = {}
+        self._components: Dict[str, 'ComponentInfo'] = {}
         """组件注册表 命名空间式组件名 -> 组件信息"""
-        self._components_by_type: Dict[ComponentType, Dict[str, ComponentInfo]] = {types: {} for types in ComponentType}
+        self._components_by_type: Dict['ComponentType', Dict[str, 'ComponentInfo']] = {types: {} for types in ComponentType}
         """类型 -> 组件原名称 -> 组件信息"""
         self._components_classes: Dict[
-            str, Type[Union[BaseCommand, BaseAction, BaseTool, BaseEventHandler, PlusCommand]]
+            str, Type[Union['BaseCommand', 'BaseAction', 'BaseTool', 'BaseEventHandler', 'PlusCommand', 'BaseChatter']]
         ] = {}
         """命名空间式组件名 -> 组件类"""
 
         # 插件注册表
-        self._plugins: Dict[str, PluginInfo] = {}
+        self._plugins: Dict[str, 'PluginInfo'] = {}
         """插件名 -> 插件信息"""
 
         # Action特定注册表
-        self._action_registry: Dict[str, Type[BaseAction]] = {}
+        self._action_registry: Dict[str, Type['BaseAction']] = {}
         """Action注册表 action名 -> action类"""
-        self._default_actions: Dict[str, ActionInfo] = {}
+        self._default_actions: Dict[str, 'ActionInfo'] = {}
         """默认动作集，即启用的Action集，用于重置ActionManager状态"""
 
         # Command特定注册表
-        self._command_registry: Dict[str, Type[BaseCommand]] = {}
+        self._command_registry: Dict[str, Type['BaseCommand']] = {}
         """Command类注册表 command名 -> command类"""
         self._command_patterns: Dict[Pattern, str] = {}
         """编译后的正则 -> command名"""
 
         # 工具特定注册表
-        self._tool_registry: Dict[str, Type[BaseTool]] = {}  # 工具名 -> 工具类
-        self._llm_available_tools: Dict[str, Type[BaseTool]] = {}  # llm可用的工具名 -> 工具类
+        self._tool_registry: Dict[str, Type['BaseTool']] = {}  # 工具名 -> 工具类
+        self._llm_available_tools: Dict[str, Type['BaseTool']] = {}  # llm可用的工具名 -> 工具类
 
         # EventHandler特定注册表
-        self._event_handler_registry: Dict[str, Type[BaseEventHandler]] = {}
+        self._event_handler_registry: Dict[str, Type['BaseEventHandler']] = {}
         """event_handler名 -> event_handler类"""
-        self._enabled_event_handlers: Dict[str, Type[BaseEventHandler]] = {}
+        self._enabled_event_handlers: Dict[str, Type['BaseEventHandler']] = {}
         """启用的事件处理器 event_handler名 -> event_handler类"""
 
+        self._chatter_registry: Dict[str, Type['BaseChatter']] = {}
+        """chatter名 -> chatter类"""
+        self._enabled_chatter_registry: Dict[str, Type['BaseChatter']] = {}
+        """启用的chatter名 -> chatter类"""
         logger.info("组件注册中心初始化完成")
 
     # == 注册方法 ==
@@ -93,7 +99,7 @@ class ComponentRegistry:
     def register_component(
         self,
         component_info: ComponentInfo,
-        component_class: Type[Union[BaseCommand, BaseAction, BaseEventHandler, BaseTool]],
+        component_class: Type[Union['BaseCommand', 'BaseAction', 'BaseEventHandler', 'BaseTool', 'BaseChatter']],
     ) -> bool:
         """注册组件
 
@@ -151,6 +157,10 @@ class ComponentRegistry:
                 assert isinstance(component_info, EventHandlerInfo)
                 assert issubclass(component_class, BaseEventHandler)
                 ret = self._register_event_handler_component(component_info, component_class)
+            case ComponentType.CHATTER:
+                assert isinstance(component_info, ChatterInfo)
+                assert issubclass(component_class, BaseChatter)
+                ret = self._register_chatter_component(component_info, component_class)
             case _:
                 logger.warning(f"未知组件类型: {component_type}")
 
@@ -162,7 +172,7 @@ class ComponentRegistry:
         )
         return True
 
-    def _register_action_component(self, action_info: ActionInfo, action_class: Type[BaseAction]) -> bool:
+    def _register_action_component(self, action_info: 'ActionInfo', action_class: Type['BaseAction']) -> bool:
         """注册Action组件到Action特定注册表"""
         if not (action_name := action_info.name):
             logger.error(f"Action组件 {action_class.__name__} 必须指定名称")
@@ -182,7 +192,7 @@ class ComponentRegistry:
 
         return True
 
-    def _register_command_component(self, command_info: CommandInfo, command_class: Type[BaseCommand]) -> bool:
+    def _register_command_component(self, command_info: 'CommandInfo', command_class: Type['BaseCommand']) -> bool:
         """注册Command组件到Command特定注册表"""
         if not (command_name := command_info.name):
             logger.error(f"Command组件 {command_class.__name__} 必须指定名称")
@@ -209,7 +219,7 @@ class ComponentRegistry:
         return True
 
     def _register_plus_command_component(
-        self, plus_command_info: PlusCommandInfo, plus_command_class: Type[PlusCommand]
+        self, plus_command_info: 'PlusCommandInfo', plus_command_class: Type['PlusCommand']
     ) -> bool:
         """注册PlusCommand组件到特定注册表"""
         plus_command_name = plus_command_info.name
@@ -223,7 +233,7 @@ class ComponentRegistry:
 
         # 创建专门的PlusCommand注册表（如果还没有）
         if not hasattr(self, "_plus_command_registry"):
-            self._plus_command_registry: Dict[str, Type[PlusCommand]] = {}
+            self._plus_command_registry: Dict[str, Type['PlusCommand']] = {}
 
         plus_command_class.plugin_name = plus_command_info.plugin_name
         # 设置插件配置
@@ -233,7 +243,7 @@ class ComponentRegistry:
         logger.debug(f"已注册PlusCommand组件: {plus_command_name}")
         return True
 
-    def _register_tool_component(self, tool_info: ToolInfo, tool_class: Type[BaseTool]) -> bool:
+    def _register_tool_component(self, tool_info: 'ToolInfo', tool_class: Type['BaseTool']) -> bool:
         """注册Tool组件到Tool特定注册表"""
         tool_name = tool_info.name
 
@@ -249,7 +259,7 @@ class ComponentRegistry:
         return True
 
     def _register_event_handler_component(
-        self, handler_info: EventHandlerInfo, handler_class: Type[BaseEventHandler]
+        self, handler_info: 'EventHandlerInfo', handler_class: Type['BaseEventHandler']
     ) -> bool:
         if not (handler_name := handler_info.name):
             logger.error(f"EventHandler组件 {handler_class.__name__} 必须指定名称")
@@ -275,9 +285,34 @@ class ComponentRegistry:
             handler_class, self.get_plugin_config(handler_info.plugin_name) or {}
         )
 
+    def _register_chatter_component(self, chatter_info: 'ChatterInfo', chatter_class: Type['BaseChatter']) -> bool:
+        """注册Chatter组件到Chatter特定注册表"""
+        chatter_name = chatter_info.name
+
+        if not chatter_name:
+            logger.error(f"Chatter组件 {chatter_class.__name__} 必须指定名称")
+            return False
+        if not isinstance(chatter_info, ChatterInfo) or not issubclass(chatter_class, BaseChatter):
+            logger.error(f"注册失败: {chatter_name} 不是有效的Chatter")
+            return False
+
+        chatter_class.plugin_name = chatter_info.plugin_name
+        # 设置插件配置
+        chatter_class.plugin_config = self.get_plugin_config(chatter_info.plugin_name) or {}
+
+        self._chatter_registry[chatter_name] = chatter_class
+
+        if not chatter_info.enabled:
+            logger.warning(f"Chatter组件 {chatter_name} 未启用")
+            return True  # 未启用，但是也是注册成功
+        self._enabled_chatter_registry[chatter_name] = chatter_class
+
+        logger.debug(f"已注册Chatter组件: {chatter_name}")
+        return True
+
     # === 组件移除相关 ===
 
-    async def remove_component(self, component_name: str, component_type: ComponentType, plugin_name: str) -> bool:
+    async def remove_component(self, component_name: str, component_type: 'ComponentType', plugin_name: str) -> bool:
         target_component_class = self.get_component_class(component_name, component_type)
         if not target_component_class:
             logger.warning(f"组件 {component_name} 未注册，无法移除")
@@ -324,6 +359,12 @@ class ComponentRegistry:
                         logger.debug(f"已移除EventHandler组件: {component_name}")
                     except Exception as e:
                         logger.warning(f"移除EventHandler事件订阅时出错: {e}")
+
+                case ComponentType.CHATTER:
+                    # 移除Chatter注册
+                    if hasattr(self, '_chatter_registry'):
+                        self._chatter_registry.pop(component_name, None)
+                    logger.debug(f"已移除Chatter组件: {component_name}")
 
                 case _:
                     logger.warning(f"未知的组件类型: {component_type}")
@@ -443,8 +484,8 @@ class ComponentRegistry:
 
     # === 组件查询方法 ===
     def get_component_info(
-        self, component_name: str, component_type: Optional[ComponentType] = None
-    ) -> Optional[ComponentInfo]:
+        self, component_name: str, component_type: Optional['ComponentType'] = None
+    ) -> Optional['ComponentInfo']:
         # sourcery skip: class-extract-method
         """获取组件信息，支持自动命名空间解析
 
@@ -488,8 +529,8 @@ class ComponentRegistry:
     def get_component_class(
         self,
         component_name: str,
-        component_type: Optional[ComponentType] = None,
-    ) -> Optional[Union[Type[BaseCommand], Type[BaseAction], Type[BaseEventHandler], Type[BaseTool]]]:
+        component_type: Optional['ComponentType'] = None,
+    ) -> Optional[Union[Type['BaseCommand'], Type['BaseAction'], Type['BaseEventHandler'], Type['BaseTool']]]:
         """获取组件类，支持自动命名空间解析
 
         Args:
@@ -506,7 +547,7 @@ class ComponentRegistry:
         # 2. 如果指定了组件类型，构造命名空间化的名称查找
         if component_type:
             namespaced_name = f"{component_type.value}.{component_name}"
-            return self._components_classes.get(namespaced_name)
+            return self._components_classes.get(namespaced_name)  # type: ignore[valid-type]
 
         # 3. 如果没有指定类型，尝试在所有命名空间中查找
         candidates = []
@@ -531,22 +572,22 @@ class ComponentRegistry:
         # 4. 都没找到
         return None
 
-    def get_components_by_type(self, component_type: ComponentType) -> Dict[str, ComponentInfo]:
+    def get_components_by_type(self, component_type: 'ComponentType') -> Dict[str, 'ComponentInfo']:
         """获取指定类型的所有组件"""
         return self._components_by_type.get(component_type, {}).copy()
 
-    def get_enabled_components_by_type(self, component_type: ComponentType) -> Dict[str, ComponentInfo]:
+    def get_enabled_components_by_type(self, component_type: 'ComponentType') -> Dict[str, 'ComponentInfo']:
         """获取指定类型的所有启用组件"""
         components = self.get_components_by_type(component_type)
         return {name: info for name, info in components.items() if info.enabled}
 
     # === Action特定查询方法 ===
 
-    def get_action_registry(self) -> Dict[str, Type[BaseAction]]:
+    def get_action_registry(self) -> Dict[str, Type['BaseAction']]:
         """获取Action注册表"""
         return self._action_registry.copy()
 
-    def get_registered_action_info(self, action_name: str) -> Optional[ActionInfo]:
+    def get_registered_action_info(self, action_name: str) -> Optional['ActionInfo']:
         """获取Action信息"""
         info = self.get_component_info(action_name, ComponentType.ACTION)
         return info if isinstance(info, ActionInfo) else None
@@ -557,11 +598,11 @@ class ComponentRegistry:
 
     # === Command特定查询方法 ===
 
-    def get_command_registry(self) -> Dict[str, Type[BaseCommand]]:
+    def get_command_registry(self) -> Dict[str, Type['BaseCommand']]:
         """获取Command注册表"""
         return self._command_registry.copy()
 
-    def get_registered_command_info(self, command_name: str) -> Optional[CommandInfo]:
+    def get_registered_command_info(self, command_name: str) -> Optional['CommandInfo']:
         """获取Command信息"""
         info = self.get_component_info(command_name, ComponentType.COMMAND)
         return info if isinstance(info, CommandInfo) else None
@@ -570,7 +611,7 @@ class ComponentRegistry:
         """获取Command模式注册表"""
         return self._command_patterns.copy()
 
-    def find_command_by_text(self, text: str) -> Optional[Tuple[Type[BaseCommand], dict, CommandInfo]]:
+    def find_command_by_text(self, text: str) -> Optional[Tuple[Type['BaseCommand'], dict, 'CommandInfo']]:
         # sourcery skip: use-named-expression, use-next
         """根据文本查找匹配的命令
 
@@ -597,15 +638,15 @@ class ComponentRegistry:
         return None
 
     # === Tool 特定查询方法 ===
-    def get_tool_registry(self) -> Dict[str, Type[BaseTool]]:
+    def get_tool_registry(self) -> Dict[str, Type['BaseTool']]:
         """获取Tool注册表"""
         return self._tool_registry.copy()
 
-    def get_llm_available_tools(self) -> Dict[str, Type[BaseTool]]:
+    def get_llm_available_tools(self) -> Dict[str, Type['BaseTool']]:
         """获取LLM可用的Tool列表"""
         return self._llm_available_tools.copy()
 
-    def get_registered_tool_info(self, tool_name: str) -> Optional[ToolInfo]:
+    def get_registered_tool_info(self, tool_name: str) -> Optional['ToolInfo']:
         """获取Tool信息
 
         Args:
@@ -618,13 +659,13 @@ class ComponentRegistry:
         return info if isinstance(info, ToolInfo) else None
 
     # === PlusCommand 特定查询方法 ===
-    def get_plus_command_registry(self) -> Dict[str, Type[PlusCommand]]:
+    def get_plus_command_registry(self) -> Dict[str, Type['PlusCommand']]:
         """获取PlusCommand注册表"""
         if not hasattr(self, "_plus_command_registry"):
             pass
         return self._plus_command_registry.copy()
 
-    def get_registered_plus_command_info(self, command_name: str) -> Optional[PlusCommandInfo]:
+    def get_registered_plus_command_info(self, command_name: str) -> Optional['PlusCommandInfo']:
         """获取PlusCommand信息
 
         Args:
@@ -638,26 +679,44 @@ class ComponentRegistry:
 
     # === EventHandler 特定查询方法 ===
 
-    def get_event_handler_registry(self) -> Dict[str, Type[BaseEventHandler]]:
+    def get_event_handler_registry(self) -> Dict[str, Type['BaseEventHandler']]:
         """获取事件处理器注册表"""
         return self._event_handler_registry.copy()
 
-    def get_registered_event_handler_info(self, handler_name: str) -> Optional[EventHandlerInfo]:
+    def get_registered_event_handler_info(self, handler_name: str) -> Optional['EventHandlerInfo']:
         """获取事件处理器信息"""
         info = self.get_component_info(handler_name, ComponentType.EVENT_HANDLER)
         return info if isinstance(info, EventHandlerInfo) else None
 
-    def get_enabled_event_handlers(self) -> Dict[str, Type[BaseEventHandler]]:
+    def get_enabled_event_handlers(self) -> Dict[str, Type['BaseEventHandler']]:
         """获取启用的事件处理器"""
         return self._enabled_event_handlers.copy()
 
+    # === Chatter 特定查询方法 ===
+    def get_chatter_registry(self) -> Dict[str, Type['BaseChatter']]:
+        """获取Chatter注册表"""
+        if not hasattr(self, '_chatter_registry'):
+            self._chatter_registry: Dict[str, Type[BaseChatter]] = {}
+        return self._chatter_registry.copy()
+    
+    def get_enabled_chatter_registry(self) -> Dict[str, Type['BaseChatter']]:
+        """获取启用的Chatter注册表"""
+        if not hasattr(self, '_enabled_chatter_registry'):
+            self._enabled_chatter_registry: Dict[str, Type[BaseChatter]] = {}
+        return self._enabled_chatter_registry.copy()
+    
+    def get_registered_chatter_info(self, chatter_name: str) -> Optional['ChatterInfo']:
+        """获取Chatter信息"""
+        info = self.get_component_info(chatter_name, ComponentType.CHATTER)
+        return info if isinstance(info, ChatterInfo) else None
+    
     # === 插件查询方法 ===
 
-    def get_plugin_info(self, plugin_name: str) -> Optional[PluginInfo]:
+    def get_plugin_info(self, plugin_name: str) -> Optional['PluginInfo']:
         """获取插件信息"""
         return self._plugins.get(plugin_name)
 
-    def get_all_plugins(self) -> Dict[str, PluginInfo]:
+    def get_all_plugins(self) -> Dict[str, 'PluginInfo']:
         """获取所有插件"""
         return self._plugins.copy()
 
@@ -665,7 +724,7 @@ class ComponentRegistry:
     #     """获取所有启用的插件"""
     #     return {name: info for name, info in self._plugins.items() if info.enabled}
 
-    def get_plugin_components(self, plugin_name: str) -> List[ComponentInfo]:
+    def get_plugin_components(self, plugin_name: str) -> List['ComponentInfo']:
         """获取插件的所有组件"""
         plugin_info = self.get_plugin_info(plugin_name)
         return plugin_info.components if plugin_info else []
@@ -709,6 +768,7 @@ class ComponentRegistry:
         tool_components: int = 0
         events_handlers: int = 0
         plus_command_components: int = 0
+        chatter_components: int = 0
         for component in self._components.values():
             if component.component_type == ComponentType.ACTION:
                 action_components += 1
@@ -720,16 +780,23 @@ class ComponentRegistry:
                 events_handlers += 1
             elif component.component_type == ComponentType.PLUS_COMMAND:
                 plus_command_components += 1
+            elif component.component_type == ComponentType.CHATTER:
+                chatter_components += 1
         return {
             "action_components": action_components,
             "command_components": command_components,
             "tool_components": tool_components,
             "event_handlers": events_handlers,
             "plus_command_components": plus_command_components,
+            "chatter_components": chatter_components,
             "total_components": len(self._components),
             "total_plugins": len(self._plugins),
             "components_by_type": {
                 component_type.value: len(components) for component_type, components in self._components_by_type.items()
+            },
+            "enabled_components": len([c for c in self._components.values() if c.enabled]),
+            "enabled_plugins": len([p for p in self._plugins.values() if p.enabled]),
+        }
             },
             "enabled_components": len([c for c in self._components.values() if c.enabled]),
             "enabled_plugins": len([p for p in self._plugins.values() if p.enabled]),

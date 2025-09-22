@@ -1,0 +1,23 @@
+{
+  "manifest_version": 1,
+  "name": "affinity_chatter",
+  "display_name": "Affinity Flow Chatter",
+  "description": "Built-in chatter plugin for affinity flow with interest scoring and relationship building",
+  "version": "1.0.0",
+  "author": "MoFox",
+  "plugin_class": "AffinityChatterPlugin",
+  "enabled": true,
+  "is_built_in": true,
+  "components": [
+    {
+      "name": "affinity_chatter",
+      "type": "chatter",
+      "description": "Affinity flow chatter with intelligent interest scoring and relationship building",
+      "enabled": true,
+      "chat_type_allow": ["all"]
+    }
+  ],
+  "host_application": { "min_version": "0.8.0" },
+  "keywords": ["chatter", "affinity", "conversation"],
+  "categories": ["Chat", "AI"]
+}

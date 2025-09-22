@@ -4,20 +4,24 @@
 """
 
 from dataclasses import asdict
-from typing import Dict, List, Optional, Tuple
+from typing import TYPE_CHECKING, Dict, List, Optional, Tuple
 
-from src.chat.planner_actions.action_manager import ActionManager
+from src.plugin_system.base.component_types import ChatMode
 from src.chat.planner_actions.plan_executor import PlanExecutor
 from src.chat.planner_actions.plan_filter import PlanFilter
 from src.chat.planner_actions.plan_generator import PlanGenerator
 from src.chat.affinity_flow.interest_scoring import InterestScoringSystem
 from src.chat.affinity_flow.relationship_tracker import UserRelationshipTracker
-from src.common.data_models.info_data_model import Plan
-from src.common.data_models.message_manager_data_model import StreamContext
+
+
 from src.common.logger import get_logger
 from src.config.config import global_config
-from src.plugin_system.base.component_types import ChatMode
-import src.chat.planner_actions.planner_prompts #noga  # noqa: F401
+
+if TYPE_CHECKING:
+    from src.chat.planner_actions.action_manager import ActionManager
+    from src.common.data_models.message_manager_data_model import StreamContext
+    from src.common.data_models.info_data_model import Plan
+
 # 导入提示词模块以确保其被初始化
 from src.chat.planner_actions import planner_prompts  # noqa
 
@@ -35,7 +39,7 @@ class ActionPlanner:
     4. 完整的规划流程：生成→筛选→执行的完整三阶段流程
     """
 
-    def __init__(self, chat_id: str, action_manager: ActionManager):
+    def __init__(self, chat_id: str, action_manager: "ActionManager"):
         """
         初始化增强版ActionPlanner。
 
@@ -85,7 +89,7 @@ class ActionPlanner:
         }
 
     async def plan(
-        self, mode: ChatMode = ChatMode.FOCUS, context: StreamContext = None
+        self, mode: ChatMode = ChatMode.FOCUS, context: "StreamContext" = None
     ) -> Tuple[List[Dict], Optional[Dict]]:
         """
         执行完整的增强版规划流程。
@@ -109,7 +113,7 @@ class ActionPlanner:
             self.planner_stats["failed_plans"] += 1
             return [], None
 
-    async def _enhanced_plan_flow(self, mode: ChatMode, context: StreamContext) -> Tuple[List[Dict], Optional[Dict]]:
+    async def _enhanced_plan_flow(self, mode: ChatMode, context: "StreamContext") -> Tuple[List[Dict], Optional[Dict]]:
         """执行增强版规划流程"""
         try:
             # 1. 生成初始 Plan
@@ -204,7 +208,7 @@ class ActionPlanner:
         self.planner_stats["replies_generated"] += reply_count
         self.planner_stats["other_actions_executed"] += other_count
 
-    def _build_return_result(self, plan: Plan) -> Tuple[List[Dict], Optional[Dict]]:
+    def _build_return_result(self, plan: "Plan") -> Tuple[List[Dict], Optional[Dict]]:
         """构建返回结果"""
         final_actions = plan.decided_actions or []
         final_target_message = next((act.action_message for act in final_actions if act.action_message), None)
