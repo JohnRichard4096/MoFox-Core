@@ -83,11 +83,11 @@ class PlanExecutor:
             execution_results.extend(reply_result["results"])
             self.execution_stats["reply_executions"] += len(reply_actions)
 
-        # 并行执行其他动作
+        # 将其他动作放入后台任务执行，避免阻塞主流程
         if other_actions:
-            other_result = await self._execute_other_actions(other_actions, plan)
-            execution_results.extend(other_result["results"])
-            self.execution_stats["other_action_executions"] += len(other_actions)
+            asyncio.create_task(self._execute_other_actions(other_actions, plan))
+            logger.info(f"已将 {len(other_actions)} 个其他动作放入后台任务执行。")
+            # 注意：后台任务的结果不会立即计入本次返回的统计数据
 
         # 更新总体统计
         self.execution_stats["total_executed"] += len(plan.decided_actions)
