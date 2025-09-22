@@ -233,34 +233,28 @@ class VideoAnalyzer:
                     return {"summary": summary}
                 finally:
                     if os.path.exists(temp_path):
-                        try:
-                            os.remove(temp_path)
-                        except Exception:  # pragma: no cover
-                            pass
-            except Exception as e:  # pragma: no cover
-                return {"summary": f"❌ 处理失败: {e}"}
+                        os.unlink(temp_path)
 
-    # ---- 缓存辅助 ----
-    async def _get_cached(self, video_hash: str) -> Optional[str]:
-        try:
-            async with get_db_session() as session:  # type: ignore
-                result = await session.execute(select(Videos).where(Videos.video_hash == video_hash))  # type: ignore
-                obj: Optional[Videos] = result.scalar_one_or_none()  # type: ignore
-                if obj and obj.vlm_processed and obj.description:
-                    # 更新使用次数
-                    try:
-                        await session.execute(
-                            update(Videos)
-                            .where(Videos.id == obj.id)  # type: ignore
-                            .values(count=obj.count + 1 if obj.count is not None else 1)
-                        )
-                        await session.commit()
-                    except Exception:  # pragma: no cover
-                        await session.rollback()
-                    return obj.description
-        except Exception:  # pragma: no cover
-            pass
-        return None
+                # 保存分析结果到数据库（仅保存成功的结果）
+                if success and not result.startswith("❌"):
+                    metadata = {"filename": filename, "file_size": len(video_bytes), "analysis_timestamp": time.time()}
+                    self._store_video_result(video_hash=video_hash, description=result, metadata=metadata)
+                    logger.info("✅ 分析结果已保存到数据库")
+                else:
+                    logger.warning("⚠️ 分析失败，不保存到数据库以便后续重试")
+
+                # 处理完成，通知等待者并清理资源
+                video_event.set()
+                async with video_lock_manager:
+                    # 清理资源
+                    video_locks.pop(video_hash, None)
+                    video_events.pop(video_hash, None)
+
+                return {"summary": result}
+
+        except Exception as e:
+            error_msg = f"❌ 从字节数据分析视频失败: {str(e)}"
+            logger.error(error_msg)
 
     async def _save_cache(self, video_hash: str, summary: str, file_size: int) -> None:
         try:
