@@ -21,7 +21,7 @@ jobs:
 
       - name: Generate tag name
         id: generate_tag
-        run: echo "TAG_NAME=prerelease-$(date -u +'%Y%m%d%H%M%S')" >> $GITHUB_OUTPUT
+        run: echo "TAG_NAME=MoFox-prerelease-$(date -u +'%Y%m%d%H%M%S')" >> $GITHUB_OUTPUT
 
       - name: Create Pre-release
         env:
