@@ -170,6 +170,18 @@ def _version_tuple(v):
     return tuple(int(x) if x.isdigit() else 0 for x in str(v).replace("v", "").split("-")[0].split("."))
 
 
+def _remove_obsolete_keys(target: TOMLDocument | dict | Table, reference: TOMLDocument | dict | Table):
+    """
+    递归地从目标字典中移除所有不存在于参考字典中的键。
+    """
+    # 使用 list() 创建键的副本，以便在迭代期间安全地修改字典
+    for key in list(target.keys()):
+        if key not in reference:
+            del target[key]
+        elif isinstance(target.get(key), (dict, Table)) and isinstance(reference.get(key), (dict, Table)):
+            _remove_obsolete_keys(target[key], reference[key])
+
+
 def _update_dict(target: TOMLDocument | dict | Table, source: TOMLDocument | dict):
     """
     将source字典的值更新到target字典中
@@ -347,6 +359,13 @@ def _update_config_generic(config_name: str, template_name: str):
     # 将旧配置的值更新到新配置中
     logger.info(f"开始合并{config_name}新旧配置...")
     _update_dict(new_config, old_config)
+
+    # 移除在新模板中已不存在的旧配置项
+    logger.info(f"开始移除{config_name}中已废弃的配置项...")
+    with open(template_path, "r", encoding="utf-8") as f:
+        template_doc = tomlkit.load(f)
+    _remove_obsolete_keys(new_config, template_doc)
+    logger.info(f"已移除{config_name}中已废弃的配置项")
 
     # 保存更新后的配置（保留注释和格式）
     with open(new_config_path, "w", encoding="utf-8") as f:
