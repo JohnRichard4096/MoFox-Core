@@ -378,24 +378,26 @@ class ChatterRelationshipTracker:
     ):
         """回复后关系追踪 - 主要入口点"""
         try:
-            logger.info(f"🔄 开始回复后关系追踪: {user_id}")
+            logger.info(f"🔄 [RelationshipTracker] 开始回复后关系追踪: {user_id}")
 
             # 检查上次追踪时间
             last_tracked_time = self._get_last_tracked_time(user_id)
             time_diff = reply_timestamp - last_tracked_time
 
             if time_diff < 5 * 60:  # 5分钟内不重复追踪
-                logger.debug(f"用户 {user_id} 距离上次追踪时间不足5分钟，跳过")
+                logger.debug(f"⏱️ [RelationshipTracker] 用户 {user_id} 距离上次追踪时间不足5分钟 ({time_diff:.2f}s)，跳过")
                 return
 
             # 获取上次bot回复该用户的消息
             last_bot_reply = await self._get_last_bot_reply_to_user(user_id)
             if not last_bot_reply:
-                logger.debug(f"未找到上次回复用户 {user_id} 的记录")
+                logger.info(f"👋 [RelationshipTracker] 未找到用户 {user_id} 的历史回复记录，启动'初次见面'逻辑")
+                await self._handle_first_interaction(user_id, user_name, bot_reply_content)
                 return
 
             # 获取用户后续的反应消息
             user_reactions = await self._get_user_reactions_after_reply(user_id, last_bot_reply.time)
+            logger.debug(f"💬 [RelationshipTracker] 找到用户 {user_id} 在上次回复后的 {len(user_reactions)} 条反应消息")
 
             # 获取当前关系数据
             current_relationship = self._get_user_relationship_from_db(user_id)
@@ -407,6 +409,7 @@ class ChatterRelationshipTracker:
             current_text = current_relationship.get("relationship_text", "新用户") if current_relationship else "新用户"
 
             # 使用LLM分析并更新关系
+            logger.debug(f"🧠 [RelationshipTracker] 开始为用户 {user_id} 分析并更新关系")
             await self._analyze_and_update_relationship(
                 user_id, user_name, last_bot_reply, user_reactions, current_text, current_score, bot_reply_content
             )
@@ -636,6 +639,69 @@ class ChatterRelationshipTracker:
         except Exception as e:
             logger.error(f"关系分析失败: {e}")
             logger.debug("错误详情:", exc_info=True)
+
+    async def _handle_first_interaction(self, user_id: str, user_name: str, bot_reply_content: str):
+        """处理与用户的初次交互"""
+        try:
+            logger.info(f"✨ [RelationshipTracker] 正在处理与用户 {user_id} 的初次交互")
+            
+            # 获取bot人设信息
+            from src.individuality.individuality import Individuality
+            individuality = Individuality()
+            bot_personality = await individuality.get_personality_block()
+
+            prompt = f"""
+你现在是：{bot_personality}
+
+你正在与一个新用户进行初次有效互动。请根据你对TA的第一印象，建立初始关系档案。
+
+用户信息:
+- 用户ID: {user_id}
+- 用户名: {user_name}
+
+你的首次回复: {bot_reply_content}
+
+【严格要求】：
+1. 建立一个初始关系分数，通常在0.2-0.4之间（普通网友）。
+2. 关系印象描述要简洁地记录你对用户的初步看法（50-100字）。
+   - 用户名给你的感觉？
+   - 你的回复是基于什么考虑？
+   - 你对接下来与TA的互动有什么期待？
+
+请以JSON格式返回结果:
+{{
+    "relationship_text": "简洁的初始关系印象描述(50-100字)",
+    "relationship_score": 0.2~0.4的新分数,
+    "analysis_reasoning": "从你性格角度说明建立此初始印象的理由"
+}}
+"""
+            # 调用LLM进行分析
+            llm_response, _ = await self.relationship_llm.generate_response_async(prompt=prompt)
+            if not llm_response:
+                logger.warning(f"初次交互分析时LLM未返回有效响应: {user_id}")
+                return
+
+            import json
+            cleaned_response = self._clean_llm_json_response(llm_response)
+            response_data = json.loads(cleaned_response)
+
+            new_text = response_data.get("relationship_text", "初次见面")
+            new_score = max(0.0, min(1.0, float(response_data.get("relationship_score", global_config.affinity_flow.base_relationship_score))))
+            
+            # 更新数据库和缓存
+            self._update_user_relationship_in_db(user_id, new_text, new_score)
+            self.user_relationship_cache[user_id] = {
+                "relationship_text": new_text,
+                "relationship_score": new_score,
+                "last_tracked": time.time(),
+            }
+
+            logger.info(f"✅ [RelationshipTracker] 已成功为新用户 {user_id} 建立初始关系档案，分数为 {new_score:.3f}")
+
+        except Exception as e:
+            logger.error(f"处理初次交互失败: {user_id}, 错误: {e}")
+            logger.debug("错误详情:", exc_info=True)
+
 
     def _clean_llm_json_response(self, response: str) -> str:
         """

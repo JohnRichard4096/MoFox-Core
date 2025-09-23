@@ -162,6 +162,7 @@ class ChatterActionManager:
             执行结果
         """
         try:
+            logger.debug(f"🎯 [ActionManager] execute_action接收到 target_message: {target_message}")
             # 通过chat_id获取chat_stream
             chat_manager = get_chat_manager()
             chat_stream = chat_manager.get_stream(chat_id)
@@ -456,11 +457,13 @@ class ChatterActionManager:
 
             # 发送第一段回复
             if not first_replied:
+                set_reply_flag = bool(message_data)
+                logger.debug(f"📤 [ActionManager] 准备发送第一段回复。message_data: {message_data}, set_reply: {set_reply_flag}")
                 await send_api.text_to_stream(
                     text=data,
                     stream_id=chat_stream.stream_id,
                     reply_to_message=message_data,
-                    set_reply=bool(message_data),
+                    set_reply=set_reply_flag,
                     typing=False,
                 )
                 first_replied = True

@@ -150,6 +150,8 @@ class ChatterPlanExecutor:
                 "reasoning": action_info.reasoning,
                 "action_data": action_info.action_data or {},
             }
+            
+            logger.debug(f"📬 [PlanExecutor] 准备调用 ActionManager，target_message: {action_info.action_message}")
 
             # 通过动作管理器执行回复
             reply_content = await self.action_manager.execute_action(
