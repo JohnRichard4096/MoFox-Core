@@ -128,6 +128,13 @@ async def generate_reply(
         if not reply_reason and action_data:
             reply_reason = action_data.get("reason", "")
 
+        # 如果action_data中有thinking，添加到extra_info中
+        if action_data and (thinking := action_data.get("thinking")):
+            if extra_info:
+                extra_info += f"\n\n思考过程：{thinking}"
+            else:
+                extra_info = f"思考过程：{thinking}"
+
         # 调用回复器生成回复
         success, llm_response_dict, prompt, selected_expressions = await replyer.generate_reply_with_context(
             extra_info=extra_info,

@@ -219,6 +219,7 @@ class ChatterActionManager:
                     success, response_set, _ = await generator_api.generate_reply(
                         chat_stream=chat_stream,
                         reply_message=target_message,
+                        action_data=action_data or {},
                         available_actions=self.get_using_actions(),
                         enable_tool=global_config.tool.enable_tool,
                         request_type="chat.replyer",

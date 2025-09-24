@@ -104,7 +104,9 @@ def init_prompt():
 ## 其他信息
 {memory_block}
 {relation_info_block}
+
 {extra_info_block}
+
 {action_descriptions}
 
 ## 任务
@@ -112,7 +114,7 @@ def init_prompt():
 *{chat_scene}*
 
 ### 核心任务
-- 你现在的主要任务是和 {sender_name} 聊天。{relation_info_block}同时，也有其他用户会参与聊天，你可以参考他们的回复内容，但是你现在想回复{sender_name}的发言。
+- 你现在的主要任务是和 {sender_name} 聊天。同时，也有其他用户会参与聊天，你可以参考他们的回复内容，但是你现在想回复{sender_name}的发言。
 
 -  {reply_target_block} 你需要生成一段紧密相关且能推动对话的回复。
 

@@ -434,8 +434,8 @@ class ChatterPlanFilter:
                 action_data = {k: v for k, v in single_action_obj.items() if k not in ["action_type", "reason"]}
 
                 # 保留原始的thinking字段（如果有）
-                thinking = action_json.get("thinking")
-                if thinking:
+                thinking = action_json.get("thinking", "")
+                if thinking and thinking != "未提供思考过程":
                     action_data["thinking"] = thinking
 
                 target_message_obj = None
