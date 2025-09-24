@@ -229,8 +229,8 @@ class SendHandler:
         # sourcery skip: reintroduce-else, swap-if-else-branches, use-named-expression
         new_payload = payload
         if seg.type == "reply":
-            logger.info(seg.data)
             target_id = seg.data
+            target_id = str(target_id)
             if target_id == "notice":
                 return payload
             logger.info(target_id if isinstance(target_id, str) else "")
