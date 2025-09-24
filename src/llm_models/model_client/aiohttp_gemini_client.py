@@ -20,6 +20,26 @@ from ..payload_content.tool_option import ToolOption, ToolParam, ToolCall
 logger = get_logger("AioHTTP-Gemini客户端")
 
 
+# gemini_thinking参数（默认范围）
+# 不同模型的思考预算范围配置
+THINKING_BUDGET_LIMITS = {
+    "gemini-2.5-flash": {"min": 1, "max": 24576, "can_disable": True},
+    "gemini-2.5-flash-lite": {"min": 512, "max": 24576, "can_disable": True},
+    "gemini-2.5-pro": {"min": 128, "max": 32768, "can_disable": False},
+}
+# 思维预算特殊值
+THINKING_BUDGET_AUTO = -1  # 自动调整思考预算，由模型决定
+THINKING_BUDGET_DISABLED = 0  # 禁用思考预算（如果模型允许禁用）
+
+gemini_safe_settings = [
+    {"category": "HARM_CATEGORY_HATE_SPEECH", "threshold": "BLOCK_NONE"},
+    {"category": "HARM_CATEGORY_DANGEROUS_CONTENT", "threshold": "BLOCK_NONE"},
+    {"category": "HARM_CATEGORY_HARASSMENT", "threshold": "BLOCK_NONE"},
+    {"category": "HARM_CATEGORY_SEXUALLY_EXPLICIT", "threshold": "BLOCK_NONE"},
+    {"category": "HARM_CATEGORY_CIVIC_INTEGRITY", "threshold": "BLOCK_NONE"},
+]
+
+
 def _format_to_mime_type(image_format: str) -> str:
     """
     将图片格式转换为正确的MIME类型
@@ -130,7 +150,11 @@ def _convert_tool_options(tool_options: list[ToolOption]) -> list[dict]:
 
 
 def _build_generation_config(
-    max_tokens: int, temperature: float, response_format: RespFormat | None = None, extra_params: dict | None = None
+    max_tokens: int,
+    temperature: float,
+    thinking_budget: int,
+    response_format: RespFormat | None = None,
+    extra_params: dict | None = None,
 ) -> dict:
     """构建生成配置"""
     config = {
@@ -138,6 +162,8 @@ def _build_generation_config(
         "temperature": temperature,
         "topK": 1,
         "topP": 1,
+        "safetySettings": gemini_safe_settings,
+        "thinkingConfig": {"includeThoughts": True, "thinkingBudget": thinking_budget},
     }
 
     # 处理响应格式
@@ -150,7 +176,11 @@ def _build_generation_config(
 
     # 合并额外参数
     if extra_params:
-        config.update(extra_params)
+        # 拷贝一份以防修改原始字典
+        safe_extra_params = extra_params.copy()
+        # 移除已单独处理的 thinking_budget
+        safe_extra_params.pop("thinking_budget", None)
+        config.update(safe_extra_params)
 
     return config
 
@@ -317,6 +347,41 @@ class AiohttpGeminiClient(BaseClient):
         if api_provider.base_url:
             self.base_url = api_provider.base_url.rstrip("/")
 
+    @staticmethod
+    def clamp_thinking_budget(tb: int, model_id: str) -> int:
+        """
+        按模型限制思考预算范围，仅支持指定的模型（支持带数字后缀的新版本）
+        """
+        limits = None
+
+        # 优先尝试精确匹配
+        if model_id in THINKING_BUDGET_LIMITS:
+            limits = THINKING_BUDGET_LIMITS[model_id]
+        else:
+            # 按 key 长度倒序，保证更长的（更具体的，如 -lite）优先
+            sorted_keys = sorted(THINKING_BUDGET_LIMITS.keys(), key=len, reverse=True)
+            for key in sorted_keys:
+                # 必须满足：完全等于 或者 前缀匹配（带 "-" 边界）
+                if model_id == key or model_id.startswith(f"{key}-"):
+                    limits = THINKING_BUDGET_LIMITS[key]
+                    break
+
+        # 特殊值处理
+        if tb == THINKING_BUDGET_AUTO:
+            return THINKING_BUDGET_AUTO
+        if tb == THINKING_BUDGET_DISABLED:
+            if limits and limits.get("can_disable", False):
+                return THINKING_BUDGET_DISABLED
+            return limits["min"] if limits else THINKING_BUDGET_AUTO
+
+        # 已知模型裁剪到范围
+        if limits:
+            return max(limits["min"], min(tb, limits["max"]))
+
+        # 未知模型，返回动态模式
+        logger.warning(f"模型 {model_id} 未在 THINKING_BUDGET_LIMITS 中定义，将使用动态模式 tb=-1 兼容。")
+        return tb
+
     # 移除全局 session，全部请求都用 with aiohttp.ClientSession() as session:
 
     async def _make_request(
@@ -376,10 +441,21 @@ class AiohttpGeminiClient(BaseClient):
         # 转换消息格式
         contents, system_instructions = _convert_messages(message_list)
 
+        # 处理思考预算
+        tb = THINKING_BUDGET_AUTO
+        if extra_params and "thinking_budget" in extra_params:
+            try:
+                tb = int(extra_params["thinking_budget"])
+            except (ValueError, TypeError):
+                logger.warning(f"无效的 thinking_budget 值 {extra_params['thinking_budget']}，将使用默认动态模式 {tb}")
+        tb = self.clamp_thinking_budget(tb, model_info.model_identifier)
+
         # 构建请求体
         request_data = {
             "contents": contents,
-            "generationConfig": _build_generation_config(max_tokens, temperature, response_format, extra_params),
+            "generationConfig": _build_generation_config(
+                max_tokens, temperature, tb, response_format, extra_params
+            ),
         }
 
         # 添加系统指令
@@ -475,7 +551,7 @@ class AiohttpGeminiClient(BaseClient):
 
         request_data = {
             "contents": contents,
-            "generationConfig": _build_generation_config(2048, 0.1, None, extra_params),
+            "generationConfig": _build_generation_config(2048, 0.1, THINKING_BUDGET_AUTO, None, extra_params),
         }
 
         try:
