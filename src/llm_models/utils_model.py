@@ -755,24 +755,6 @@ class LLMRequest:
         # 响应错误
         if e.status_code in [400, 401, 402, 403, 404]:
             model_name = model_info.name
-            if (
-                e.status_code == 403
-                and model_name.startswith("Pro/deepseek-ai")
-                and api_provider.base_url == "https://api.siliconflow.cn/v1/"
-            ):
-                old_model_name = model_name
-                new_model_name = model_name[4:]
-                model_info.name = new_model_name
-                logger.warning(f"检测到403错误，模型从 {old_model_name} 降级为 {new_model_name}")
-                # 更新任务配置中的模型列表
-                for i, m_name in enumerate(self.model_for_task.model_list):
-                    if m_name == old_model_name:
-                        self.model_for_task.model_list[i] = new_model_name
-                        logger.warning(
-                            f"将任务 {self.task_name} 的模型列表中的 {old_model_name} 临时降级至 {new_model_name}"
-                        )
-                        break
-                return 0, None  # 立即重试
             # 客户端错误
             logger.warning(
                 f"任务-'{task_name}' 模型-'{model_name}': 请求失败，错误代码-{e.status_code}，错误信息-{e.message}"
