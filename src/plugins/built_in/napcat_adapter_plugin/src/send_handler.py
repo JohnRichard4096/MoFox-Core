@@ -71,6 +71,7 @@ class SendHandler:
         action: Optional[str] = None
         id_name: Optional[str] = None
         processed_message: list = []
+        logger.info(message_info,message_segment)
         try:
             if user_info:
                 processed_message = await self.handle_seg_recursive(message_segment, user_info)
