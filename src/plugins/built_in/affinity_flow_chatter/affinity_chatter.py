@@ -3,6 +3,7 @@
 基于现有的AffinityFlowChatter重构为插件化组件
 """
 
+import asyncio
 import time
 import traceback
 from datetime import datetime
@@ -14,6 +15,7 @@ from src.common.data_models.message_manager_data_model import StreamContext
 from src.plugins.built_in.affinity_flow_chatter.planner import ChatterActionPlanner
 from src.chat.planner_actions.action_manager import ChatterActionManager
 from src.common.logger import get_logger
+from src.chat.express.expression_learner import expression_learner_manager
 
 logger = get_logger("affinity_chatter")
 
@@ -62,6 +64,10 @@ class AffinityChatter(BaseChatter):
             处理结果字典
         """
         try:
+            # 触发表达学习
+            learner = expression_learner_manager.get_expression_learner(self.stream_id)
+            asyncio.create_task(learner.trigger_learning_for_chat())
+
             unread_messages = context.get_unread_messages()
 
             # 使用增强版规划器处理消息
