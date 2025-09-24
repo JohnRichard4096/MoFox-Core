@@ -96,6 +96,7 @@ class SendHandler:
             logger.error("无法识别的消息类型")
             return None
         logger.info("尝试发送到napcat")
+        logger.info(f"准备发送到napcat的消息体: action='{action}', {id_name}='{target_id}', message='{processed_message}'")
         response = await self.send_message_to_napcat(
             action,
             {
@@ -294,14 +295,17 @@ class SendHandler:
 
     async def handle_reply_message(self, id: str, user_info: UserInfo) -> dict | list:
         """处理回复消息"""
+        logger.info(f"开始处理回复消息，消息ID: {id}")
         reply_seg = {"type": "reply", "data": {"id": id}}
 
         # 检查是否启用引用艾特功能
         if not config_api.get_plugin_config(self.plugin_config, "features.enable_reply_at", False):
+            logger.info("引用艾特功能未启用，仅发送普通回复")
             return reply_seg
 
         try:
             msg_info_response = await self.send_message_to_napcat("get_msg", {"message_id": id})
+            logger.info(f"获取消息 {id} 的详情响应: {msg_info_response}")
 
             replied_user_id = None
             if msg_info_response and msg_info_response.get("status") == "ok":
@@ -312,6 +316,7 @@ class SendHandler:
             # 如果没有获取到被回复者的ID，则直接返回，不进行@
             if not replied_user_id:
                 logger.warning(f"无法获取消息 {id} 的发送者信息，跳过 @")
+                logger.info(f"最终返回的回复段: {reply_seg}")
                 return reply_seg
 
             # 根据概率决定是否艾特用户
@@ -319,13 +324,17 @@ class SendHandler:
                 at_seg = {"type": "at", "data": {"qq": str(replied_user_id)}}
                 # 在艾特后面添加一个空格
                 text_seg = {"type": "text", "data": {"text": " "}}
-                return [reply_seg, at_seg, text_seg]
+                result_seg = [reply_seg, at_seg, text_seg]
+                logger.info(f"最终返回的回复段: {result_seg}")
+                return result_seg
 
         except Exception as e:
             logger.error(f"处理引用回复并尝试@时出错: {e}")
             # 出现异常时，只发送普通的回复，避免程序崩溃
+            logger.info(f"最终返回的回复段: {reply_seg}")
             return reply_seg
 
+        logger.info(f"最终返回的回复段: {reply_seg}")
         return reply_seg
 
     @staticmethod
