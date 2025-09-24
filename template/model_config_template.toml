@@ -53,14 +53,14 @@ price_out = 8.0                    # 输出价格（用于API调用统计，单�
 #use_anti_truncation = true        # [可选] 启用反截断功能。当模型输出不完整时，系统会自动重试。建议只为有需要的模型（如Gemini）开启。
 
 [[models]]
-model_identifier = "Pro/deepseek-ai/DeepSeek-V3"
+model_identifier = "deepseek-ai/DeepSeek-V3"
 name = "siliconflow-deepseek-v3"
 api_provider = "SiliconFlow"
 price_in = 2.0
 price_out = 8.0
 
 [[models]]
-model_identifier = "Pro/deepseek-ai/DeepSeek-R1-Distill-Qwen-32B"
+model_identifier = "deepseek-ai/DeepSeek-R1-Distill-Qwen-32B"
 name = "deepseek-r1-distill-qwen-32b"
 api_provider = "SiliconFlow"
 price_in = 4.0
