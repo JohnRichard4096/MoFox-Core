@@ -534,7 +534,6 @@ class ChatManager:
                     "action_count": s_data_dict.get("action_count", 0),
                     "reply_count": s_data_dict.get("reply_count", 0),
                     "last_interaction_time": s_data_dict.get("last_interaction_time", time.time()),
-                    "relationship_score": s_data_dict.get("relationship_score", 0.3),
                     "consecutive_no_reply": s_data_dict.get("consecutive_no_reply", 0),
                 }
                 if global_config.database.database_type == "sqlite":
