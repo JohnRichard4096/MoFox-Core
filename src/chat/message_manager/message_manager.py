@@ -316,11 +316,16 @@ class MessageManager:
         focus_energy = 0.5  # 默认值
         avg_message_interest = 0.5  # 默认平均兴趣度
 
-        if hasattr(context, 'chat_stream') and context.chat_stream:
-            focus_energy = context.chat_stream.focus_energy
-            # 获取平均消息兴趣度用于更精确的计算
-            if context.chat_stream.message_count > 0:
-                avg_message_interest = context.chat_stream.message_interest_total / context.chat_stream.message_count
+        if chat_stream:
+            focus_energy = chat_stream.focus_energy
+            # 获取平均消息兴趣度用于更精确的计算 - 从StreamContext获取
+            history_messages = context.get_history_messages(limit=100)
+            unread_messages = context.get_unread_messages()
+            all_messages = history_messages + unread_messages
+
+            if all_messages:
+                message_interests = [msg.interest_degree for msg in all_messages if hasattr(msg, 'interest_degree')]
+                avg_message_interest = sum(message_interests) / len(message_interests) if message_interests else 0.5
 
         # 获取AFC阈值用于参考，添加None值检查
         reply_threshold = getattr(global_config.affinity_flow, 'reply_action_interest_threshold', 0.4)
@@ -533,9 +538,17 @@ class MessageManager:
         time_since_active = current_time - context.last_check_time
         time_penalty = max(0, 1.0 - time_since_active / 3600.0)  # 1小时内无惩罚
 
-        # 连续无回复惩罚
-        if hasattr(context, 'chat_stream') and context.chat_stream:
-            consecutive_no_reply = context.chat_stream.consecutive_no_reply
+        # 连续无回复惩罚 - 从StreamContext历史消息计算
+        if chat_stream:
+            # 计算连续无回复次数
+            consecutive_no_reply = 0
+            all_messages = context.get_history_messages(limit=50) + context.get_unread_messages()
+            for msg in reversed(all_messages):
+                if hasattr(msg, 'should_reply') and msg.should_reply:
+                    if not (hasattr(msg, 'actions') and 'reply' in (msg.actions or [])):
+                        consecutive_no_reply += 1
+                    else:
+                        break
             no_reply_penalty = max(0, 1.0 - consecutive_no_reply * 0.05)  # 每次无回复降低5%
         else:
             no_reply_penalty = 1.0
