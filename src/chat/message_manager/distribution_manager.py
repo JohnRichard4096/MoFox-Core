@@ -163,7 +163,7 @@ class StreamLoopManager:
                     interval = await self._calculate_interval(stream_id, has_messages)
 
                     # 5. sleep等待下次检查
-                    logger.debug(f"流 {stream_id} 等待 {interval:.2f}s")
+                    logger.info(f"流 {stream_id} 等待 {interval:.2f}s")
                     await asyncio.sleep(interval)
 
                 except asyncio.CancelledError:

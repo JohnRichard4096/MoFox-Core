@@ -106,17 +106,6 @@ class ChatterActionPlanner:
             reply_not_available = False
 
             if unread_messages:
-                # 获取用户ID，优先从user_info.user_id获取，其次从user_id属性获取
-                user_id = None
-                first_message = unread_messages[0]
-                user_id = first_message.user_info.user_id
-
-                # 构建计算上下文
-                calc_context = {
-                    "stream_id": self.chat_id,
-                    "user_id": user_id,
-                }
-
                 # 为每条消息计算兴趣度
                 for message in unread_messages:
                     try:
@@ -133,7 +122,7 @@ class ChatterActionPlanner:
                         # 简单的回复决策逻辑：兴趣度超过阈值则回复
                         message.should_reply = message_interest > global_config.affinity_flow.non_reply_action_interest_threshold
 
-                        logger.debug(f"消息 {message.message_id} 兴趣度: {message_interest:.3f}, 应回复: {message.should_reply}")
+                        logger.info(f"消息 {message.message_id} 兴趣度: {message_interest:.3f}, 应回复: {message.should_reply}")
 
                         # 更新StreamContext中的消息信息并刷新focus_energy
                         if context:
@@ -149,7 +138,7 @@ class ChatterActionPlanner:
                         try:
                             from src.chat.message_receive.storage import MessageStorage
                             await MessageStorage.update_message_interest_value(message.message_id, message_interest)
-                            logger.debug(f"已更新数据库中消息 {message.message_id} 的兴趣度为: {message_interest:.3f}")
+                            logger.info(f"已更新数据库中消息 {message.message_id} 的兴趣度为: {message_interest:.3f}")
                         except Exception as e:
                             logger.warning(f"更新数据库消息兴趣度失败: {e}")
                      

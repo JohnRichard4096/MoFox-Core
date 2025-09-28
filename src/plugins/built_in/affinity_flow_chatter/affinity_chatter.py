@@ -77,7 +77,7 @@ class AffinityChatter(BaseChatter):
             # 执行动作（如果规划器返回了动作）
             execution_result = {"executed_count": len(actions) if actions else 0}
             if actions:
-                logger.debug(f"聊天流 {self.stream_id} 生成了 {len(actions)} 个动作")
+                logger.info(f"聊天流 {self.stream_id} 生成了 {len(actions)} 个动作")
 
             # 更新统计
             self.stats["messages_processed"] += 1
@@ -95,7 +95,7 @@ class AffinityChatter(BaseChatter):
                 **execution_result,
             }
 
-            logger.debug(
+            logger.info(
                 f"聊天流 {self.stream_id} StreamContext处理成功: 动作数={result['actions_count']}, 未读消息={result['unread_messages_processed']}"
             )
 
