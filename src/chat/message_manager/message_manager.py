@@ -288,8 +288,8 @@ class MessageManager:
             else:
                 logger.debug(f"聊天流 {stream_id} 未触发打断，打断概率: {interruption_probability:.2f}")
 
-    def _clear_all_unread_messages(self, stream_id: str):
-        """清除指定上下文中的所有未读消息，防止意外情况导致消息一直未读"""
+    async def clear_all_unread_messages(self, stream_id: str):
+        """清除指定上下文中的所有未读消息，在消息处理完成后调用"""
         try:
             # 通过 ChatManager 获取 ChatStream
             chat_manager = get_chat_manager()

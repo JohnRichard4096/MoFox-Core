@@ -483,8 +483,40 @@ class ChatterPlanFilter:
 
                 target_message_obj = None
                 if action not in ["no_action", "no_reply", "do_nothing", "proactive_reply"]:
-                    if target_message_id := action_data.get("target_message_id"):
-                        target_message_dict = self._find_message_by_id(target_message_id, message_id_list)
+                    original_target_id = action_data.get("target_message_id")
+
+                    if original_target_id:
+                        # 记录原始ID用于调试
+                        logger.debug(f"[{action}] 尝试查找目标消息: {original_target_id}")
+
+                        # 使用增强的查找函数
+                        target_message_dict = self._find_message_by_id(original_target_id, message_id_list)
+
+                        if not target_message_dict:
+                            logger.warning(f"[{action}] 未找到目标消息: {original_target_id}")
+
+                            # 根据动作类型采用不同的恢复策略
+                            if action == "reply":
+                                # reply动作必须有目标消息，使用最新消息作为兜底
+                                target_message_dict = self._get_latest_message(message_id_list)
+                                if target_message_dict:
+                                    logger.info(f"[{action}] 使用最新消息作为目标: {target_message_dict.get('message_id')}")
+                                else:
+                                    logger.error(f"[{action}] 无法找到任何目标消息，降级为no_action")
+                                    action = "no_action"
+                                    reasoning = f"无法找到目标消息进行回复。原始理由: {reasoning}"
+
+                            elif action in ["poke_user", "set_emoji_like"]:
+                                # 这些动作可以尝试其他策略
+                                target_message_dict = self._find_poke_notice(message_id_list) or self._get_latest_message(message_id_list)
+                                if target_message_dict:
+                                    logger.info(f"[{action}] 使用替代消息作为目标: {target_message_dict.get('message_id')}")
+
+                            else:
+                                # 其他动作使用最新消息或跳过
+                                target_message_dict = self._get_latest_message(message_id_list)
+                                if target_message_dict:
+                                    logger.info(f"[{action}] 使用最新消息作为目标: {target_message_dict.get('message_id')}")
                     else:
                         # 如果LLM没有指定target_message_id，进行特殊处理
                         if action == "poke_user":
@@ -505,19 +537,27 @@ class ChatterPlanFilter:
                             real_message_id = target_message_dict.get("message_id") or target_message_dict.get("id")
                             if real_message_id:
                                 action_data["target_message_id"] = real_message_id
-                        
-                        # 确保 action_message 中始终有 message_id 字段
-                        if "message_id" not in target_message_obj and "id" in target_message_obj:
-                            target_message_obj["message_id"] = target_message_obj["id"]
+                                logger.debug(f"[{action}] 更新目标消息ID: {original_target_id} -> {real_message_id}")
                     else:
-                        # 如果找不到目标消息，对于reply动作来说这是必需的，应该记录警告
+                        logger.warning(f"[{action}] 最终未找到任何可用的目标消息")
                         if action == "reply":
-                            logger.warning(
-                                f"reply动作找不到目标消息，target_message_id: {action_data.get('target_message_id')}"
-                            )
-                            # 将reply动作改为no_action，避免后续执行时出错
+                            # reply动作如果没有目标消息，降级为no_action
                             action = "no_action"
-                            reasoning = f"找不到目标消息进行回复。原始理由: {reasoning}"
+                            reasoning = f"无法找到目标消息进行回复。原始理由: {reasoning}"
+
+                if target_message_obj:
+                    # 确保 action_message 中始终有 message_id 字段
+                    if "message_id" not in target_message_obj and "id" in target_message_obj:
+                        target_message_obj["message_id"] = target_message_obj["id"]
+                else:
+                    # 如果找不到目标消息，对于reply动作来说这是必需的，应该记录警告
+                    if action == "reply":
+                        logger.warning(
+                            f"reply动作找不到目标消息，target_message_id: {action_data.get('target_message_id')}"
+                        )
+                        # 将reply动作改为no_action，避免后续执行时出错
+                        action = "no_action"
+                        reasoning = f"找不到目标消息进行回复。原始理由: {reasoning}"
 
                 if (
                     action not in ["no_action", "no_reply", "reply", "do_nothing", "proactive_reply"]
@@ -644,47 +684,107 @@ class ChatterPlanFilter:
         return action_options_block
 
     def _find_message_by_id(self, message_id: str, message_id_list: list) -> Optional[Dict[str, Any]]:
-        # 兼容多种 message_id 格式：数字、m123、buffered-xxxx
-        # 如果是纯数字，补上 m 前缀以兼容旧格式
-        candidate_ids = {message_id}
-        if message_id.isdigit():
-            candidate_ids.add(f"m{message_id}")
+        """
+        增强的消息查找函数，支持多种格式和模糊匹配
+        兼容大模型可能返回的各种格式变体
+        """
+        if not message_id or not message_id_list:
+            return None
 
-        # 如果是 m 开头且后面是数字，尝试去掉 m 前缀的数字形式
-        if message_id.startswith("m") and message_id[1:].isdigit():
-            candidate_ids.add(message_id[1:])
+        # 1. 标准化处理：去除可能的格式干扰
+        original_id = str(message_id).strip()
+        normalized_id = original_id.strip('<>"\'').strip()
 
-        # 逐项匹配 message_id_list（每项可能为 {'id':..., 'message':...}）
-        for item in message_id_list:
-            # 支持 message_id_list 中直接是字符串/ID 的情形
-            if isinstance(item, str):
-                if item in candidate_ids:
-                    # 没有 message 对象，返回None
-                    return None
-                continue
+        if not normalized_id:
+            return None
 
-            if not isinstance(item, dict):
-                continue
+        # 2. 构建候选ID集合，兼容各种可能的格式
+        candidate_ids = {normalized_id}
 
-            item_id = item.get("id")
-            # 直接匹配分配的短 id
-            if item_id and item_id in candidate_ids:
-                return item.get("message")
+        # 处理纯数字格式 (123 -> m123)
+        if normalized_id.isdigit():
+            candidate_ids.add(f"m{normalized_id}")
 
-            # 有时 message 存储里会有原始的 message_id 字段（如 buffered-xxxx）
-            message_obj = item.get("message")
-            if isinstance(message_obj, dict):
-                orig_mid = message_obj.get("message_id") or message_obj.get("id")
-                if orig_mid and orig_mid in candidate_ids:
-                    return message_obj
+        # 处理m前缀格式 (m123 -> 123)
+        if normalized_id.startswith("m") and normalized_id[1:].isdigit():
+            candidate_ids.add(normalized_id[1:])
 
-        # 作为兜底，尝试在 message_id_list 中找到 message.message_id 匹配
-        for item in message_id_list:
-            if isinstance(item, dict) and isinstance(item.get("message"), dict):
-                mid = item["message"].get("message_id") or item["message"].get("id")
-                if mid == message_id:
-                    return item["message"]
+        # 处理包含在文本中的ID格式 (如 "消息m123" -> 提取 m123)
+        import re
+        # 尝试提取各种格式的ID
+        id_patterns = [
+            r'm\d+',  # m123格式
+            r'\d+',   # 纯数字格式
+            r'buffered-[a-f0-9-]+',  # buffered-xxxx格式
+            r'[a-f0-9]{8}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{12}',  # UUID格式
+        ]
 
+        for pattern in id_patterns:
+            matches = re.findall(pattern, normalized_id)
+            for match in matches:
+                candidate_ids.add(match)
+
+        # 3. 尝试精确匹配
+        for candidate in candidate_ids:
+            for item in message_id_list:
+                if isinstance(item, str):
+                    if item == candidate:
+                        # 字符串类型没有message对象，返回None
+                        return None
+                    continue
+
+                if not isinstance(item, dict):
+                    continue
+
+                # 匹配短ID
+                item_id = item.get("id")
+                if item_id and item_id == candidate:
+                    return item.get("message")
+
+                # 匹配原始消息ID
+                message_obj = item.get("message")
+                if isinstance(message_obj, dict):
+                    orig_mid = message_obj.get("message_id") or message_obj.get("id")
+                    if orig_mid and orig_mid == candidate:
+                        return message_obj
+
+        # 4. 尝试模糊匹配（数字部分匹配）
+        for candidate in candidate_ids:
+            # 提取数字部分进行模糊匹配
+            number_part = re.sub(r'[^0-9]', '', candidate)
+            if number_part:
+                for item in message_id_list:
+                    if isinstance(item, dict):
+                        item_id = item.get("id", "")
+                        item_number = re.sub(r'[^0-9]', '', item_id)
+
+                        # 数字部分匹配
+                        if item_number == number_part:
+                            logger.debug(f"模糊匹配成功: {candidate} -> {item_id}")
+                            return item.get("message")
+
+                        # 检查消息对象中的ID
+                        message_obj = item.get("message")
+                        if isinstance(message_obj, dict):
+                            orig_mid = message_obj.get("message_id") or message_obj.get("id")
+                            orig_number = re.sub(r'[^0-9]', '', orig_mid)
+                            if orig_number == number_part:
+                                logger.debug(f"模糊匹配成功(消息对象): {candidate} -> {orig_mid}")
+                                return message_obj
+
+        # 5. 兜底策略：返回最新消息
+        if message_id_list:
+            latest_item = message_id_list[-1]
+            if isinstance(latest_item, dict):
+                latest_message = latest_item.get("message")
+                if isinstance(latest_message, dict):
+                    logger.warning(f"未找到精确匹配的消息ID {original_id}，使用最新消息作为兜底")
+                    return latest_message
+                elif latest_message is not None:
+                    logger.warning(f"未找到精确匹配的消息ID {original_id}，使用最新消息作为兜底")
+                    return latest_message
+
+        logger.warning(f"未找到任何匹配的消息: {original_id} (候选: {candidate_ids})")
         return None
 
     @staticmethod

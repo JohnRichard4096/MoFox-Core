@@ -195,6 +195,10 @@ class ChatterActionManager:
                     action_data={"reason": reason},
                     action_name="no_reply",
                 )
+
+                # 自动清空所有未读消息
+                await self._clear_all_unread_messages(chat_stream.stream_id, "no_reply")
+
                 return {"action_type": "no_reply", "success": True, "reply_text": "", "command": ""}
 
             elif action_name != "reply" and action_name != "no_action":
@@ -212,6 +216,8 @@ class ChatterActionManager:
                 # 记录执行的动作到目标消息
                 if success:
                     await self._record_action_to_message(chat_stream, action_name, target_message, action_data)
+                    # 自动清空所有未读消息
+                    await self._clear_all_unread_messages(chat_stream.stream_id, action_name)
                     # 重置打断计数
                     await self._reset_interruption_count_after_action(chat_stream.stream_id)
 
@@ -255,6 +261,9 @@ class ChatterActionManager:
 
                 # 记录回复动作到目标消息
                 await self._record_action_to_message(chat_stream, "reply", target_message, action_data)
+
+                # 自动清空所有未读消息
+                await self._clear_all_unread_messages(chat_stream.stream_id, "reply")
 
                 # 回复成功，重置打断计数
                 await self._reset_interruption_count_after_action(chat_stream.stream_id)
@@ -324,6 +333,24 @@ class ChatterActionManager:
                     logger.debug(f"动作执行成功，重置聊天流 {stream_id} 的打断计数: {old_count} -> 0, afc调整: {old_afc_adjustment} -> 0")
         except Exception as e:
             logger.warning(f"重置打断计数时出错: {e}")
+
+    async def _clear_all_unread_messages(self, stream_id: str, action_name: str):
+        """在动作执行成功后自动清空所有未读消息
+
+        Args:
+            stream_id: 聊天流ID
+            action_name: 动作名称
+        """
+        try:
+            from src.chat.message_manager.message_manager import message_manager
+
+            # 清空所有未读消息
+            await message_manager.clear_all_unread_messages(stream_id)
+            logger.debug(f"[{action_name}] 已自动清空聊天流 {stream_id} 的所有未读消息")
+
+        except Exception as e:
+            logger.error(f"[{action_name}] 自动清空未读消息时出错: {e}")
+            # 不抛出异常，避免影响主要功能
 
     async def _handle_action(
         self, chat_stream, action, reasoning, action_data, cycle_timers, thinking_id, action_message
@@ -495,7 +522,7 @@ class ChatterActionManager:
         """
         current_time = time.time()
         # 计算新消息数量
-        new_message_count = message_api.count_new_messages(
+        new_message_count = await message_api.count_new_messages(
             chat_id=chat_stream.stream_id, start_time=thinking_start_time, end_time=current_time
         )
 

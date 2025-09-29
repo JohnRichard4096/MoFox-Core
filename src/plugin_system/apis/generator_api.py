@@ -146,7 +146,6 @@ async def generate_reply(
             from_plugin=from_plugin,
             stream_id=chat_stream.stream_id if chat_stream else chat_id,
             reply_message=reply_message,
-            read_mark=read_mark,
         )
         if not success:
             logger.warning("[GeneratorAPI] 回复生成失败")

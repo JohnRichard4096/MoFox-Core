@@ -1651,7 +1651,7 @@ class DefaultReplyer:
                 user_id = user_info.get("user_id", "unknown")
 
                 # 从数据库获取关系数据
-                relationship_data = relationship_tracker._get_user_relationship_from_db(user_id)
+                relationship_data = await relationship_tracker._get_user_relationship_from_db(user_id)
                 if relationship_data:
                     relationship_text = relationship_data.get("relationship_text", "")
                     relationship_score = relationship_data.get("relationship_score", 0.3)
