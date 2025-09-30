@@ -60,10 +60,12 @@ class ReminderTask(AsyncTask):
             logger.info(f"执行提醒任务: 给 {self.target_user_name} 发送关于 '{self.event_details}' 的提醒")
 
             extra_info = f"现在是提醒时间，请你以一种符合你人设的、俏皮的方式提醒 {self.target_user_name}。\n提醒内容: {self.event_details}\n设置提醒的人: {self.creator_name}"
+            last_message = self.chat_stream.context_manager.context.get_last_message()
+            reply_message_dict = last_message.flatten() if last_message else None
             success, reply_set, _ = await generator_api.generate_reply(
                 chat_stream=self.chat_stream,
                 extra_info=extra_info,
-                reply_message=self.chat_stream.context_manager.context.get_last_message().to_dict(),
+                reply_message=reply_message_dict,
                 request_type="plugin.reminder.remind_message",
             )
 
@@ -217,7 +219,6 @@ class SetEmojiLikeAction(BaseAction):
             emoji_options.append(match.group(1))
 
     action_parameters = {
-        "emoji": f"要回应的表情,必须从以下表情中选择: {', '.join(emoji_options)}",
         "set": "是否设置回应 (True/False)",
     }
     action_require = [
@@ -260,15 +261,50 @@ class SetEmojiLikeAction(BaseAction):
             return False, "未提供表情"
         logger.info(f"设置表情回应: {emoji_input}, 是否设置: {set_like}")
 
-        emoji_id = get_emoji_id(emoji_input)
-        if not emoji_id:
-            logger.error(f"找不到表情: '{emoji_input}'。请从可用列表中选择。")
-            await self.store_action_info(
-                action_build_into_prompt=True,
-                action_prompt_display=f"执行了set_emoji_like动作：{self.action_name},失败: 找不到表情: '{emoji_input}'",
-                action_done=False,
+        logger.info(f"无法直接匹配表情 '{emoji_input}'，启动二级LLM选择...")
+        available_models = llm_api.get_available_models()
+        if "utils_small" not in available_models:
+                logger.error("未找到 'utils_small' 模型配置，无法选择表情")
+                return False, "表情选择功能配置错误"
+
+        model_to_use = available_models["utils_small"]
+            
+            # 获取最近的对话历史作为上下文
+        context_text = ""
+        if self.action_message:
+            context_text = self.action_message.get("processed_plain_text", "")
+        else:
+            logger.error("无法找到动作选择的原始消息")
+            return False, "无法找到动作选择的原始消息"
+        
+        prompt = (
+                f"根据以下这条消息，从列表中选择一个最合适的表情名称来回应这条消息。\n"
+                f"消息内容: '{context_text}'\n"
+                f"可用表情列表: {', '.join(self.emoji_options)}\n"
+                f"你的任务是：只输出你选择的表情的名称，不要包含任何其他文字或标点。\n"
+                f"例如，如果觉得应该用'赞'，就只输出'赞'。"
             )
-            return False, f"找不到表情: '{emoji_input}'。请从可用列表中选择。"
+
+        success, response, _, _ = await llm_api.generate_with_model(
+                prompt, model_config=model_to_use, request_type="plugin.set_emoji_like.select_emoji"
+            )
+
+        if not success or not response:
+                logger.error(f"二级LLM未能为 '{emoji_input}' 选择有效的表情。")
+                return False, f"无法为 '{emoji_input}' 找到合适的表情。"
+
+        chosen_emoji_name = response.strip()
+        logger.info(f"二级LLM选择的表情是: '{chosen_emoji_name}'")
+        emoji_id = get_emoji_id(chosen_emoji_name)
+
+        if not emoji_id:
+                logger.error(f"二级LLM选择的表情 '{chosen_emoji_name}' 仍然无法匹配到有效的表情ID。")
+                await self.store_action_info(
+                    action_build_into_prompt=True,
+                    action_prompt_display=f"执行了set_emoji_like动作：{self.action_name},失败: 找不到表情: '{chosen_emoji_name}'",
+                    action_done=False,
+                )
+                return False, f"找不到表情: '{chosen_emoji_name}'。"
 
         # 4. 使用适配器API发送命令
         if not message_id:

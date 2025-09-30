@@ -436,7 +436,6 @@ class BaseAction(ABC):
                 return False, f"未找到Action组件信息: {action_name}"
 
             plugin_config = component_registry.get_plugin_config(component_info.plugin_name)
-
             # 3. 实例化被调用的Action
             action_instance = action_class(
                 action_data=called_action_data,
