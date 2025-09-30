@@ -409,8 +409,9 @@ class QZoneService:
         cookie_dir.mkdir(exist_ok=True)
         cookie_file_path = cookie_dir / f"cookies-{qq_account}.json"
 
+        # 优先尝试通过Napcat HTTP服务获取最新的Cookie
         try:
-            # 使用HTTP服务器方式获取Cookie
+            logger.info("尝试通过Napcat HTTP服务获取Cookie...")
             host = self.get_config("cookie.http_fallback_host", "172.20.130.55")
             port = self.get_config("cookie.http_fallback_port", "9999")
             napcat_token = self.get_config("cookie.napcat_token", "")
@@ -421,23 +422,43 @@ class QZoneService:
                 parsed_cookies = {
                     k.strip(): v.strip() for k, v in (p.split("=", 1) for p in cookie_str.split("; ") if "=" in p)
                 }
-                with open(cookie_file_path, "wb") as f:
-                    f.write(orjson.dumps(parsed_cookies))
-                logger.info(f"Cookie已更新并保存至: {cookie_file_path}")
+                # 成功获取后，异步写入本地文件作为备份
+                try:
+                    with open(cookie_file_path, "wb") as f:
+                        f.write(orjson.dumps(parsed_cookies))
+                    logger.info(f"通过Napcat服务成功更新Cookie，并已保存至: {cookie_file_path}")
+                except Exception as e:
+                    logger.warning(f"保存Cookie到文件时出错: {e}")
                 return parsed_cookies
+            else:
+                logger.warning("通过Napcat服务未能获取有效Cookie。")
 
-            # 如果HTTP获取失败，尝试读取本地文件
-            if cookie_file_path.exists():
-                with open(cookie_file_path, "rb") as f:
-                    return orjson.loads(f.read())
-            return None
         except Exception as e:
-            logger.error(f"更新或加载Cookie时发生异常: {e}")
-            return None
+            logger.warning(f"通过Napcat HTTP服务获取Cookie时发生异常: {e}。将尝试从本地文件加载。")
 
-    async def _fetch_cookies_http(self, host: str, port: str, napcat_token: str) -> Optional[Dict]:
+        # 如果通过服务获取失败，则尝试从本地文件加载
+        logger.info("尝试从本地Cookie文件加载...")
+        if cookie_file_path.exists():
+            try:
+                with open(cookie_file_path, "rb") as f:
+                    cookies = orjson.loads(f.read())
+                    logger.info(f"成功从本地文件加载Cookie: {cookie_file_path}")
+                    return cookies
+            except Exception as e:
+                logger.error(f"从本地文件 {cookie_file_path} 读取或解析Cookie失败: {e}")
+        else:
+            logger.warning(f"本地Cookie文件不存在: {cookie_file_path}")
+
+        logger.error("所有获取Cookie的方式均失败。")
+        return None
+
+    async def _fetch_cookies_http(self, host: str, port: int, napcat_token: str) -> Optional[Dict]:
         """通过HTTP服务器获取Cookie"""
-        url = f"http://{host}:{port}/get_cookies"
+        # 从配置中读取主机和端口，如果未提供则使用传入的参数
+        final_host = self.get_config("cookie.http_fallback_host", host)
+        final_port = self.get_config("cookie.http_fallback_port", port)
+        url = f"http://{final_host}:{final_port}/get_cookies"
+
         max_retries = 5
         retry_delay = 1
 
@@ -481,14 +502,19 @@ class QZoneService:
     async def _get_api_client(self, qq_account: str, stream_id: Optional[str]) -> Optional[Dict]:
         cookies = await self.cookie_service.get_cookies(qq_account, stream_id)
         if not cookies:
+            logger.error("获取API客户端失败：未能获取到Cookie。请检查Napcat连接是否正常，或是否存在有效的本地Cookie文件。")
             return None
 
         p_skey = cookies.get("p_skey") or cookies.get("p_skey".upper())
         if not p_skey:
+            logger.error(f"获取API客户端失败：Cookie中缺少关键的 'p_skey'。Cookie内容: {cookies}")
             return None
 
         gtk = self._generate_gtk(p_skey)
         uin = cookies.get("uin", "").lstrip("o")
+        if not uin:
+            logger.error(f"获取API客户端失败：Cookie中缺少关键的 'uin'。Cookie内容: {cookies}")
+            return None
 
         async def _request(method, url, params=None, data=None, headers=None):
             final_headers = {"referer": f"https://user.qzone.qq.com/{uin}", "origin": "https://user.qzone.qq.com"}
