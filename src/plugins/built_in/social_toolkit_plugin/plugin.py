@@ -239,6 +239,7 @@ class SetEmojiLikeAction(BaseAction):
     async def execute(self) -> Tuple[bool, str]:
         """执行设置表情回应的动作"""
         message_id = None
+        set_like = self.action_data.get("set", True)
         if self.has_action_message:
             logger.debug(str(self.action_message))
             if isinstance(self.action_message, dict):
@@ -252,16 +253,6 @@ class SetEmojiLikeAction(BaseAction):
                 action_done=False,
             )
             return False, "未提供消息ID"
-
-        emoji_input = self.action_data.get("emoji")
-        set_like = self.action_data.get("set", True)
-
-        if not emoji_input:
-            logger.error("未提供表情")
-            return False, "未提供表情"
-        logger.info(f"设置表情回应: {emoji_input}, 是否设置: {set_like}")
-
-        logger.info(f"无法直接匹配表情 '{emoji_input}'，启动二级LLM选择...")
         available_models = llm_api.get_available_models()
         if "utils_small" not in available_models:
                 logger.error("未找到 'utils_small' 模型配置，无法选择表情")
@@ -269,7 +260,7 @@ class SetEmojiLikeAction(BaseAction):
 
         model_to_use = available_models["utils_small"]
             
-            # 获取最近的对话历史作为上下文
+        # 获取最近的对话历史作为上下文
         context_text = ""
         if self.action_message:
             context_text = self.action_message.get("processed_plain_text", "")
@@ -290,8 +281,8 @@ class SetEmojiLikeAction(BaseAction):
             )
 
         if not success or not response:
-                logger.error(f"二级LLM未能为 '{emoji_input}' 选择有效的表情。")
-                return False, f"无法为 '{emoji_input}' 找到合适的表情。"
+                logger.error("二级LLM未能选择有效的表情。")
+                return False, "无法找到合适的表情。"
 
         chosen_emoji_name = response.strip()
         logger.info(f"二级LLM选择的表情是: '{chosen_emoji_name}'")
@@ -327,7 +318,7 @@ class SetEmojiLikeAction(BaseAction):
                 logger.info("设置表情回应成功")
                 await self.store_action_info(
                     action_build_into_prompt=True,
-                    action_prompt_display=f"执行了set_emoji_like动作,{emoji_input},设置表情回应: {emoji_id}, 是否设置: {set_like}",
+                    action_prompt_display=f"执行了set_emoji_like动作,{chosen_emoji_name},设置表情回应: {emoji_id}, 是否设置: {set_like}",
                     action_done=True,
                 )
                 return True, "成功设置表情回应"
