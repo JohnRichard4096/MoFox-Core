@@ -185,9 +185,13 @@ class SendHandler:
 
             logger.info(f"执行适配器命令: {action}")
 
-            # 直接向Napcat发送命令并获取响应
-            response_task = asyncio.create_task(self.send_message_to_napcat(action, params))
-            response = await response_task
+            # 根据action决定处理方式
+            if action == "get_cookies":
+                # 对于get_cookies，我们需要一个更长的超时时间
+                response = await self.send_message_to_napcat(action, params, timeout=40.0)
+            else:
+                # 对于其他命令，使用默认超时
+                response = await self.send_message_to_napcat(action, params)
 
             # 发送响应回MaiBot
             await self.send_adapter_command_response(raw_message_base, response, request_id)
@@ -196,6 +200,8 @@ class SendHandler:
                 logger.info(f"适配器命令 {action} 执行成功")
             else:
                 logger.warning(f"适配器命令 {action} 执行失败，napcat返回：{str(response)}")
+            # 无论成功失败，都记录下完整的响应内容以供调试
+            logger.debug(f"适配器命令 {action} 的完整响应: {response}")
 
         except Exception as e:
             logger.error(f"处理适配器命令时发生错误: {e}")
@@ -583,7 +589,7 @@ class SendHandler:
             },
         )
 
-    async def send_message_to_napcat(self, action: str, params: dict) -> dict:
+    async def send_message_to_napcat(self, action: str, params: dict, timeout: float = 20.0) -> dict:
         request_uuid = str(uuid.uuid4())
         payload = json.dumps({"action": action, "params": params, "echo": request_uuid})
 
@@ -595,9 +601,9 @@ class SendHandler:
 
         try:
             await connection.send(payload)
-            response = await get_response(request_uuid)
+            response = await get_response(request_uuid, timeout=timeout)  # 使用传入的超时时间
         except TimeoutError:
-            logger.error("发送消息超时，未收到响应")
+            logger.error(f"发送消息超时（{timeout}秒），未收到响应: action={action}, params={params}")
             return {"status": "error", "message": "timeout"}
         except Exception as e:
             logger.error(f"发送消息失败: {e}")

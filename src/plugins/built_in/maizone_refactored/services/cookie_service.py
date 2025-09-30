@@ -113,31 +113,32 @@ class CookieService:
     async def get_cookies(self, qq_account: str, stream_id: Optional[str]) -> Optional[Dict[str, str]]:
         """
         获取Cookie，按以下顺序尝试：
-        1. Adapter API
-        2. HTTP备用端点
-        3. 本地文件缓存
+        1. HTTP备用端点 (更稳定)
+        2. 本地文件缓存
+        3. Adapter API (作为最后手段)
         """
-        # 1. 尝试从Adapter获取
-        cookies = await self._get_cookies_from_adapter(stream_id)
-        if cookies:
-            logger.info("成功从Adapter获取Cookie。")
-            self._save_cookies_to_file(qq_account, cookies)
-            return cookies
-
-        # 2. 尝试从HTTP备用端点获取
-        logger.warning("从Adapter获取Cookie失败，尝试使用HTTP备用地址。")
+        # 1. 尝试从HTTP备用端点获取
+        logger.info(f"开始尝试从HTTP备用地址获取 {qq_account} 的Cookie...")
         cookies = await self._get_cookies_from_http()
         if cookies:
-            logger.info("成功从HTTP备用地址获取Cookie。")
+            logger.info(f"成功从HTTP备用地址为 {qq_account} 获取Cookie。")
             self._save_cookies_to_file(qq_account, cookies)
             return cookies
 
-        # 3. 尝试从本地文件加载
-        logger.warning("从HTTP备用地址获取Cookie失败，尝试加载本地缓存。")
+        # 2. 尝试从本地文件加载
+        logger.warning(f"从HTTP备用地址获取 {qq_account} 的Cookie失败，尝试加载本地缓存。")
         cookies = self._load_cookies_from_file(qq_account)
         if cookies:
-            logger.info("成功从本地文件加载缓存的Cookie。")
+            logger.info(f"成功从本地文件为 {qq_account} 加载缓存的Cookie。")
             return cookies
 
-        logger.error("所有Cookie获取方法均失败。")
+        # 3. 尝试从Adapter获取 (作为最后的备用方案)
+        logger.warning(f"从本地缓存加载 {qq_account} 的Cookie失败，最后尝试使用Adapter API。")
+        cookies = await self._get_cookies_from_adapter(stream_id)
+        if cookies:
+            logger.info(f"成功从Adapter API为 {qq_account} 获取Cookie。")
+            self._save_cookies_to_file(qq_account, cookies)
+            return cookies
+
+        logger.error(f"为 {qq_account} 获取Cookie的所有方法均失败。请确保Napcat HTTP服务或Adapter连接至少有一个正常工作，或存在有效的本地Cookie文件。")
         return None
