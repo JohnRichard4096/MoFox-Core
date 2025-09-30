@@ -646,7 +646,7 @@ class ChatterPlanFilter:
                     # 为参数描述添加一个通用示例值
                     if action_name == "set_emoji_like" and p_name == "emoji":
                         # 特殊处理set_emoji_like的emoji参数
-                        from plugins.set_emoji_like.qq_emoji_list import qq_face
+                        from plugins.social_toolkit_plugin.qq_emoji_list import qq_face
                         emoji_options = [re.search(r"\[表情：(.+?)\]", name).group(1) for name in qq_face.values() if re.search(r"\[表情：(.+?)\]", name)]
                         example_value = f"<从'{', '.join(emoji_options[:10])}...'中选择一个>"
                     else:

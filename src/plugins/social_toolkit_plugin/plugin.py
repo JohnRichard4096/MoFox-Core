@@ -1,24 +1,26 @@
-import asyncio
-from datetime import datetime
-from typing import List, Tuple, Type, Optional
+import re
+from typing import List, Tuple, Type
 
-from dateutil.parser import parse as parse_datetime
-
-from src.common.logger import get_logger
-from src.manager.async_task_manager import AsyncTask, async_task_manager
-from src.person_info.person_info import get_person_info_manager
 from src.plugin_system import (
-    BaseAction,
-    ActionInfo,
     BasePlugin,
     register_plugin,
+    BaseAction,
+    ComponentInfo,
     ActionActivationType,
+    ConfigField,
 )
+from src.common.logger import get_logger
+from .qq_emoji_list import qq_face
+from src.plugin_system.base.component_types import ChatType
+from src.person_info.person_info import get_person_info_manager
+from dateutil.parser import parse as parse_datetime
+from src.manager.async_task_manager import AsyncTask, async_task_manager
 from src.plugin_system.apis import send_api, llm_api, generator_api
 from src.plugin_system.base.component_types import ComponentType
+import asyncio
+import datetime
 
-logger = get_logger(__name__)
-
+logger = get_logger("set_emoji_like_plugin")
 
 # ============================ AsyncTask ============================
 
@@ -89,21 +91,217 @@ class ReminderTask(AsyncTask):
 
 # =============================== Actions ===============================
 
+def get_emoji_id(emoji_input: str) -> str | None:
+    """根据输入获取表情ID"""
+    # 如果输入本身就是数字ID，直接返回
+    if emoji_input.isdigit() or (isinstance(emoji_input, str) and emoji_input.startswith("😊")):
+        if emoji_input in qq_face:
+            return emoji_input
+
+    # 尝试从 "[表情：xxx]" 格式中提取
+    match = re.search(r"\[表情：(.+?)\]", emoji_input)
+    if match:
+        emoji_name = match.group(1).strip()
+    else:
+        emoji_name = emoji_input.strip()
+
+    # 遍历查找
+    for key, value in qq_face.items():
+        # value 的格式是 "[表情：xxx]"
+        if f"[表情：{emoji_name}]" == value:
+            return key
+
+    return None
+
+
+# ===== Action组件 =====
+
+class PokeAction(BaseAction):
+    """发送戳一戳动作"""
+
+    # === 基本信息（必须填写）===
+    action_name = "poke_user"
+    action_description = "向用户发送戳一戳"
+    activation_type = ActionActivationType.ALWAYS
+    parallel_action = True
+
+    # === 功能描述（必须填写）===
+    action_parameters = {
+        "user_name": "需要戳一戳的用户的名字 (可选)",
+        "user_id": "需要戳一戳的用户的ID (可选，优先级更高)",
+        "times": "需要戳一戳的次数 (默认为 1)",
+    }
+    action_require = ["当需要戳某个用户时使用", "当你想提醒特定用户时使用"]
+    llm_judge_prompt = """
+    判定是否需要使用戳一戳动作的条件：
+    1. 用户明确要求使用戳一戳。
+    2. 你想以一种有趣的方式提醒或与某人互动。
+    3. 上下文明确需要你戳一个或多个人。
+
+    请回答"是"或"否"。
+    """
+    associated_types = ["text"]
+
+    async def execute(self) -> Tuple[bool, str]:
+        """执行戳一戳的动作"""
+        user_id = self.action_data.get("user_id")
+        user_name = self.action_data.get("user_name")
+        
+        try:
+            times = int(self.action_data.get("times", 1))
+        except (ValueError, TypeError):
+            times = 1
+
+        # 优先使用 user_id
+        if not user_id:
+            if not user_name:
+                logger.warning("戳一戳动作缺少 'user_id' 或 'user_name' 参数。")
+                return False, "缺少用户标识参数"
+            
+            # 备用方案：通过 user_name 查找
+            user_info = await get_person_info_manager().get_person_info_by_name(user_name)
+            if not user_info or not user_info.get("user_id"):
+                logger.info(f"找不到名为 '{user_name}' 的用户。")
+                return False, f"找不到名为 '{user_name}' 的用户"
+            user_id = user_info.get("user_id")
+        
+        display_name = user_name or user_id
+
+        for i in range(times):
+            logger.info(f"正在向 {display_name} ({user_id}) 发送第 {i + 1}/{times} 次戳一戳...")
+            await self.send_command(
+                "SEND_POKE", args={"qq_id": user_id}, display_message=f"戳了戳 {display_name} ({i + 1}/{times})"
+            )
+            # 添加一个小的延迟，以避免发送过快
+            await asyncio.sleep(0.5)
+
+        success_message = f"已向 {display_name} 发送 {times} 次戳一戳。"
+        await self.store_action_info(
+            action_build_into_prompt=True, action_prompt_display=success_message, action_done=True
+        )
+        return True, success_message
+
+class SetEmojiLikeAction(BaseAction):
+    """设置消息表情回应"""
+
+    # === 基本信息（必须填写）===
+    action_name = "set_emoji_like"
+    action_description = "为某条已经存在的消息添加‘贴表情’回应（类似点赞），而不是发送新消息。可以在觉得某条消息非常有趣、值得赞同或者需要特殊情感回应时主动使用。"
+    activation_type = ActionActivationType.ALWAYS  # 消息接收时激活(?)
+    chat_type_allow = ChatType.GROUP
+    parallel_action = True
+
+    # === 功能描述（必须填写）===
+    # 从 qq_face 字典中提取所有表情名称用于提示
+    emoji_options = []
+    for name in qq_face.values():
+        match = re.search(r"\[表情：(.+?)\]", name)
+        if match:
+            emoji_options.append(match.group(1))
+
+    action_parameters = {
+        "emoji": f"要回应的表情,必须从以下表情中选择: {', '.join(emoji_options)}",
+        "set": "是否设置回应 (True/False)",
+    }
+    action_require = [
+        "当需要对一个已存在消息进行‘贴表情’回应时使用",
+        "这是一个对旧消息的操作，而不是发送新消息",
+        "如果你想发送一个新的表情包消息，请使用 'emoji' 动作",
+    ]
+    llm_judge_prompt = """
+    判定是否需要使用贴表情动作的条件：
+    1. 用户明确要求使用贴表情包
+    2. 这是一个适合表达强烈情绪的场合
+    3. 不要发送太多表情包，如果你已经发送过多个表情包则回答"否"
+    
+    请回答"是"或"否"。
+    """
+    associated_types = ["text"]
+
+    async def execute(self) -> Tuple[bool, str]:
+        """执行设置表情回应的动作"""
+        message_id = None
+        if self.has_action_message:
+            logger.debug(str(self.action_message))
+            if isinstance(self.action_message, dict):
+                message_id = self.action_message.get("message_id")
+            logger.info(f"获取到的消息ID: {message_id}")
+        else:
+            logger.error("未提供消息ID")
+            await self.store_action_info(
+                action_build_into_prompt=True,
+                action_prompt_display=f"执行了set_emoji_like动作：{self.action_name},失败: 未提供消息ID",
+                action_done=False,
+            )
+            return False, "未提供消息ID"
+
+        emoji_input = self.action_data.get("emoji")
+        set_like = self.action_data.get("set", True)
+
+        if not emoji_input:
+            logger.error("未提供表情")
+            return False, "未提供表情"
+        logger.info(f"设置表情回应: {emoji_input}, 是否设置: {set_like}")
+
+        emoji_id = get_emoji_id(emoji_input)
+        if not emoji_id:
+            logger.error(f"找不到表情: '{emoji_input}'。请从可用列表中选择。")
+            await self.store_action_info(
+                action_build_into_prompt=True,
+                action_prompt_display=f"执行了set_emoji_like动作：{self.action_name},失败: 找不到表情: '{emoji_input}'",
+                action_done=False,
+            )
+            return False, f"找不到表情: '{emoji_input}'。请从可用列表中选择。"
+
+        # 4. 使用适配器API发送命令
+        if not message_id:
+            logger.error("未提供消息ID")
+            await self.store_action_info(
+                action_build_into_prompt=True,
+                action_prompt_display=f"执行了set_emoji_like动作：{self.action_name},失败: 未提供消息ID",
+                action_done=False,
+            )
+            return False, "未提供消息ID"
+
+        try:
+            # 使用适配器API发送贴表情命令
+            success = await self.send_command(
+                command_name="set_emoji_like", args={"message_id": message_id, "emoji_id": emoji_id, "set": set_like}, storage_message=False
+            )
+            if success:
+                logger.info("设置表情回应成功")
+                await self.store_action_info(
+                    action_build_into_prompt=True,
+                    action_prompt_display=f"执行了set_emoji_like动作,{emoji_input},设置表情回应: {emoji_id}, 是否设置: {set_like}",
+                    action_done=True,
+                )
+                return True, "成功设置表情回应"
+            else:
+                logger.error("设置表情回应失败")
+                await self.store_action_info(
+                    action_build_into_prompt=True,
+                    action_prompt_display=f"执行了set_emoji_like动作：{self.action_name},失败",
+                    action_done=False,
+                )
+                return False, "设置表情回应失败"
+
+        except Exception as e:
+            logger.error(f"设置表情回应失败: {e}")
+            await self.store_action_info(
+                action_build_into_prompt=True,
+                action_prompt_display=f"执行了set_emoji_like动作：{self.action_name},失败: {e}",
+                action_done=False,
+            )
+            return False, f"设置表情回应失败: {e}"
+
 class RemindAction(BaseAction):
     """一个能从对话中智能识别并设置定时提醒的动作。"""
 
     # === 基本信息 ===
     action_name = "set_reminder"
     action_description = "根据用户的对话内容，智能地设置一个未来的提醒事项。"
-    
-    @staticmethod
-    def get_action_info() -> ActionInfo:
-        return ActionInfo(
-            name="set_reminder",
-            component_type=ComponentType.ACTION,
-            activation_type=ActionActivationType.KEYWORD,
-            activation_keywords=["提醒", "叫我", "记得", "别忘了"]
-        )
+    activation_type=ActionActivationType.KEYWORD,
+    activation_keywords=["提醒", "叫我", "记得", "别忘了"]
 
     # === LLM 判断与参数提取 ===
     llm_judge_prompt = ""
@@ -319,23 +517,42 @@ class RemindAction(BaseAction):
             await self.send_text("抱歉，设置提醒时发生了一点内部错误。")
             return False, "设置提醒时发生内部错误"
 
-
-# =============================== Plugin ===============================
-
+# ===== 插件注册 =====
 @register_plugin
-class ReminderPlugin(BasePlugin):
-    """一个能从对话中智能识别并设置定时提醒的插件。"""
+class SetEmojiLikePlugin(BasePlugin):
+    """一个集合多种实用功能的插件，旨在提升聊天体验和效率。"""
 
-    # --- 插件基础信息 ---
-    plugin_name = "reminder_plugin"
-    enable_plugin = True
-    dependencies = []
-    python_dependencies = []
-    config_file_name = "config.toml"
-    config_schema = {}
+    # 插件基本信息
+    plugin_name: str = "social_toolkit_plugin"  # 内部标识符
+    enable_plugin: bool = True
+    dependencies: List[str] = []  # 插件依赖列表
+    python_dependencies: List[str] = []  # Python包依赖列表，现在使用内置API
+    config_file_name: str = "config.toml"  # 配置文件名
 
-    def get_plugin_components(self) -> List[Tuple[ActionInfo, Type[BaseAction]]]:
-        """注册插件的所有功能组件。"""
-        return [
-            (RemindAction.get_action_info(), RemindAction)
-        ]
+    # 配置节描述
+    config_section_descriptions = {"plugin": "插件基本信息", "components": "插件组件"}
+
+    # 配置Schema定义
+    config_schema: dict = {
+        "plugin": {
+            "name": ConfigField(type=str, default="set_emoji_like", description="插件名称"),
+            "version": ConfigField(type=str, default="1.0.0", description="插件版本"),
+            "enabled": ConfigField(type=bool, default=True, description="是否启用插件"),
+            "config_version": ConfigField(type=str, default="1.1", description="配置版本"),
+        },
+        "components": {
+            "action_set_emoji_like": ConfigField(type=bool, default=True, description="是否启用设置表情回应功能"),
+            "action_poke_enable": ConfigField(type=bool, default=True, description="是否启用戳一戳功能"),
+            "action_set_reminder_enable": ConfigField(type=bool, default=True, description="是否启用定时提醒功能"),
+        },
+    }
+
+    def get_plugin_components(self) -> List[Tuple[ComponentInfo, Type]]:
+        enable_components = []
+        if self.get_config("components.action_set_emoji_like"):
+            enable_components.append((SetEmojiLikeAction.get_action_info(), SetEmojiLikeAction))
+        if self.get_config("components.action_poke_enable"):
+            enable_components.append((PokeAction.get_action_info(), PokeAction))
+        if self.get_config("components.action_set_reminder_enable"):
+            enable_components.append((RemindAction.get_action_info(), RemindAction))
+        return enable_components
