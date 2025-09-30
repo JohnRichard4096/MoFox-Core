@@ -102,7 +102,6 @@ class PlanManager:
         except Exception as e:
             logger.error(f" 归档 {target_month} 月度计划时发生错误: {e}")
 
-    @staticmethod
-    async def get_plans_for_schedule(month: str, max_count: int) -> List:
+    async def get_plans_for_schedule(self, month: str, max_count: int) -> List:
         avoid_days = global_config.planning_system.avoid_repetition_days
-        return get_smart_plans_for_daily_schedule(month, max_count=max_count, avoid_days=avoid_days)
+        return await get_smart_plans_for_daily_schedule(month, max_count=max_count, avoid_days=avoid_days)
