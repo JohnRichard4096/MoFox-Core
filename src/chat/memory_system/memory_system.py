@@ -191,27 +191,27 @@ class MemorySystem:
             self.memory_builder = MemoryBuilder(self.memory_extraction_model)
             self.fusion_engine = MemoryFusionEngine(self.config.fusion_similarity_threshold)
 
-            # 初始化统一存储系统
-            from src.chat.memory_system.unified_memory_storage import initialize_unified_memory_storage, UnifiedStorageConfig
+            # 初始化Vector DB存储系统（替代旧的unified_memory_storage）
+            from src.chat.memory_system.vector_memory_storage_v2 import VectorMemoryStorage, VectorStorageConfig
 
-            storage_config = UnifiedStorageConfig(
-                dimension=self.config.vector_dimension,
+            storage_config = VectorStorageConfig(
+                memory_collection="unified_memory_v2",
+                metadata_collection="memory_metadata_v2",
                 similarity_threshold=self.config.similarity_threshold,
-                storage_path=getattr(global_config.memory, 'unified_storage_path', 'data/unified_memory'),
-                cache_size_limit=getattr(global_config.memory, 'unified_storage_cache_limit', 10000),
-                auto_save_interval=getattr(global_config.memory, 'unified_storage_auto_save_interval', 50),
-                enable_compression=getattr(global_config.memory, 'unified_storage_enable_compression', True),
+                search_limit=getattr(global_config.memory, 'unified_storage_search_limit', 20),
+                batch_size=getattr(global_config.memory, 'unified_storage_batch_size', 100),
+                enable_caching=getattr(global_config.memory, 'unified_storage_enable_caching', True),
+                cache_size_limit=getattr(global_config.memory, 'unified_storage_cache_limit', 1000),
+                auto_cleanup_interval=getattr(global_config.memory, 'unified_storage_auto_cleanup_interval', 3600),
                 enable_forgetting=getattr(global_config.memory, 'enable_memory_forgetting', True),
-                forgetting_check_interval=getattr(global_config.memory, 'forgetting_check_interval_hours', 24)
+                retention_hours=getattr(global_config.memory, 'memory_retention_hours', 720)  # 30天
             )
 
             try:
-                self.unified_storage = await initialize_unified_memory_storage(storage_config)
-                if self.unified_storage is None:
-                    raise RuntimeError("统一存储系统初始化返回None")
-                logger.info("✅ 统一存储系统初始化成功")
+                self.unified_storage = VectorMemoryStorage(storage_config)
+                logger.info("✅ Vector DB存储系统初始化成功")
             except Exception as storage_error:
-                logger.error(f"❌ 统一存储系统初始化失败: {storage_error}", exc_info=True)
+                logger.error(f"❌ Vector DB存储系统初始化失败: {storage_error}", exc_info=True)
                 raise
 
             # 初始化遗忘引擎
@@ -647,20 +647,18 @@ class MemorySystem:
                 except Exception as plan_exc:
                     logger.warning("查询规划失败，使用默认检索策略: %s", plan_exc, exc_info=True)
 
-            # 使用统一存储搜索
+            # 使用Vector DB存储搜索
             search_results = await self.unified_storage.search_similar_memories(
                 query_text=raw_query,
                 limit=effective_limit,
                 filters=filters
             )
 
-            # 转换为记忆对象
+            # 转换为记忆对象 - search_results 返回 List[Tuple[MemoryChunk, float]]
             final_memories = []
-            for memory_id, similarity_score in search_results:
-                memory = self.unified_storage.get_memory_by_id(memory_id)
-                if memory:
-                    memory.update_access()
-                    final_memories.append(memory)
+            for memory, similarity_score in search_results:
+                memory.update_access()
+                final_memories.append(memory)
 
             retrieval_time = time.time() - start_time
 

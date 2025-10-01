@@ -795,7 +795,7 @@ class LLMRequest:
             max_tokens=max_tokens,
         )
         
-        self._record_usage(model_info, response.usage, time.time() - start_time, "/chat/completions")
+        await self._record_usage(model_info, response.usage, time.time() - start_time, "/chat/completions")
         content, reasoning, _ = self._prompt_processor.process_response(response.content or "", False)
         reasoning = response.reasoning_content or reasoning
         

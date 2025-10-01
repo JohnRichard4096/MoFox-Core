@@ -22,12 +22,11 @@ from .memory_forgetting_engine import (
     get_memory_forgetting_engine
 )
 
-# 统一存储系统
-from .unified_memory_storage import (
-    UnifiedMemoryStorage,
-    UnifiedStorageConfig,
-    get_unified_memory_storage,
-    initialize_unified_memory_storage
+# Vector DB存储系统
+from .vector_memory_storage_v2 import (
+    VectorMemoryStorage,
+    VectorStorageConfig,
+    get_vector_memory_storage
 )
 
 # 记忆核心系统
@@ -79,11 +78,10 @@ __all__ = [
     "ForgettingConfig",
     "get_memory_forgetting_engine",
 
-    # 统一存储
-    "UnifiedMemoryStorage",
-    "UnifiedStorageConfig",
-    "get_unified_memory_storage",
-    "initialize_unified_memory_storage",
+    # Vector DB存储
+    "VectorMemoryStorage",
+    "VectorStorageConfig", 
+    "get_vector_memory_storage",
 
     # 记忆系统
     "MemorySystem",

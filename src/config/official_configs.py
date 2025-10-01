@@ -472,6 +472,47 @@ class MemoryConfig(ValidatedConfigBase):
     cache_ttl_seconds: int = Field(default=300, description="缓存生存时间（秒）")
     max_cache_size: int = Field(default=1000, description="最大缓存大小")
 
+    # Vector DB记忆存储配置 (替代JSON存储)
+    enable_vector_memory_storage: bool = Field(default=True, description="启用Vector DB记忆存储")
+    enable_llm_instant_memory: bool = Field(default=True, description="启用基于LLM的瞬时记忆")
+    enable_vector_instant_memory: bool = Field(default=True, description="启用基于向量的瞬时记忆")
+    
+    # Vector DB配置
+    vector_db_memory_collection: str = Field(default="unified_memory_v2", description="Vector DB集合名称")
+    vector_db_similarity_threshold: float = Field(default=0.8, description="Vector DB相似度阈值")
+    vector_db_search_limit: int = Field(default=20, description="Vector DB搜索限制")
+    vector_db_batch_size: int = Field(default=100, description="批处理大小")
+    vector_db_enable_caching: bool = Field(default=True, description="启用缓存")
+    vector_db_cache_size_limit: int = Field(default=1000, description="缓存大小限制")
+    vector_db_auto_cleanup_interval: int = Field(default=3600, description="自动清理间隔（秒）")
+    vector_db_retention_hours: int = Field(default=720, description="记忆保留时间（小时，默认30天）")
+
+    # 遗忘引擎配置
+    enable_memory_forgetting: bool = Field(default=True, description="启用智能遗忘机制")
+    forgetting_check_interval_hours: int = Field(default=24, description="遗忘检查间隔（小时）")
+    base_forgetting_days: float = Field(default=30.0, description="基础遗忘天数")
+    min_forgetting_days: float = Field(default=7.0, description="最小遗忘天数")
+    max_forgetting_days: float = Field(default=365.0, description="最大遗忘天数")
+    
+    # 重要程度权重
+    critical_importance_bonus: float = Field(default=45.0, description="关键重要性额外天数")
+    high_importance_bonus: float = Field(default=30.0, description="高重要性额外天数")
+    normal_importance_bonus: float = Field(default=15.0, description="一般重要性额外天数")
+    low_importance_bonus: float = Field(default=0.0, description="低重要性额外天数")
+    
+    # 置信度权重
+    verified_confidence_bonus: float = Field(default=30.0, description="已验证置信度额外天数")
+    high_confidence_bonus: float = Field(default=20.0, description="高置信度额外天数")
+    medium_confidence_bonus: float = Field(default=10.0, description="中等置信度额外天数")
+    low_confidence_bonus: float = Field(default=0.0, description="低置信度额外天数")
+    
+    # 激活频率权重
+    activation_frequency_weight: float = Field(default=0.5, description="每次激活增加的天数权重")
+    max_frequency_bonus: float = Field(default=10.0, description="最大激活频率奖励天数")
+    
+    # 休眠机制
+    dormant_threshold_days: int = Field(default=90, description="休眠状态判定天数")
+
 
 class MoodConfig(ValidatedConfigBase):
     """情绪配置类"""
