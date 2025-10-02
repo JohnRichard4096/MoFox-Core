@@ -1,3 +1,4 @@
+# Todo: 重构Action,这里现在只剩下了报错。
 import asyncio
 import time
 from abc import ABC, abstractmethod
@@ -455,7 +456,7 @@ class BaseAction(ABC):
 
             # 4. 执行Action
             logger.debug(f"{log_prefix} 开始执行...")
-            execute_result = await action_instance.execute()
+            execute_result = await action_instance.execute()  # Todo: 修复类型错误
             # 确保返回类型符合 (bool, str) 格式
             is_success = execute_result[0] if isinstance(execute_result, tuple) and len(execute_result) > 0 else False
             message = execute_result[1] if isinstance(execute_result, tuple) and len(execute_result) > 1 else ""

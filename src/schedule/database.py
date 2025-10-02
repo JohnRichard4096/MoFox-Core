@@ -70,7 +70,7 @@ async def get_active_plans_for_month(month: str) -> list[MonthlyPlan]:
                 .where(MonthlyPlan.target_month == month, MonthlyPlan.status == "active")
                 .order_by(MonthlyPlan.created_at.desc())
             )
-            return result.scalars().all()
+            return list(result.scalars().all())
         except Exception as e:
             logger.error(f"查询 {month} 的有效月度计划时发生错误: {e}")
             return []
@@ -225,7 +225,7 @@ async def get_smart_plans_for_daily_schedule(month: str, max_count: int = 3, avo
                 plans = random.sample(plans, max_count)
 
             logger.info(f"智能抽取了 {len(plans)} 条 {month} 的月度计划用于每日日程生成。")
-            return plans
+            return list(plans)
 
         except Exception as e:
             logger.error(f"智能抽取 {month} 的月度计划时发生错误: {e}")
@@ -269,7 +269,7 @@ async def get_archived_plans_for_month(month: str) -> list[MonthlyPlan]:
             result = await session.execute(
                 select(MonthlyPlan).where(MonthlyPlan.target_month == month, MonthlyPlan.status == "archived")
             )
-            return result.scalars().all()
+            return list(result.scalars().all())
         except Exception as e:
             logger.error(f"查询 {month} 的归档月度计划时发生错误: {e}")
             return []

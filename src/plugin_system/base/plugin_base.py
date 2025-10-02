@@ -27,40 +27,17 @@ class PluginBase(ABC):
     """
 
     # 插件基本信息（子类必须定义）
-    @property
-    @abstractmethod
-    def plugin_name(self) -> str:
-        return ""  # 插件内部标识符（如 "hello_world_plugin"）
-
-    @property
-    @abstractmethod
-    def enable_plugin(self) -> bool:
-        return True  # 是否启用插件
-
-    @property
-    @abstractmethod
-    def dependencies(self) -> list[str]:
-        return []  # 依赖的其他插件
-
-    @property
-    @abstractmethod
-    def python_dependencies(self) -> list[str | PythonDependency]:
-        return []  # Python包依赖，支持字符串列表或PythonDependency对象列表
-
-    @property
-    @abstractmethod
-    def config_file_name(self) -> str:
-        return ""  # 配置文件名
+    plugin_name: str
+    config_file_name: str
+    enable_plugin: bool = True
+    dependencies: list[str] = []
+    python_dependencies: list[str | PythonDependency] = []
 
     # manifest文件相关
     manifest_file_name: str = "_manifest.json"  # manifest文件名
     manifest_data: dict[str, Any] = {}  # manifest数据
 
-    # 配置定义
-    @property
-    @abstractmethod
-    def config_schema(self) -> dict[str, dict[str, ConfigField] | str]:
-        return {}
+    config_schema: dict[str, dict[str, ConfigField] | str] = {}
 
     config_section_descriptions: dict[str, str] = {}
 

@@ -760,7 +760,7 @@ async def initialize_database():
 
 
 @asynccontextmanager
-async def get_db_session() -> AsyncGenerator[AsyncSession | None, None]:
+async def get_db_session() -> AsyncGenerator[AsyncSession]:
     """
     异步数据库会话上下文管理器。
     在初始化失败时会yield None，调用方需要检查会话是否为None。
@@ -770,13 +770,10 @@ async def get_db_session() -> AsyncGenerator[AsyncSession | None, None]:
     try:
         _, SessionLocal = await initialize_database()
         if not SessionLocal:
-            logger.error("数据库会话工厂 (_SessionLocal) 未初始化。")
-            yield None
-            return
+            raise RuntimeError("数据库会话工厂 (_SessionLocal) 未初始化。")
     except Exception as e:
         logger.error(f"数据库初始化失败，无法创建会话: {e}")
-        yield None
-        return
+        raise
 
     try:
         session = SessionLocal()

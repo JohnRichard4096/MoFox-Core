@@ -21,10 +21,6 @@ class BasePlugin(PluginBase):
     - Command组件：处理命令请求
     - 未来可扩展：Scheduler、Listener等
     """
-
-    def __init__(self, *args, **kwargs):
-        super().__init__(*args, **kwargs)
-
     @abstractmethod
     def get_plugin_components(
         self,
@@ -42,7 +38,7 @@ class BasePlugin(PluginBase):
         Returns:
             List[tuple[ComponentInfo, Type]]: [(组件信息, 组件类), ...]
         """
-        raise NotImplementedError("Subclasses must implement this method")
+        ...
 
     def register_plugin(self) -> bool:
         """注册插件及其所有组件"""
