@@ -3,7 +3,7 @@ from typing import Optional, Dict, Any
 from datetime import datetime
 
 from src.common.logger import get_logger
-from src.plugin_system.apis import chat_api, person_api, schedule_api, send_api, llm_api, message_api
+from src.plugin_system.apis import chat_api, person_api, schedule_api, send_api, llm_api, message_api, generator_api, database_api
 from src.config.config import global_config, model_config
 from src.person_info.person_info import get_person_info_manager
 
@@ -38,23 +38,44 @@ class ProactiveThinkerExecutor:
 
         # 2. 决策阶段
         decision_result = await self._make_decision(context, start_mode)
+
+
         if not decision_result or not decision_result.get("should_reply"):
             reason = decision_result.get("reason", "未提供") if decision_result else "决策过程返回None"
             logger.info(f"决策结果为：不回复。原因: {reason}")
+            await database_api.store_action_info(
+            chat_stream=self._get_stream_from_id(stream_id),
+            action_name="proactive_decision",
+            action_prompt_display=f"主动思考决定不回复,原因: {reason}",
+            action_done = True,
+            action_data=decision_result
+        )
             return
 
         # 3. 规划与执行阶段
         topic = decision_result.get("topic", "打个招呼")
+        reason = decision_result.get("reason", "无")
+        await database_api.store_action_info(
+            chat_stream=self._get_stream_from_id(stream_id),
+            action_name="proactive_decision",
+            action_prompt_display=f"主动思考决定回复,原因: {reason},话题:{topic}",
+            action_done = True,
+            action_data=decision_result
+        )
         logger.info(f"决策结果为：回复。话题: {topic}")
         
-        plan_prompt = self._build_plan_prompt(context, start_mode, topic)
+        plan_prompt = self._build_plan_prompt(context, start_mode, topic, reason)
         
         is_success, response, _, _ = await llm_api.generate_with_model(prompt=plan_prompt, model_config=model_config.model_task_config.utils)
         
-        if is_success:
+        if is_success and response:
             stream = self._get_stream_from_id(stream_id)
             if stream:
-                await send_api.text_to_stream(stream_id=stream.stream_id, text=response)
+                # 使用消息分割器处理并发送消息
+                reply_set = generator_api.process_human_text(response, enable_splitter=True, enable_chinese_typo=False)
+                for reply_type, content in reply_set:
+                    if reply_type == "text":
+                        await send_api.text_to_stream(stream_id=stream.stream_id, text=content)
             else:
                 logger.warning(f"无法发送消息，因为找不到 stream_id 为 {stream_id} 的聊天流")
 
@@ -99,12 +120,22 @@ class ProactiveThinkerExecutor:
         # 获取最近聊天记录
         recent_messages = await message_api.get_recent_messages(stream_id, limit=10)
         recent_chat_history = await message_api.build_readable_messages_to_str(recent_messages) if recent_messages else "无"
+        
+        # 获取最近的动作历史
+        action_history = await database_api.db_query(
+            database_api.MODEL_MAPPING["ActionRecords"],
+            filters={"chat_id": stream_id, "action_name": "proactive_decision"},
+            limit=3,
+            order_by=["-time"]
+        )
+        action_history_context = "\n".join([f"- {a['action_data']}" for a in action_history]) if action_history else "无"
 
         return {
             "person_id": person_id,
             "user_info": user_info,
             "schedule_context": schedule_context,
             "recent_chat_history": recent_chat_history,
+            "action_history_context": action_history_context,
             "relationship": {
                 "short_impression": short_impression,
                 "impression": impression,
@@ -185,7 +216,7 @@ class ProactiveThinkerExecutor:
             logger.error(f"决策LLM返回的JSON格式无效: {response}")
             return {"should_reply": False, "reason": "决策模型返回格式错误"}
 
-    def _build_plan_prompt(self, context: Dict[str, Any], start_mode: str, topic: str) -> str:
+    def _build_plan_prompt(self, context: Dict[str, Any], start_mode: str, topic: str, reason: str) -> str:
         """
         根据启动模式和决策话题，构建最终的规划提示词
         """
@@ -204,7 +235,8 @@ class ProactiveThinkerExecutor:
 # 任务
 你需要主动向一个新朋友 '{user_info.user_nickname}' 发起对话。这是你们的第一次交流，或者很久没聊了。
 
-# 情境分析
+# 决策上下文
+- **决策理由**: {reason}
 - **你和Ta的关系**:
     - 简短印象: {relationship['short_impression']}
     - 详细印象: {relationship['impression']}
@@ -227,6 +259,9 @@ class ProactiveThinkerExecutor:
 # 任务
 现在是 {context['current_time']}，你需要主动向你的朋友 '{user_info.user_nickname}' 发起对话。
 
+# 决策上下文
+- **决策理由**: {reason}
+
 # 情境分析
 1.  **你的日程**:
 {context['schedule_context']}
@@ -235,6 +270,8 @@ class ProactiveThinkerExecutor:
     - 好感度: {relationship['attitude']}/100
 3.  **最近的聊天摘要**:
 {context['recent_chat_history']}
+4.  **你最近的相关动作**:
+{context['action_history_context']}
 
 # 对话指引
 - 你决定和Ta聊聊关于“{topic}”的话题。
