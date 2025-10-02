@@ -519,10 +519,9 @@ class Prompt:
 
             # 选择合适的表情
             selected_expressions = await expression_selector.select_suitable_expressions_llm(
-                chat_history=chat_history,
-                current_message=self.parameters.target,
-                emotional_tone="neutral",
-                topic_type="general",
+                chat_id=self.parameters.chat_id,
+                chat_info=chat_history,
+                target_message=self.parameters.target,
             )
 
             # 构建表达习惯块

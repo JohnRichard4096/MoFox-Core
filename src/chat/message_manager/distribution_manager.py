@@ -9,6 +9,7 @@ from typing import Any
 
 from src.chat.chatter_manager import ChatterManager
 from src.chat.energy_system import energy_manager
+from src.common.data_models.message_manager_data_model import StreamContext
 from src.common.logger import get_logger
 from src.config.config import global_config
 from src.plugin_system.apis.chat_api import get_chat_manager
@@ -369,7 +370,7 @@ class StreamLoopManager:
             logger.error(f"检查消息状态失败: {e}")
             return False
 
-    async def _process_stream_messages(self, stream_id: str, context: Any) -> bool:
+    async def _process_stream_messages(self, stream_id: str, context: StreamContext) -> bool:
         """处理流消息
 
         Args:
@@ -387,7 +388,8 @@ class StreamLoopManager:
             start_time = time.time()
 
             # 直接调用chatter_manager处理流上下文
-            results = await asyncio.create_task(self.chatter_manager.process_stream_context(stream_id, context))
+            context.processing_task = asyncio.create_task(self.chatter_manager.process_stream_context(stream_id, context))
+            results = await context.processing_task
             success = results.get("success", False)
 
             if success:

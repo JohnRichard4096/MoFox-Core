@@ -89,9 +89,8 @@ class MessageManager:
                 logger.warning(f"MessageManager.add_message: 聊天流 {stream_id} 不存在")
                 return
             await self._check_and_handle_interruption(chat_stream)
-            chat_stream.context_manager.context.processing_task = asyncio.create_task(
-                chat_stream.context_manager.add_message(message)
-            )
+            await chat_stream.context_manager.add_message(message)
+        
         except Exception as e:
             logger.error(f"添加消息到聊天流 {stream_id} 时发生错误: {e}")
 

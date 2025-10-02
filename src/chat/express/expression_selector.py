@@ -71,7 +71,8 @@ def weighted_sample(population: list[dict], weights: list[float], k: int) -> lis
 
 
 class ExpressionSelector:
-    def __init__(self):
+    def __init__(self, chat_id: str = ""):
+        self.chat_id = chat_id
         self.llm_model = LLMRequest(
             model_set=model_config.model_task_config.utils_small, request_type="expression.selector"
         )
