@@ -1,12 +1,9 @@
-# -*- coding: utf-8 -*-
 """
 消息加盾模块
 
 本模块提供消息加盾功能，对检测到的危险消息进行安全处理，
 主要通过注入系统提示词来指导AI安全响应。
 """
-
-from typing import List
 
 from src.common.logger import get_logger
 from src.config.config import global_config
@@ -35,7 +32,7 @@ class MessageShield:
         return SAFETY_SYSTEM_PROMPT
 
     @staticmethod
-    def is_shield_needed(confidence: float, matched_patterns: List[str]) -> bool:
+    def is_shield_needed(confidence: float, matched_patterns: list[str]) -> bool:
         """判断是否需要加盾
 
         Args:
@@ -60,7 +57,7 @@ class MessageShield:
         return False
 
     @staticmethod
-    def create_safety_summary(confidence: float, matched_patterns: List[str]) -> str:
+    def create_safety_summary(confidence: float, matched_patterns: list[str]) -> str:
         """创建安全处理摘要
 
         Args:

@@ -1,7 +1,7 @@
 # mmc/src/schedule/schemas.py
 
 from datetime import datetime, time
-from typing import List
+
 from pydantic import BaseModel, validator
 
 
@@ -41,7 +41,7 @@ class ScheduleItem(BaseModel):
 class ScheduleData(BaseModel):
     """完整日程数据的Pydantic模型"""
 
-    schedule: List[ScheduleItem]
+    schedule: list[ScheduleItem]
 
     @validator("schedule")
     def validate_schedule_completeness(cls, v):
@@ -67,7 +67,7 @@ class ScheduleData(BaseModel):
         return v
 
     @staticmethod
-    def _check_24_hour_coverage(time_ranges: List[tuple]) -> bool:
+    def _check_24_hour_coverage(time_ranges: list[tuple]) -> bool:
         """检查时间段是否覆盖24小时"""
         if not time_ranges:
             return False

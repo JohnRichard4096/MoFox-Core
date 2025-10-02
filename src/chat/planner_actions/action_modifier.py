@@ -1,17 +1,17 @@
-import random
 import asyncio
 import hashlib
+import random
 import time
-from typing import List, Any, Dict, TYPE_CHECKING, Tuple
+from typing import TYPE_CHECKING, Any
 
+from src.chat.message_receive.chat_stream import get_chat_manager
+from src.chat.planner_actions.action_manager import ChatterActionManager
+from src.chat.utils.chat_message_builder import build_readable_messages, get_raw_msg_before_timestamp_with_chat
+from src.common.data_models.message_manager_data_model import StreamContext
 from src.common.logger import get_logger
 from src.config.config import global_config, model_config
 from src.llm_models.utils_model import LLMRequest
-from src.chat.message_receive.chat_stream import get_chat_manager
-from src.common.data_models.message_manager_data_model import StreamContext
-from src.chat.planner_actions.action_manager import ChatterActionManager
-from src.chat.utils.chat_message_builder import get_raw_msg_before_timestamp_with_chat, build_readable_messages
-from src.plugin_system.base.component_types import ActionInfo, ActionActivationType
+from src.plugin_system.base.component_types import ActionActivationType, ActionInfo
 from src.plugin_system.core.global_announcement_manager import global_announcement_manager
 
 if TYPE_CHECKING:
@@ -59,18 +59,17 @@ class ActionModifier:
         """
         logger.debug(f"{self.log_prefix}开始完整动作修改流程")
 
-        removals_s1: List[Tuple[str, str]] = []
-        removals_s2: List[Tuple[str, str]] = []
-        removals_s3: List[Tuple[str, str]] = []
+        removals_s1: list[tuple[str, str]] = []
+        removals_s2: list[tuple[str, str]] = []
+        removals_s3: list[tuple[str, str]] = []
 
         self.action_manager.restore_actions()
         all_actions = self.action_manager.get_using_actions()
 
         # === 第0阶段：根据聊天类型过滤动作 ===
-        from src.plugin_system.base.component_types import ChatType
-        from src.plugin_system.core.component_registry import component_registry
-        from src.plugin_system.base.component_types import ComponentType
         from src.chat.utils.utils import get_chat_type_and_target_info
+        from src.plugin_system.base.component_types import ChatType, ComponentType
+        from src.plugin_system.core.component_registry import component_registry
 
         # 获取聊天类型
         is_group_chat, _ = get_chat_type_and_target_info(self.chat_id)
@@ -167,8 +166,8 @@ class ActionModifier:
 
         logger.info(f"{self.log_prefix} 当前可用动作: {available_actions_text}||移除: {removals_summary}")
 
-    def _check_action_associated_types(self, all_actions: Dict[str, ActionInfo], chat_context: StreamContext):
-        type_mismatched_actions: List[Tuple[str, str]] = []
+    def _check_action_associated_types(self, all_actions: dict[str, ActionInfo], chat_context: StreamContext):
+        type_mismatched_actions: list[tuple[str, str]] = []
         for action_name, action_info in all_actions.items():
             if action_info.associated_types and not chat_context.check_types(action_info.associated_types):
                 associated_types_str = ", ".join(action_info.associated_types)
@@ -179,9 +178,9 @@ class ActionModifier:
 
     async def _get_deactivated_actions_by_type(
         self,
-        actions_with_info: Dict[str, ActionInfo],
+        actions_with_info: dict[str, ActionInfo],
         chat_content: str = "",
-    ) -> List[tuple[str, str]]:
+    ) -> list[tuple[str, str]]:
         """
         根据激活类型过滤，返回需要停用的动作列表及原因
 
@@ -254,9 +253,9 @@ class ActionModifier:
 
     async def _process_llm_judge_actions_parallel(
         self,
-        llm_judge_actions: Dict[str, Any],
+        llm_judge_actions: dict[str, Any],
         chat_content: str = "",
-    ) -> Dict[str, bool]:
+    ) -> dict[str, bool]:
         """
         并行处理LLM判定actions，支持智能缓存
 

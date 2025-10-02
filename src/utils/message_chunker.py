@@ -3,10 +3,12 @@ MaiBot 端的消息切片处理模块
 用于接收和重组来自 Napcat-Adapter 的切片消息
 """
 
-import orjson
-import time
 import asyncio
-from typing import Dict, Any, Optional
+import time
+from typing import Any
+
+import orjson
+
 from src.common.logger import get_logger
 
 logger = get_logger("message_chunker")
@@ -17,7 +19,7 @@ class MessageReassembler:
 
     def __init__(self, timeout: int = 30):
         self.timeout = timeout
-        self.chunk_buffers: Dict[str, Dict[str, Any]] = {}
+        self.chunk_buffers: dict[str, dict[str, Any]] = {}
         self._cleanup_task = None
 
     async def start_cleanup_task(self):
@@ -59,7 +61,7 @@ class MessageReassembler:
                 logger.error(f"清理过期切片时出错: {e}")
 
     @staticmethod
-    def is_chunk_message(message: Dict[str, Any]) -> bool:
+    def is_chunk_message(message: dict[str, Any]) -> bool:
         """检查是否是来自 Ada 的切片消息"""
         return (
             isinstance(message, dict)
@@ -68,7 +70,7 @@ class MessageReassembler:
             and "__mmc_is_chunked__" in message
         )
 
-    async def process_chunk(self, message: Dict[str, Any]) -> Optional[Dict[str, Any]]:
+    async def process_chunk(self, message: dict[str, Any]) -> dict[str, Any] | None:
         """
         处理切片消息，如果切片完整则返回重组后的消息
 
@@ -144,7 +146,7 @@ class MessageReassembler:
             logger.error(f"处理切片消息时出错: {e}")
             return None
 
-    def get_pending_chunks_info(self) -> Dict[str, Any]:
+    def get_pending_chunks_info(self) -> dict[str, Any]:
         """获取待处理切片信息"""
         info = {}
         for chunk_id, buffer in self.chunk_buffers.items():

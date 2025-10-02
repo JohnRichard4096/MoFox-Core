@@ -1,4 +1,3 @@
-from typing import Optional
 from src.common.logger import get_logger
 
 logger = get_logger("dependency_config")
@@ -66,7 +65,7 @@ class DependencyConfig:
 
 
 # 全局配置实例
-_global_dependency_config: Optional[DependencyConfig] = None
+_global_dependency_config: DependencyConfig | None = None
 
 
 def get_dependency_config() -> DependencyConfig:

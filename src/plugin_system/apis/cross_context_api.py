@@ -3,20 +3,20 @@
 """
 
 import time
-from typing import Dict, Any, Optional, List
+from typing import Any
 
+from src.chat.message_receive.chat_stream import ChatStream, get_chat_manager
+from src.chat.utils.chat_message_builder import (
+    build_readable_messages_with_id,
+    get_raw_msg_before_timestamp_with_chat,
+)
 from src.common.logger import get_logger
 from src.config.config import global_config
-from src.chat.utils.chat_message_builder import (
-    get_raw_msg_before_timestamp_with_chat,
-    build_readable_messages_with_id,
-)
-from src.chat.message_receive.chat_stream import get_chat_manager, ChatStream
 
 logger = get_logger("cross_context_api")
 
 
-def get_context_groups(chat_id: str) -> Optional[List[List[str]]]:
+def get_context_groups(chat_id: str) -> list[list[str]] | None:
     """
     获取当前聊天所在的共享组的其他聊天ID
     """
@@ -41,7 +41,7 @@ def get_context_groups(chat_id: str) -> Optional[List[List[str]]]:
     return None
 
 
-async def build_cross_context_normal(chat_stream: ChatStream, other_chat_infos: List[List[str]]) -> str:
+async def build_cross_context_normal(chat_stream: ChatStream, other_chat_infos: list[list[str]]) -> str:
     """
     构建跨群聊/私聊上下文 (Normal模式)
     """
@@ -74,8 +74,8 @@ async def build_cross_context_normal(chat_stream: ChatStream, other_chat_infos: 
 
 async def build_cross_context_s4u(
     chat_stream: ChatStream,
-    other_chat_infos: List[List[str]],
-    target_user_info: Optional[Dict[str, Any]],
+    other_chat_infos: list[list[str]],
+    target_user_info: dict[str, Any] | None,
 ) -> str:
     """
     构建跨群聊/私聊上下文 (S4U模式)

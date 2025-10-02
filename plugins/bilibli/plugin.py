@@ -1,14 +1,15 @@
 #!/usr/bin/env python3
-# -*- coding: utf-8 -*-
 """
 Bilibili 视频观看体验工具
 支持哔哩哔哩视频链接解析和AI视频内容分析
 """
 
-from typing import Dict, Any, List, Tuple, Type
-from src.plugin_system import BaseTool, ToolParamType, BasePlugin, register_plugin, ComponentInfo, ConfigField
-from .bilibli_base import get_bilibili_analyzer
+from typing import Any
+
 from src.common.logger import get_logger
+from src.plugin_system import BasePlugin, BaseTool, ComponentInfo, ConfigField, ToolParamType, register_plugin
+
+from .bilibli_base import get_bilibili_analyzer
 
 logger = get_logger("bilibili_tool")
 
@@ -41,7 +42,7 @@ class BilibiliTool(BaseTool):
         super().__init__(plugin_config)
         self.analyzer = get_bilibili_analyzer()
 
-    async def execute(self, function_args: Dict[str, Any]) -> Dict[str, Any]:
+    async def execute(self, function_args: dict[str, Any]) -> dict[str, Any]:
         """执行哔哩哔哩视频观看体验"""
         try:
             url = function_args.get("url", "").strip()
@@ -83,7 +84,7 @@ class BilibiliTool(BaseTool):
             return {"name": self.name, "content": content.strip()}
 
         except Exception as e:
-            error_msg = f"😅 看视频的时候出了点问题: {str(e)}"
+            error_msg = f"😅 看视频的时候出了点问题: {e!s}"
             logger.error(error_msg)
             return {"name": self.name, "content": error_msg}
 
@@ -104,7 +105,7 @@ class BilibiliTool(BaseTool):
 
         return base_prompt
 
-    def _format_watch_experience(self, video_info: Dict, ai_analysis: str, interest_focus: str = None) -> str:
+    def _format_watch_experience(self, video_info: dict, ai_analysis: str, interest_focus: str = None) -> str:
         """格式化观看体验报告"""
 
         # 根据播放量生成热度评价
@@ -191,8 +192,8 @@ class BilibiliPlugin(BasePlugin):
     # 插件基本信息
     plugin_name: str = "bilibili_video_watcher"
     enable_plugin: bool = True
-    dependencies: List[str] = []
-    python_dependencies: List[str] = []
+    dependencies: list[str] = []
+    python_dependencies: list[str] = []
     config_file_name: str = "config.toml"
 
     # 配置节描述
@@ -220,6 +221,6 @@ class BilibiliPlugin(BasePlugin):
         },
     }
 
-    def get_plugin_components(self) -> List[Tuple[ComponentInfo, Type]]:
+    def get_plugin_components(self) -> list[tuple[ComponentInfo, type]]:
         """返回插件包含的工具组件"""
         return [(BilibiliTool.get_tool_info(), BilibiliTool)]

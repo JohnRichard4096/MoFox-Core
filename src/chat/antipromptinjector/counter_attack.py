@@ -1,15 +1,13 @@
-# -*- coding: utf-8 -*-
 """
 反击消息生成模块
 
 负责生成个性化的反击消息回应提示词注入攻击
 """
 
-from typing import Optional
-
 from src.common.logger import get_logger
 from src.config.config import global_config
 from src.plugin_system.apis import llm_api
+
 from .types import DetectionResult
 
 logger = get_logger("anti_injector.counter_attack")
@@ -55,7 +53,7 @@ class CounterAttackGenerator:
 
     async def generate_counter_attack_message(
         self, original_message: str, detection_result: DetectionResult
-    ) -> Optional[str]:
+    ) -> str | None:
         """生成反击消息
 
         Args:

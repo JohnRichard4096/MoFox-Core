@@ -1,19 +1,17 @@
 import asyncio
+import importlib
 import os
 import traceback
-import importlib
-
-from typing import Dict, List, Optional, Tuple, Type, Any
-from importlib.util import spec_from_file_location, module_from_spec
+from importlib.util import module_from_spec, spec_from_file_location
 from pathlib import Path
-
+from typing import Any, Optional
 
 from src.common.logger import get_logger
-from src.plugin_system.base.plugin_base import PluginBase
 from src.plugin_system.base.component_types import ComponentType
+from src.plugin_system.base.plugin_base import PluginBase
 from src.plugin_system.utils.manifest_utils import VersionComparator
-from .component_registry import component_registry
 
+from .component_registry import component_registry
 
 logger = get_logger("plugin_manager")
 
@@ -26,12 +24,12 @@ class PluginManager:
     """
 
     def __init__(self):
-        self.plugin_directories: List[str] = []  # 插件根目录列表
-        self.plugin_classes: Dict[str, Type[PluginBase]] = {}  # 全局插件类注册表，插件名 -> 插件类
-        self.plugin_paths: Dict[str, str] = {}  # 记录插件名到目录路径的映射，插件名 -> 目录路径
+        self.plugin_directories: list[str] = []  # 插件根目录列表
+        self.plugin_classes: dict[str, type[PluginBase]] = {}  # 全局插件类注册表，插件名 -> 插件类
+        self.plugin_paths: dict[str, str] = {}  # 记录插件名到目录路径的映射，插件名 -> 目录路径
 
-        self.loaded_plugins: Dict[str, PluginBase] = {}  # 已加载的插件类实例注册表，插件名 -> 插件类实例
-        self.failed_plugins: Dict[str, str] = {}  # 记录加载失败的插件文件及其错误信息，插件名 -> 错误信息
+        self.loaded_plugins: dict[str, PluginBase] = {}  # 已加载的插件类实例注册表，插件名 -> 插件类实例
+        self.failed_plugins: dict[str, str] = {}  # 记录加载失败的插件文件及其错误信息，插件名 -> 错误信息
 
         # 确保插件目录存在
         self._ensure_plugin_directories()
@@ -54,7 +52,7 @@ class PluginManager:
 
     # === 插件加载管理 ===
 
-    def load_all_plugins(self) -> Tuple[int, int]:
+    def load_all_plugins(self) -> tuple[int, int]:
         """加载所有插件
 
         Returns:
@@ -87,7 +85,7 @@ class PluginManager:
 
         return total_registered, total_failed_registration
 
-    def load_registered_plugin_classes(self, plugin_name: str) -> Tuple[bool, int]:
+    def load_registered_plugin_classes(self, plugin_name: str) -> tuple[bool, int]:
         # sourcery skip: extract-duplicate-method, extract-method
         """
         加载已经注册的插件类
@@ -142,7 +140,7 @@ class PluginManager:
 
         except FileNotFoundError as e:
             # manifest文件缺失
-            error_msg = f"缺少manifest文件: {str(e)}"
+            error_msg = f"缺少manifest文件: {e!s}"
             self.failed_plugins[plugin_name] = error_msg
             logger.error(f"❌ 插件加载失败: {plugin_name} - {error_msg}")
             return False, 1
@@ -150,14 +148,14 @@ class PluginManager:
         except ValueError as e:
             # manifest文件格式错误或验证失败
             traceback.print_exc()
-            error_msg = f"manifest验证失败: {str(e)}"
+            error_msg = f"manifest验证失败: {e!s}"
             self.failed_plugins[plugin_name] = error_msg
             logger.error(f"❌ 插件加载失败: {plugin_name} - {error_msg}")
             return False, 1
 
         except Exception as e:
             # 其他错误
-            error_msg = f"未知错误: {str(e)}"
+            error_msg = f"未知错误: {e!s}"
             self.failed_plugins[plugin_name] = error_msg
             logger.error(f"❌ 插件加载失败: {plugin_name} - {error_msg}")
             logger.debug("详细错误信息: ", exc_info=True)
@@ -192,7 +190,7 @@ class PluginManager:
         logger.debug(f"插件 {plugin_name} 重载成功")
         return True
 
-    def rescan_plugin_directory(self) -> Tuple[int, int]:
+    def rescan_plugin_directory(self) -> tuple[int, int]:
         """
         重新扫描插件根目录
         """
@@ -220,7 +218,7 @@ class PluginManager:
         return self.loaded_plugins.get(plugin_name)
 
     # === 查询方法 ===
-    def list_loaded_plugins(self) -> List[str]:
+    def list_loaded_plugins(self) -> list[str]:
         """
         列出所有当前加载的插件。
 
@@ -229,7 +227,7 @@ class PluginManager:
         """
         return list(self.loaded_plugins.keys())
 
-    def list_registered_plugins(self) -> List[str]:
+    def list_registered_plugins(self) -> list[str]:
         """
         列出所有已注册的插件类。
 
@@ -238,7 +236,7 @@ class PluginManager:
         """
         return list(self.plugin_classes.keys())
 
-    def get_plugin_path(self, plugin_name: str) -> Optional[str]:
+    def get_plugin_path(self, plugin_name: str) -> str | None:
         """
         获取指定插件的路径。
 
@@ -329,7 +327,7 @@ class PluginManager:
     # == 兼容性检查 ==
 
     @staticmethod
-    def _check_plugin_version_compatibility(plugin_name: str, manifest_data: Dict[str, Any]) -> Tuple[bool, str]:
+    def _check_plugin_version_compatibility(plugin_name: str, manifest_data: dict[str, Any]) -> tuple[bool, str]:
         """检查插件版本兼容性
 
         Args:
@@ -569,7 +567,7 @@ class PluginManager:
             return True
 
         except Exception as e:
-            logger.error(f"❌ 插件卸载失败: {plugin_name} - {str(e)}", exc_info=True)
+            logger.error(f"❌ 插件卸载失败: {plugin_name} - {e!s}", exc_info=True)
             return False
 
     def reload_plugin(self, plugin_name: str) -> bool:
@@ -606,7 +604,7 @@ class PluginManager:
                 return False
 
         except Exception as e:
-            logger.error(f"❌ 插件重载失败: {plugin_name} - {str(e)}", exc_info=True)
+            logger.error(f"❌ 插件重载失败: {plugin_name} - {e!s}", exc_info=True)
             return False
 
     def force_reload_plugin(self, plugin_name: str) -> bool:

@@ -1,13 +1,11 @@
-from typing import Optional, Type
+from src.common.logger import get_logger
 from src.plugin_system.base.base_tool import BaseTool
 from src.plugin_system.base.component_types import ComponentType
-
-from src.common.logger import get_logger
 
 logger = get_logger("tool_api")
 
 
-def get_tool_instance(tool_name: str) -> Optional[BaseTool]:
+def get_tool_instance(tool_name: str) -> BaseTool | None:
     """获取公开工具实例"""
     from src.plugin_system.core import component_registry
 
@@ -18,7 +16,7 @@ def get_tool_instance(tool_name: str) -> Optional[BaseTool]:
     else:
         plugin_config = None
 
-    tool_class: Type[BaseTool] = component_registry.get_component_class(tool_name, ComponentType.TOOL)  # type: ignore
+    tool_class: type[BaseTool] = component_registry.get_component_class(tool_name, ComponentType.TOOL)  # type: ignore
     return tool_class(plugin_config) if tool_class else None
 
 

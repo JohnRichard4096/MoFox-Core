@@ -4,19 +4,19 @@
 提供方便的权限检查装饰器，用于插件命令和其他需要权限验证的地方。
 """
 
+from collections.abc import Callable
 from functools import wraps
-from typing import Callable, Optional
 from inspect import iscoroutinefunction
 
+from src.chat.message_receive.chat_stream import ChatStream
+from src.plugin_system.apis.logging_api import get_logger
 from src.plugin_system.apis.permission_api import permission_api
 from src.plugin_system.apis.send_api import text_to_stream
-from src.plugin_system.apis.logging_api import get_logger
-from src.chat.message_receive.chat_stream import ChatStream
 
 logger = get_logger(__name__)
 
 
-def require_permission(permission_node: str, deny_message: Optional[str] = None):
+def require_permission(permission_node: str, deny_message: str | None = None):
     """
     权限检查装饰器
 
@@ -90,7 +90,7 @@ def require_permission(permission_node: str, deny_message: Optional[str] = None)
     return decorator
 
 
-def require_master(deny_message: Optional[str] = None):
+def require_master(deny_message: str | None = None):
     """
     Master权限检查装饰器
 
@@ -186,9 +186,7 @@ class PermissionChecker:
         return permission_api.is_master(chat_stream.platform, chat_stream.user_info.user_id)
 
     @staticmethod
-    async def ensure_permission(
-        chat_stream: ChatStream, permission_node: str, deny_message: Optional[str] = None
-    ) -> bool:
+    async def ensure_permission(chat_stream: ChatStream, permission_node: str, deny_message: str | None = None) -> bool:
         """
         确保用户拥有指定权限，如果没有权限会发送消息并返回False
 
@@ -209,7 +207,7 @@ class PermissionChecker:
         return has_permission
 
     @staticmethod
-    async def ensure_master(chat_stream: ChatStream, deny_message: Optional[str] = None) -> bool:
+    async def ensure_master(chat_stream: ChatStream, deny_message: str | None = None) -> bool:
         """
         确保用户为Master用户，如果不是会发送消息并返回False
 

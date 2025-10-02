@@ -1,13 +1,13 @@
 from abc import abstractmethod
-from typing import List, Type, Tuple, Union
-from .plugin_base import PluginBase
 
 from src.common.logger import get_logger
-from src.plugin_system.base.component_types import ActionInfo, CommandInfo, PlusCommandInfo, EventHandlerInfo, ToolInfo
+from src.plugin_system.base.component_types import ActionInfo, CommandInfo, EventHandlerInfo, PlusCommandInfo, ToolInfo
+
 from .base_action import BaseAction
 from .base_command import BaseCommand
 from .base_events_handler import BaseEventHandler
 from .base_tool import BaseTool
+from .plugin_base import PluginBase
 from .plus_command import PlusCommand
 
 logger = get_logger("base_plugin")
@@ -28,14 +28,12 @@ class BasePlugin(PluginBase):
     @abstractmethod
     def get_plugin_components(
         self,
-    ) -> List[
-        Union[
-            Tuple[ActionInfo, Type[BaseAction]],
-            Tuple[CommandInfo, Type[BaseCommand]],
-            Tuple[PlusCommandInfo, Type[PlusCommand]],
-            Tuple[EventHandlerInfo, Type[BaseEventHandler]],
-            Tuple[ToolInfo, Type[BaseTool]],
-        ]
+    ) -> list[
+        tuple[ActionInfo, type[BaseAction]]
+        | tuple[CommandInfo, type[BaseCommand]]
+        | tuple[PlusCommandInfo, type[PlusCommand]]
+        | tuple[EventHandlerInfo, type[BaseEventHandler]]
+        | tuple[ToolInfo, type[BaseTool]]
     ]:
         """获取插件包含的组件列表
 

@@ -1,30 +1,30 @@
 # import asyncio
 import asyncio
 import os
+import platform
 import sys
 import time
-import platform
 import traceback
 from pathlib import Path
-from rich.traceback import install
-from colorama import init, Fore
+
+from colorama import Fore, init
 from dotenv import load_dotenv  # 处理.env文件
+from rich.traceback import install
 
 # maim_message imports for console input
-
 # 最早期初始化日志系统，确保所有后续模块都使用正确的日志格式
-from src.common.logger import initialize_logging, get_logger, shutdown_logging
+from src.common.logger import get_logger, initialize_logging, shutdown_logging
 
 # UI日志适配器
 initialize_logging()
 
 from src.main import MainSystem  # noqa
-from src import BaseMain  # noqa
-from src.manager.async_task_manager import async_task_manager  # noqa
-from src.chat.knowledge.knowledge_lib import initialize_lpmm_knowledge  # noqa
-from src.config.config import global_config  # noqa
-from src.common.database.database import initialize_sql_database  # noqa
-from src.common.database.sqlalchemy_models import initialize_database as init_db  # noqa
+from src import BaseMain
+from src.manager.async_task_manager import async_task_manager
+from src.chat.knowledge.knowledge_lib import initialize_lpmm_knowledge
+from src.config.config import global_config
+from src.common.database.database import initialize_sql_database
+from src.common.database.sqlalchemy_models import initialize_database as init_db
 
 logger = get_logger("main")
 
@@ -247,7 +247,7 @@ if __name__ == "__main__":
             # The actual shutdown logic is now in the finally block.
 
     except Exception as e:
-        logger.error(f"主程序发生异常: {str(e)} {str(traceback.format_exc())}")
+        logger.error(f"主程序发生异常: {e!s} {traceback.format_exc()!s}")
         exit_code = 1  # 标记发生错误
     finally:
         # 确保 loop 在任何情况下都尝试关闭（如果存在且未关闭）

@@ -7,12 +7,13 @@
     success, response, reasoning, model_name = await llm_api.generate_with_model(prompt, model_config)
 """
 
-from typing import Tuple, Dict, List, Any, Optional
+from typing import Any
+
 from src.common.logger import get_logger
+from src.config.api_ada_configs import TaskConfig
+from src.config.config import model_config
 from src.llm_models.payload_content.tool_option import ToolCall
 from src.llm_models.utils_model import LLMRequest
-from src.config.config import model_config
-from src.config.api_ada_configs import TaskConfig
 
 logger = get_logger("llm_api")
 
@@ -21,7 +22,7 @@ logger = get_logger("llm_api")
 # =============================================================================
 
 
-def get_available_models() -> Dict[str, TaskConfig]:
+def get_available_models() -> dict[str, TaskConfig]:
     """获取所有可用的模型配置
 
     Returns:
@@ -31,7 +32,7 @@ def get_available_models() -> Dict[str, TaskConfig]:
         # 自动获取所有属性并转换为字典形式
         models = model_config.model_task_config
         attrs = dir(models)
-        rets: Dict[str, TaskConfig] = {}
+        rets: dict[str, TaskConfig] = {}
         for attr in attrs:
             if not attr.startswith("__"):
                 try:
@@ -52,9 +53,9 @@ async def generate_with_model(
     prompt: str,
     model_config: TaskConfig,
     request_type: str = "plugin.generate",
-    temperature: Optional[float] = None,
-    max_tokens: Optional[int] = None,
-) -> Tuple[bool, str, str, str]:
+    temperature: float | None = None,
+    max_tokens: int | None = None,
+) -> tuple[bool, str, str, str]:
     """使用指定模型生成内容
 
     Args:
@@ -78,7 +79,7 @@ async def generate_with_model(
         return True, response, reasoning_content, model_name
 
     except Exception as e:
-        error_msg = f"生成内容时出错: {str(e)}"
+        error_msg = f"生成内容时出错: {e!s}"
         logger.error(f"[LLMAPI] {error_msg}")
         return False, error_msg, "", ""
 
@@ -86,11 +87,11 @@ async def generate_with_model(
 async def generate_with_model_with_tools(
     prompt: str,
     model_config: TaskConfig,
-    tool_options: List[Dict[str, Any]] | None = None,
+    tool_options: list[dict[str, Any]] | None = None,
     request_type: str = "plugin.generate",
-    temperature: Optional[float] = None,
-    max_tokens: Optional[int] = None,
-) -> Tuple[bool, str, str, str, List[ToolCall] | None]:
+    temperature: float | None = None,
+    max_tokens: int | None = None,
+) -> tuple[bool, str, str, str, list[ToolCall] | None]:
     """使用指定模型和工具生成内容
 
     Args:
@@ -117,6 +118,6 @@ async def generate_with_model_with_tools(
         return True, response, reasoning_content, model_name, tool_call
 
     except Exception as e:
-        error_msg = f"生成内容时出错: {str(e)}"
+        error_msg = f"生成内容时出错: {e!s}"
         logger.error(f"[LLMAPI] {error_msg}")
         return False, error_msg, "", "", None

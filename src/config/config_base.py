@@ -1,6 +1,8 @@
-from dataclasses import dataclass, fields, MISSING
-from typing import TypeVar, Type, Any, get_origin, get_args, Literal
+from dataclasses import MISSING, dataclass, fields
+from typing import Any, Literal, TypeVar, get_args, get_origin
+
 from pydantic import BaseModel, ValidationError
+from typing_extensions import Self
 
 T = TypeVar("T", bound="ConfigBase")
 
@@ -19,7 +21,7 @@ class ConfigBase:
     """配置类的基类"""
 
     @classmethod
-    def from_dict(cls: Type[T], data: dict[str, Any]) -> T:
+    def from_dict(cls, data: dict[str, Any]) -> Self:
         """从字典加载配置字段"""
         if not isinstance(data, dict):
             raise TypeError(f"Expected a dictionary, got {type(data).__name__}")
@@ -53,7 +55,7 @@ class ConfigBase:
         return cls()
 
     @classmethod
-    def _convert_field(cls, value: Any, field_type: Type[Any]) -> Any:
+    def _convert_field(cls, value: Any, field_type: type[Any]) -> Any:
         """
         转换字段值为指定类型
 

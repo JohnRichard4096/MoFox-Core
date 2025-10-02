@@ -1,11 +1,9 @@
 from __future__ import annotations
 
-from typing import Optional
-
 from src.config.config import global_config, model_config
 
 
-def resolve_embedding_dimension(fallback: Optional[int] = None, *, sync_global: bool = True) -> Optional[int]:
+def resolve_embedding_dimension(fallback: int | None = None, *, sync_global: bool = True) -> int | None:
     """获取当前配置的嵌入向量维度。
 
     优先顺序：
@@ -14,7 +12,7 @@ def resolve_embedding_dimension(fallback: Optional[int] = None, *, sync_global: 
     3. 调用方提供的 fallback
     """
 
-    candidates: list[Optional[int]] = []
+    candidates: list[int | None] = []
 
     try:
         embedding_task = getattr(model_config.model_task_config, "embedding", None)
@@ -30,7 +28,7 @@ def resolve_embedding_dimension(fallback: Optional[int] = None, *, sync_global: 
 
     candidates.append(fallback)
 
-    resolved: Optional[int] = next((int(dim) for dim in candidates if dim and int(dim) > 0), None)
+    resolved: int | None = next((int(dim) for dim in candidates if dim and int(dim) > 0), None)
 
     if resolved and sync_global:
         try:

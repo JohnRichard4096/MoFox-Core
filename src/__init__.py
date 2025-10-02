@@ -1,13 +1,15 @@
 import random
-from typing import List, Optional, Sequence
-from colorama import init, Fore
+from collections.abc import Sequence
+from typing import List, Optional
+
+from colorama import Fore, init
 
 from src.common.logger import get_logger
 
 egg = get_logger("小彩蛋")
 
 
-def weighted_choice(data: Sequence[str], weights: Optional[List[float]] = None) -> str:
+def weighted_choice(data: Sequence[str], weights: list[float] | None = None) -> str:
     """
     从 data 中按权重随机返回一条。
     若 weights 为 None，则所有元素权重默认为 1。

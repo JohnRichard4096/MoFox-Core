@@ -1,6 +1,6 @@
-from src.llm_models.utils_model import LLMRequest
 from src.common.logger import get_logger
 from src.config.config import model_config
+from src.llm_models.utils_model import LLMRequest
 from src.plugin_system.apis import send_api
 
 logger = get_logger(__name__)

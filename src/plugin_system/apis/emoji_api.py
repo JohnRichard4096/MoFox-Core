@@ -10,10 +10,9 @@
 
 import random
 
-from typing import Optional, Tuple, List
-from src.common.logger import get_logger
 from src.chat.emoji_system.emoji_manager import get_emoji_manager
 from src.chat.utils.utils_image import image_path_to_base64
+from src.common.logger import get_logger
 
 logger = get_logger("emoji_api")
 
@@ -23,7 +22,7 @@ logger = get_logger("emoji_api")
 # =============================================================================
 
 
-async def get_by_description(description: str) -> Optional[Tuple[str, str, str]]:
+async def get_by_description(description: str) -> tuple[str, str, str] | None:
     """根据描述选择表情包
 
     Args:
@@ -65,7 +64,7 @@ async def get_by_description(description: str) -> Optional[Tuple[str, str, str]]
         return None
 
 
-async def get_random(count: Optional[int] = 1) -> List[Tuple[str, str, str]]:
+async def get_random(count: int | None = 1) -> list[tuple[str, str, str]]:
     """随机获取指定数量的表情包
 
     Args:
@@ -137,7 +136,7 @@ async def get_random(count: Optional[int] = 1) -> List[Tuple[str, str, str]]:
         return []
 
 
-async def get_by_emotion(emotion: str) -> Optional[Tuple[str, str, str]]:
+async def get_by_emotion(emotion: str) -> tuple[str, str, str] | None:
     """根据情感标签获取表情包
 
     Args:
@@ -227,7 +226,7 @@ def get_info():
         return {"current_count": 0, "max_count": 0, "available_emojis": 0}
 
 
-def get_emotions() -> List[str]:
+def get_emotions() -> list[str]:
     """获取所有可用的情感标签
 
     Returns:
@@ -247,7 +246,7 @@ def get_emotions() -> List[str]:
         return []
 
 
-def get_descriptions() -> List[str]:
+def get_descriptions() -> list[str]:
     """获取所有表情包描述
 
     Returns:

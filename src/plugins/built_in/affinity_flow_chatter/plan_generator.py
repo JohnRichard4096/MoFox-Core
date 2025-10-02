@@ -3,7 +3,6 @@ PlanGenerator: 负责搜集和汇总所有决策所需的信息，生成一个�
 """
 
 import time
-from typing import Dict
 
 from src.chat.utils.chat_message_builder import get_raw_msg_before_timestamp_with_chat
 from src.chat.utils.utils import get_chat_type_and_target_info
@@ -85,7 +84,7 @@ class ChatterPlanGenerator:
                 chat_history=[],
             )
 
-    async def _get_available_actions(self, chat_type: ChatType, mode: ChatMode) -> Dict[str, ActionInfo]:
+    async def _get_available_actions(self, chat_type: ChatType, mode: ChatMode) -> dict[str, ActionInfo]:
         """
         获取当前可用的动作列表。
 
@@ -152,7 +151,7 @@ class ChatterPlanGenerator:
             # 如果获取失败，返回空列表
             return []
 
-    def get_generator_stats(self) -> Dict:
+    def get_generator_stats(self) -> dict:
         """
         获取生成器统计信息。
 

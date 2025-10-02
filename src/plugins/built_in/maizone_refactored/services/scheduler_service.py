@@ -1,4 +1,3 @@
-# -*- coding: utf-8 -*-
 """
 定时任务服务
 根据日程表定时发送说说。
@@ -8,13 +7,14 @@ import asyncio
 import datetime
 import random
 import traceback
-from typing import Callable
+from collections.abc import Callable
 
+from sqlalchemy import select
+
+from src.common.database.sqlalchemy_database_api import get_db_session
+from src.common.database.sqlalchemy_models import MaiZoneScheduleStatus
 from src.common.logger import get_logger
 from src.schedule.schedule_manager import schedule_manager
-from src.common.database.sqlalchemy_database_api import get_db_session
-from sqlalchemy import select
-from src.common.database.sqlalchemy_models import MaiZoneScheduleStatus
 
 from .qzone_service import QZoneService
 

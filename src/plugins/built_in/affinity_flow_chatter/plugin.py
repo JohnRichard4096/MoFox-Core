@@ -2,12 +2,10 @@
 亲和力聊天处理器插件
 """
 
-from typing import List, Tuple, Type
-
+from src.common.logger import get_logger
 from src.plugin_system.apis.plugin_register_api import register_plugin
 from src.plugin_system.base.base_plugin import BasePlugin
 from src.plugin_system.base.component_types import ComponentInfo
-from src.common.logger import get_logger
 
 logger = get_logger("affinity_chatter_plugin")
 
@@ -29,7 +27,7 @@ class AffinityChatterPlugin(BasePlugin):
     # 简单的 config_schema 占位（如果将来需要配置可扩展）
     config_schema = {}
 
-    def get_plugin_components(self) -> List[Tuple[ComponentInfo, Type]]:
+    def get_plugin_components(self) -> list[tuple[ComponentInfo, type]]:
         """返回插件包含的组件列表（ChatterInfo, AffinityChatter）
 
         这里采用延迟导入 AffinityChatter 来避免循环依赖和启动顺序问题。

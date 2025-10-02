@@ -4,24 +4,24 @@
 """
 
 from .energy_manager import (
-    EnergyManager,
-    EnergyLevel,
-    EnergyComponent,
-    EnergyCalculator,
-    InterestEnergyCalculator,
     ActivityEnergyCalculator,
+    EnergyCalculator,
+    EnergyComponent,
+    EnergyLevel,
+    EnergyManager,
+    InterestEnergyCalculator,
     RecencyEnergyCalculator,
     RelationshipEnergyCalculator,
     energy_manager,
 )
 
 __all__ = [
-    "EnergyManager",
-    "EnergyLevel",
-    "EnergyComponent",
-    "EnergyCalculator",
-    "InterestEnergyCalculator",
     "ActivityEnergyCalculator",
+    "EnergyCalculator",
+    "EnergyComponent",
+    "EnergyLevel",
+    "EnergyManager",
+    "InterestEnergyCalculator",
     "RecencyEnergyCalculator",
     "RelationshipEnergyCalculator",
     "energy_manager",

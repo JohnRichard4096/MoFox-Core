@@ -8,8 +8,9 @@
 """
 
 from typing import Any
+
 from src.common.logger import get_logger
-from src.person_info.person_info import Person
+from src.person_info.person_info import PersonInfoManager, get_person_info_manager
 
 logger = get_logger("person_api")
 
@@ -63,7 +64,7 @@ async def get_person_value(person_id: str, field_name: str, default: Any = None)
         return default
 
 
-async def get_person_values(person_id: str, field_names: list, default_dict: Optional[dict] = None) -> dict:
+async def get_person_values(person_id: str, field_names: list, default_dict: dict | None = None) -> dict:
     """批量获取用户信息字段值
 
     Args:

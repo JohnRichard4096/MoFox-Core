@@ -1,32 +1,33 @@
-# -*- coding: utf-8 -*-
 """
 QQ空间服务模块
 封装了所有与QQ空间API的直接交互，是插件的核心业务逻辑层。
 """
 
 import asyncio
-import orjson
+import base64
 import os
 import random
 import time
-import base64
+from collections.abc import Callable
 from pathlib import Path
-from typing import Callable, Optional, Dict, Any, List, Tuple
+from typing import Any
 
 import aiohttp
 import bs4
 import json5
-from src.common.logger import get_logger
-from src.plugin_system.apis import config_api, person_api
+import orjson
+
 from src.chat.message_receive.chat_stream import get_chat_manager
 from src.chat.utils.chat_message_builder import (
     build_readable_messages_with_id,
     get_raw_msg_by_timestamp_with_chat,
 )
+from src.common.logger import get_logger
+from src.plugin_system.apis import config_api, person_api
 
 from .content_service import ContentService
-from .image_service import ImageService
 from .cookie_service import CookieService
+from .image_service import ImageService
 from .reply_tracker_service import ReplyTrackerService
 
 logger = get_logger("MaiZone.QZoneService")
@@ -64,7 +65,7 @@ class QZoneService:
 
     # --- Public Methods (High-Level Business Logic) ---
 
-    async def send_feed(self, topic: str, stream_id: Optional[str]) -> Dict[str, Any]:
+    async def send_feed(self, topic: str, stream_id: str | None) -> dict[str, Any]:
         """发送一条说说"""
         # --- 获取互通组上下文 ---
         context = await self._get_intercom_context(stream_id) if stream_id else None
@@ -92,7 +93,7 @@ class QZoneService:
             logger.error(f"发布说说时发生异常: {e}", exc_info=True)
             return {"success": False, "message": f"发布说说异常: {e}"}
 
-    async def send_feed_from_activity(self, activity: str) -> Dict[str, Any]:
+    async def send_feed_from_activity(self, activity: str) -> dict[str, Any]:
         """根据日程活动发送一条说说"""
         story = await self.content_service.generate_story_from_activity(activity)
         if not story:
@@ -118,7 +119,7 @@ class QZoneService:
             logger.error(f"根据活动发布说说时发生异常: {e}", exc_info=True)
             return {"success": False, "message": f"发布说说异常: {e}"}
 
-    async def read_and_process_feeds(self, target_name: str, stream_id: Optional[str]) -> Dict[str, Any]:
+    async def read_and_process_feeds(self, target_name: str, stream_id: str | None) -> dict[str, Any]:
         """读取并处理指定好友的说说"""
         target_person_id = await person_api.get_person_id_by_name(target_name)
         if not target_person_id:
@@ -147,7 +148,7 @@ class QZoneService:
             logger.error(f"读取和处理说说时发生异常: {e}", exc_info=True)
             return {"success": False, "message": f"处理说说异常: {e}"}
 
-    async def monitor_feeds(self, stream_id: Optional[str] = None):
+    async def monitor_feeds(self, stream_id: str | None = None):
         """监控并处理所有好友的动态，包括回复自己说说的评论"""
         logger.info("开始执行好友动态监控...")
         qq_account = config_api.get_global_config("bot.qq_account", "")
@@ -189,7 +190,7 @@ class QZoneService:
 
     # --- Internal Helper Methods ---
 
-    async def _get_intercom_context(self, stream_id: str) -> Optional[str]:
+    async def _get_intercom_context(self, stream_id: str) -> str | None:
         """
         根据 stream_id 查找其所属的互通组，并构建该组的聊天上下文。
 
@@ -247,7 +248,7 @@ class QZoneService:
         logger.debug(f"Stream ID '{stream_id}' 未在任何互通组中找到。")
         return None
 
-    async def _reply_to_own_feed_comments(self, feed: Dict, api_client: Dict):
+    async def _reply_to_own_feed_comments(self, feed: dict, api_client: dict):
         """处理对自己说说的评论并进行回复"""
         qq_account = config_api.get_global_config("bot.qq_account", "")
         comments = feed.get("comments", [])
@@ -309,7 +310,7 @@ class QZoneService:
                 if comment_key in self.processing_comments:
                     self.processing_comments.remove(comment_key)
 
-    async def _validate_and_cleanup_reply_records(self, fid: str, my_replies: List[Dict]):
+    async def _validate_and_cleanup_reply_records(self, fid: str, my_replies: list[dict]):
         """验证并清理已删除的回复记录"""
         # 获取当前记录中该说说的所有已回复评论ID
         recorded_replied_comments = self.reply_tracker.get_replied_comments(fid)
@@ -333,7 +334,7 @@ class QZoneService:
                 self.reply_tracker.remove_reply_record(fid, comment_tid)
                 logger.debug(f"已清理删除的回复记录: feed_id={fid}, comment_id={comment_tid}")
 
-    async def _process_single_feed(self, feed: Dict, api_client: Dict, target_qq: str, target_name: str):
+    async def _process_single_feed(self, feed: dict, api_client: dict, target_qq: str, target_name: str):
         """处理单条说说，决定是否评论和点赞"""
         content = feed.get("content", "")
         fid = feed.get("tid", "")
@@ -371,7 +372,7 @@ class QZoneService:
         if random.random() <= self.get_config("read.like_possibility", 1.0):
             await api_client["like"](target_qq, fid)
 
-    def _load_local_images(self, image_dir: str) -> List[bytes]:
+    def _load_local_images(self, image_dir: str) -> list[bytes]:
         """随机加载本地图片（不删除文件）"""
         images = []
         if not image_dir or not os.path.exists(image_dir):
@@ -432,7 +433,7 @@ class QZoneService:
             hash_val += (hash_val << 5) + ord(char)
         return str(hash_val & 2147483647)
 
-    async def _renew_and_load_cookies(self, qq_account: str, stream_id: Optional[str]) -> Optional[Dict[str, str]]:
+    async def _renew_and_load_cookies(self, qq_account: str, stream_id: str | None) -> dict[str, str] | None:
         cookie_dir = Path(__file__).resolve().parent.parent / "cookies"
         cookie_dir.mkdir(exist_ok=True)
         cookie_file_path = cookie_dir / f"cookies-{qq_account}.json"
@@ -480,7 +481,7 @@ class QZoneService:
         logger.error("所有获取Cookie的方式均失败。")
         return None
 
-    async def _fetch_cookies_http(self, host: str, port: int, napcat_token: str) -> Optional[Dict]:
+    async def _fetch_cookies_http(self, host: str, port: int, napcat_token: str) -> dict | None:
         """通过HTTP服务器获取Cookie"""
         # 从配置中读取主机和端口，如果未提供则使用传入的参数
         final_host = self.get_config("cookie.http_fallback_host", host)
@@ -515,19 +516,19 @@ class QZoneService:
 
             except aiohttp.ClientError as e:
                 if attempt < max_retries - 1:
-                    logger.warning(f"无法连接到Napcat服务(尝试 {attempt + 1}/{max_retries}): {url}，错误: {str(e)}")
+                    logger.warning(f"无法连接到Napcat服务(尝试 {attempt + 1}/{max_retries}): {url}，错误: {e!s}")
                     await asyncio.sleep(retry_delay)
                     retry_delay *= 2
                     continue
-                logger.error(f"无法连接到Napcat服务(最终尝试): {url}，错误: {str(e)}")
+                logger.error(f"无法连接到Napcat服务(最终尝试): {url}，错误: {e!s}")
                 raise RuntimeError(f"无法连接到Napcat服务: {url}") from e
             except Exception as e:
-                logger.error(f"获取cookie异常: {str(e)}")
+                logger.error(f"获取cookie异常: {e!s}")
                 raise
 
         raise RuntimeError(f"无法连接到Napcat服务: 超过最大重试次数({max_retries})")
 
-    async def _get_api_client(self, qq_account: str, stream_id: Optional[str]) -> Optional[Dict]:
+    async def _get_api_client(self, qq_account: str, stream_id: str | None) -> dict | None:
         cookies = await self.cookie_service.get_cookies(qq_account, stream_id)
         if not cookies:
             logger.error(
@@ -559,7 +560,7 @@ class QZoneService:
                     response.raise_for_status()
                     return await response.text()
 
-        async def _publish(content: str, images: List[bytes]) -> Tuple[bool, str]:
+        async def _publish(content: str, images: list[bytes]) -> tuple[bool, str]:
             """发布说说"""
             try:
                 post_data = {
@@ -660,7 +661,7 @@ class QZoneService:
 
             return picbo, richval
 
-        async def _upload_image(image_bytes: bytes, index: int) -> Optional[Dict[str, str]]:
+        async def _upload_image(image_bytes: bytes, index: int) -> dict[str, str] | None:
             """上传图片到QQ空间（完全按照原版实现）"""
             try:
                 upload_url = "https://up.qzone.qq.com/cgi-bin/upload/cgi_upload_image"
@@ -745,7 +746,7 @@ class QZoneService:
                 logger.error(f"上传图片 {index + 1} 异常: {e}", exc_info=True)
                 return None
 
-        async def _list_feeds(t_qq: str, num: int) -> List[Dict]:
+        async def _list_feeds(t_qq: str, num: int) -> list[dict]:
             """获取指定用户说说列表 (统一接口)"""
             try:
                 # 统一使用 format=json 获取完整评论
@@ -920,7 +921,7 @@ class QZoneService:
                 logger.error(f"回复评论异常: {e}", exc_info=True)
                 return False
 
-        async def _monitor_list_feeds(num: int) -> List[Dict]:
+        async def _monitor_list_feeds(num: int) -> list[dict]:
             """监控好友动态"""
             try:
                 params = {

@@ -1,14 +1,12 @@
-# -*- coding: utf-8 -*-
 """
 阅读说说动作组件
 """
 
-from typing import Tuple
-
 from src.common.logger import get_logger
-from src.plugin_system import BaseAction, ActionActivationType, ChatMode
+from src.plugin_system import ActionActivationType, BaseAction, ChatMode
 from src.plugin_system.apis import generator_api
 from src.plugin_system.apis.permission_api import permission_api
+
 from ..services.manager import get_qzone_service
 
 logger = get_logger("MaiZone.ReadFeedAction")
@@ -41,7 +39,7 @@ class ReadFeedAction(BaseAction):
         # 使用权限API检查用户是否有阅读说说的权限
         return await permission_api.check_permission(platform, user_id, "plugin.maizone.read_feed")
 
-    async def execute(self) -> Tuple[bool, str]:
+    async def execute(self) -> tuple[bool, str]:
         """
         执行动作的核心逻辑。
         """

@@ -16,8 +16,7 @@ Chat Frequency Analyzer
 """
 
 import time as time_module
-from datetime import datetime, timedelta, time
-from typing import List, Tuple, Optional
+from datetime import datetime, time, timedelta
 
 from .tracker import chat_frequency_tracker
 
@@ -42,7 +41,7 @@ class ChatFrequencyAnalyzer:
         self._cache_ttl_seconds = 60 * 30  # 缓存30分钟
 
     @staticmethod
-    def _find_peak_windows(timestamps: List[float]) -> List[Tuple[datetime, datetime]]:
+    def _find_peak_windows(timestamps: list[float]) -> list[tuple[datetime, datetime]]:
         """
         使用滑动窗口算法来识别时间戳列表中的高峰时段。
 
@@ -59,7 +58,7 @@ class ChatFrequencyAnalyzer:
         datetimes = [datetime.fromtimestamp(ts) for ts in timestamps]
         datetimes.sort()
 
-        peak_windows: List[Tuple[datetime, datetime]] = []
+        peak_windows: list[tuple[datetime, datetime]] = []
         window_start_idx = 0
 
         for i in range(len(datetimes)):
@@ -83,7 +82,7 @@ class ChatFrequencyAnalyzer:
 
         return peak_windows
 
-    def get_peak_chat_times(self, chat_id: str) -> List[Tuple[time, time]]:
+    def get_peak_chat_times(self, chat_id: str) -> list[tuple[time, time]]:
         """
         获取指定用户的高峰聊天时间段。
 
@@ -116,7 +115,7 @@ class ChatFrequencyAnalyzer:
 
         return peak_time_windows
 
-    def is_in_peak_time(self, chat_id: str, now: Optional[datetime] = None) -> bool:
+    def is_in_peak_time(self, chat_id: str, now: datetime | None = None) -> bool:
         """
         检查当前时间是否处于用户的高峰聊天时段内。
 

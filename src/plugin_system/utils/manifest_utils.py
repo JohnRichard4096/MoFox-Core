@@ -5,7 +5,8 @@
 """
 
 import re
-from typing import Dict, Any, Tuple
+from typing import Any
+
 from src.common.logger import get_logger
 from src.config.config import MMC_VERSION
 
@@ -70,7 +71,7 @@ class VersionComparator:
         return normalized
 
     @staticmethod
-    def parse_version(version: str) -> Tuple[int, int, int]:
+    def parse_version(version: str) -> tuple[int, int, int]:
         """解析版本号为元组
 
         Args:
@@ -109,7 +110,7 @@ class VersionComparator:
             return 0
 
     @staticmethod
-    def check_forward_compatibility(current_version: str, max_version: str) -> Tuple[bool, str]:
+    def check_forward_compatibility(current_version: str, max_version: str) -> tuple[bool, str]:
         """检查向前兼容性（仅使用兼容性映射表）
 
         Args:
@@ -131,7 +132,7 @@ class VersionComparator:
         return False, ""
 
     @staticmethod
-    def is_version_in_range(version: str, min_version: str = "", max_version: str = "") -> Tuple[bool, str]:
+    def is_version_in_range(version: str, min_version: str = "", max_version: str = "") -> tuple[bool, str]:
         """检查版本是否在指定范围内，支持兼容性检查
 
         Args:
@@ -195,7 +196,7 @@ class VersionComparator:
         logger.info(f"添加兼容性映射：{base_normalized} -> {compatible_versions}")
 
     @staticmethod
-    def get_compatibility_info() -> Dict[str, list]:
+    def get_compatibility_info() -> dict[str, list]:
         """获取当前的兼容性映射表
 
         Returns:
@@ -232,7 +233,7 @@ class ManifestValidator:
         self.validation_errors = []
         self.validation_warnings = []
 
-    def validate_manifest(self, manifest_data: Dict[str, Any]) -> bool:
+    def validate_manifest(self, manifest_data: dict[str, Any]) -> bool:
         """验证manifest数据
 
         Args:
@@ -266,7 +267,7 @@ class ManifestValidator:
                 if "name" not in author or not author["name"]:
                     self.validation_errors.append("作者信息缺少name字段或为空")
                 # url字段是可选的
-                if "url" in author and author["url"]:
+                if author.get("url"):
                     url = author["url"]
                     if not (url.startswith("http://") or url.startswith("https://")):
                         self.validation_warnings.append("作者URL建议使用完整的URL格式")
@@ -305,7 +306,7 @@ class ManifestValidator:
 
         # 检查URL格式（可选字段）
         for url_field in ["homepage_url", "repository_url"]:
-            if url_field in manifest_data and manifest_data[url_field]:
+            if manifest_data.get(url_field):
                 url: str = manifest_data[url_field]
                 if not (url.startswith("http://") or url.startswith("https://")):
                     self.validation_warnings.append(f"{url_field}建议使用完整的URL格式")

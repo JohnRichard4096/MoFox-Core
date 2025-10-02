@@ -4,10 +4,10 @@
 提供统一的异步数据库初始化接口
 """
 
-from typing import Optional
 from sqlalchemy.exc import SQLAlchemyError
-from src.common.logger import get_logger
+
 from src.common.database.sqlalchemy_models import Base, get_engine, initialize_database
+from src.common.logger import get_logger
 
 logger = get_logger("sqlalchemy_init")
 
@@ -71,7 +71,7 @@ async def create_all_tables() -> bool:
         return False
 
 
-async def get_database_info() -> Optional[dict]:
+async def get_database_info() -> dict | None:
     """
     异步获取数据库信息
 

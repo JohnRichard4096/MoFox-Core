@@ -8,9 +8,9 @@
 - 测试功能
 """
 
-from src.plugin_system.base import BaseCommand
 from src.chat.antipromptinjector import get_anti_injector
 from src.common.logger import get_logger
+from src.plugin_system.base import BaseCommand
 
 logger = get_logger("anti_injector.commands")
 
@@ -56,5 +56,5 @@ class AntiInjectorStatusCommand(BaseCommand):
 
         except Exception as e:
             logger.error(f"获取反注入系统状态失败: {e}")
-            await self.send_text(f"获取状态失败: {str(e)}")
-            return False, f"获取状态失败: {str(e)}", True
+            await self.send_text(f"获取状态失败: {e!s}")
+            return False, f"获取状态失败: {e!s}", True

@@ -1,14 +1,15 @@
-# -*- coding: utf-8 -*-
 """
 服务管理器/定位器
 这是一个独立的模块，用于注册和获取插件内的全局服务实例，以避免循环导入。
 """
 
-from typing import Dict, Any, Callable
+from collections.abc import Callable
+from typing import Any
+
 from .qzone_service import QZoneService
 
 # --- 全局服务注册表 ---
-_services: Dict[str, Any] = {}
+_services: dict[str, Any] = {}
 
 
 def register_service(name: str, instance: Any):

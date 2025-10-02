@@ -1,17 +1,16 @@
 import time
 import traceback
-import orjson
+from typing import Any
 
-from typing import List, Dict, Any
+import orjson
 from json_repair import repair_json
 
+from src.chat.message_receive.chat_stream import get_chat_manager
+from src.chat.utils.prompt import Prompt, global_prompt_manager
 from src.common.logger import get_logger
 from src.config.config import global_config, model_config
 from src.llm_models.utils_model import LLMRequest
-from src.chat.utils.prompt import Prompt, global_prompt_manager
-from src.chat.message_receive.chat_stream import get_chat_manager
 from src.person_info.person_info import get_person_info_manager
-
 
 logger = get_logger("relationship_fetcher")
 
@@ -64,10 +63,10 @@ class RelationshipFetcher:
         self.chat_id = chat_id
 
         # 信息获取缓存：记录正在获取的信息请求
-        self.info_fetching_cache: List[Dict[str, Any]] = []
+        self.info_fetching_cache: list[dict[str, Any]] = []
 
         # 信息结果缓存：存储已获取的信息结果，带TTL
-        self.info_fetched_cache: Dict[str, Dict[str, Any]] = {}
+        self.info_fetched_cache: dict[str, dict[str, Any]] = {}
         # 结构：{person_id: {info_type: {"info": str, "ttl": int, "start_time": float, "person_name": str, "unknown": bool}}}
 
         # LLM模型配置
@@ -475,7 +474,7 @@ class RelationshipFetcherManager:
     """
 
     def __init__(self):
-        self._fetchers: Dict[str, RelationshipFetcher] = {}
+        self._fetchers: dict[str, RelationshipFetcher] = {}
 
     def get_fetcher(self, chat_id: str) -> RelationshipFetcher:
         """获取或创建指定 chat_id 的 RelationshipFetcher
@@ -503,7 +502,7 @@ class RelationshipFetcherManager:
         """清空所有 RelationshipFetcher"""
         self._fetchers.clear()
 
-    def get_active_chat_ids(self) -> List[str]:
+    def get_active_chat_ids(self) -> list[str]:
         """获取所有活跃的 chat_id 列表"""
         return list(self._fetchers.keys())
 

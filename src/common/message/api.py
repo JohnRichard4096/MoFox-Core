@@ -1,9 +1,11 @@
-from src.common.server import get_global_server
 import importlib.metadata
-from maim_message import MessageServer
-from src.common.logger import get_logger
-from src.config.config import global_config
 import os
+
+from maim_message import MessageServer
+
+from src.common.logger import get_logger
+from src.common.server import get_global_server
+from src.config.config import global_config
 
 global_api = None
 

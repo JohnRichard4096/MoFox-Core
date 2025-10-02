@@ -6,19 +6,20 @@
 import asyncio
 import random
 import time
-from typing import Dict, Optional, Any, TYPE_CHECKING, List
+from typing import TYPE_CHECKING, Any
 
+from src.chat.chatter_manager import ChatterManager
 from src.chat.message_receive.chat_stream import ChatStream
-from src.common.logger import get_logger
+from src.chat.planner_actions.action_manager import ChatterActionManager
 from src.common.data_models.database_data_model import DatabaseMessages
 from src.common.data_models.message_manager_data_model import MessageManagerStats, StreamStats
-from src.chat.chatter_manager import ChatterManager
-from src.chat.planner_actions.action_manager import ChatterActionManager
-from .sleep_manager.sleep_manager import SleepManager
-from .sleep_manager.wakeup_manager import WakeUpManager
+from src.common.logger import get_logger
 from src.config.config import global_config
 from src.plugin_system.apis.chat_api import get_chat_manager
+
 from .distribution_manager import stream_loop_manager
+from .sleep_manager.sleep_manager import SleepManager
+from .sleep_manager.wakeup_manager import WakeUpManager
 
 if TYPE_CHECKING:
     pass
@@ -32,7 +33,7 @@ class MessageManager:
     def __init__(self, check_interval: float = 5.0):
         self.check_interval = check_interval  # 检查间隔（秒）
         self.is_running = False
-        self.manager_task: Optional[asyncio.Task] = None
+        self.manager_task: asyncio.Task | None = None
 
         # 统计信息
         self.stats = MessageManagerStats()
@@ -125,7 +126,7 @@ class MessageManager:
         except Exception as e:
             logger.error(f"更新消息 {message_id} 时发生错误: {e}")
 
-    async def bulk_update_messages(self, stream_id: str, updates: List[Dict[str, Any]]) -> int:
+    async def bulk_update_messages(self, stream_id: str, updates: list[dict[str, Any]]) -> int:
         """批量更新消息信息，降低更新频率"""
         if not updates:
             return 0
@@ -214,7 +215,7 @@ class MessageManager:
         except Exception as e:
             logger.error(f"激活聊天流 {stream_id} 时发生错误: {e}")
 
-    def get_stream_stats(self, stream_id: str) -> Optional[StreamStats]:
+    def get_stream_stats(self, stream_id: str) -> StreamStats | None:
         """获取聊天流统计"""
         try:
             # 通过 ChatManager 获取 ChatStream
@@ -243,7 +244,7 @@ class MessageManager:
             logger.error(f"获取聊天流 {stream_id} 统计时发生错误: {e}")
             return None
 
-    def get_manager_stats(self) -> Dict[str, Any]:
+    def get_manager_stats(self) -> dict[str, Any]:
         """获取管理器统计"""
         return {
             "total_streams": self.stats.total_streams,
@@ -278,7 +279,7 @@ class MessageManager:
         except Exception as e:
             logger.error(f"清理不活跃聊天流时发生错误: {e}")
 
-    async def _check_and_handle_interruption(self, chat_stream: Optional[ChatStream] = None):
+    async def _check_and_handle_interruption(self, chat_stream: ChatStream | None = None):
         """检查并处理消息打断"""
         if not global_config.chat.interruption_enabled:
             return

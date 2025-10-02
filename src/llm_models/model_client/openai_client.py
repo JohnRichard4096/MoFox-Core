@@ -1,17 +1,17 @@
 import asyncio
-import io
-import orjson
-import re
 import base64
-from collections.abc import Iterable
-from typing import Callable, Any, Coroutine, Optional
-from json_repair import repair_json
+import io
+import re
+from collections.abc import Callable, Coroutine, Iterable
+from typing import Any
 
+import orjson
+from json_repair import repair_json
 from openai import (
-    AsyncOpenAI,
+    NOT_GIVEN,
     APIConnectionError,
     APIStatusError,
-    NOT_GIVEN,
+    AsyncOpenAI,
     AsyncStream,
 )
 from openai.types.chat import (
@@ -22,18 +22,19 @@ from openai.types.chat import (
 )
 from openai.types.chat.chat_completion_chunk import ChoiceDelta
 
-from src.config.api_ada_configs import ModelInfo, APIProvider
 from src.common.logger import get_logger
-from .base_client import APIResponse, UsageRecord, BaseClient, client_registry
+from src.config.api_ada_configs import APIProvider, ModelInfo
+
 from ..exceptions import (
-    RespParseException,
     NetworkConnectionError,
-    RespNotOkException,
     ReqAbortException,
+    RespNotOkException,
+    RespParseException,
 )
 from ..payload_content.message import Message, RoleType
 from ..payload_content.resp_format import RespFormat
-from ..payload_content.tool_option import ToolOption, ToolParam, ToolCall
+from ..payload_content.tool_option import ToolCall, ToolOption, ToolParam
+from .base_client import APIResponse, BaseClient, UsageRecord, client_registry
 
 logger = get_logger("OpenAI客户端")
 
@@ -241,7 +242,7 @@ def _build_stream_api_resp(
 async def _default_stream_response_handler(
     resp_stream: AsyncStream[ChatCompletionChunk],
     interrupt_flag: asyncio.Event | None,
-) -> tuple[APIResponse, Optional[tuple[int, int, int]]]:
+) -> tuple[APIResponse, tuple[int, int, int] | None]:
     """
     流式响应处理函数 - 处理OpenAI API的流式响应
     :param resp_stream: 流式响应对象
@@ -323,7 +324,7 @@ pattern = re.compile(
 
 def _default_normal_response_parser(
     resp: ChatCompletion,
-) -> tuple[APIResponse, Optional[tuple[int, int, int]]]:
+) -> tuple[APIResponse, tuple[int, int, int] | None]:
     """
     解析对话补全响应 - 将OpenAI API响应解析为APIResponse对象
     :param resp: 响应对象
@@ -402,15 +403,13 @@ class OpenaiClient(BaseClient):
         max_tokens: int = 1024,
         temperature: float = 0.7,
         response_format: RespFormat | None = None,
-        stream_response_handler: Optional[
-            Callable[
-                [AsyncStream[ChatCompletionChunk], asyncio.Event | None],
-                Coroutine[Any, Any, tuple[APIResponse, Optional[tuple[int, int, int]]]],
-            ]
-        ] = None,
-        async_response_parser: Optional[
-            Callable[[ChatCompletion], tuple[APIResponse, Optional[tuple[int, int, int]]]]
-        ] = None,
+        stream_response_handler: Callable[
+            [AsyncStream[ChatCompletionChunk], asyncio.Event | None],
+            Coroutine[Any, Any, tuple[APIResponse, tuple[int, int, int] | None]],
+        ]
+        | None = None,
+        async_response_parser: Callable[[ChatCompletion], tuple[APIResponse, tuple[int, int, int] | None]]
+        | None = None,
         interrupt_flag: asyncio.Event | None = None,
         extra_params: dict[str, Any] | None = None,
     ) -> APIResponse:
@@ -527,17 +526,17 @@ class OpenaiClient(BaseClient):
             )
         except APIConnectionError as e:
             # 添加详细的错误信息以便调试
-            logger.error(f"OpenAI API连接错误（嵌入模型）: {str(e)}")
+            logger.error(f"OpenAI API连接错误（嵌入模型）: {e!s}")
             logger.error(f"错误类型: {type(e)}")
             if hasattr(e, "__cause__") and e.__cause__:
-                logger.error(f"底层错误: {str(e.__cause__)}")
+                logger.error(f"底层错误: {e.__cause__!s}")
             raise NetworkConnectionError() from e
         except APIStatusError as e:
             # 重封装APIError为RespNotOkException
             raise RespNotOkException(e.status_code) from e
         except Exception as e:
             # 添加通用异常处理和日志记录
-            logger.error(f"获取嵌入时发生未知错误: {str(e)}")
+            logger.error(f"获取嵌入时发生未知错误: {e!s}")
             logger.error(f"错误类型: {type(e)}")
             raise
 

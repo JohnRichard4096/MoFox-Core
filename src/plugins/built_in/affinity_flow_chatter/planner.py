@@ -4,22 +4,20 @@
 """
 
 from dataclasses import asdict
-from typing import TYPE_CHECKING, Any, Dict, List, Optional, Tuple
-
-from src.plugins.built_in.affinity_flow_chatter.plan_executor import ChatterPlanExecutor
-from src.plugins.built_in.affinity_flow_chatter.plan_filter import ChatterPlanFilter
-from src.plugins.built_in.affinity_flow_chatter.plan_generator import ChatterPlanGenerator
-from src.plugins.built_in.affinity_flow_chatter.interest_scoring import chatter_interest_scoring_system
-from src.mood.mood_manager import mood_manager
-
+from typing import TYPE_CHECKING, Any
 
 from src.common.logger import get_logger
 from src.config.config import global_config
+from src.mood.mood_manager import mood_manager
+from src.plugins.built_in.affinity_flow_chatter.interest_scoring import chatter_interest_scoring_system
+from src.plugins.built_in.affinity_flow_chatter.plan_executor import ChatterPlanExecutor
+from src.plugins.built_in.affinity_flow_chatter.plan_filter import ChatterPlanFilter
+from src.plugins.built_in.affinity_flow_chatter.plan_generator import ChatterPlanGenerator
 
 if TYPE_CHECKING:
-    from src.common.data_models.message_manager_data_model import StreamContext
-    from src.common.data_models.info_data_model import Plan
     from src.chat.planner_actions.action_manager import ChatterActionManager
+    from src.common.data_models.info_data_model import Plan
+    from src.common.data_models.message_manager_data_model import StreamContext
 
 # 导入提示词模块以确保其被初始化
 from src.plugins.built_in.affinity_flow_chatter import planner_prompts  # noqa
@@ -62,7 +60,7 @@ class ChatterActionPlanner:
             "other_actions_executed": 0,
         }
 
-    async def plan(self, context: "StreamContext" = None) -> Tuple[List[Dict], Optional[Dict]]:
+    async def plan(self, context: "StreamContext" = None) -> tuple[list[dict], dict | None]:
         """
         执行完整的增强版规划流程。
 
@@ -84,7 +82,7 @@ class ChatterActionPlanner:
             self.planner_stats["failed_plans"] += 1
             return [], None
 
-    async def _enhanced_plan_flow(self, context: "StreamContext") -> Tuple[List[Dict], Optional[Dict]]:
+    async def _enhanced_plan_flow(self, context: "StreamContext") -> tuple[list[dict], dict | None]:
         """执行增强版规划流程"""
         try:
             # 在规划前，先进行动作修改
@@ -104,7 +102,7 @@ class ChatterActionPlanner:
             score = 0.0
             should_reply = False
             reply_not_available = False
-            interest_updates: List[Dict[str, Any]] = []
+            interest_updates: list[dict[str, Any]] = []
 
             if unread_messages:
                 # 为每条消息计算兴趣度，并延迟提交数据库更新
@@ -193,7 +191,7 @@ class ChatterActionPlanner:
             self.planner_stats["failed_plans"] += 1
             return [], None
 
-    async def _commit_interest_updates(self, updates: List[Dict[str, Any]]) -> None:
+    async def _commit_interest_updates(self, updates: list[dict[str, Any]]) -> None:
         """统一更新消息兴趣度，减少数据库写入次数"""
         if not updates:
             return
@@ -220,7 +218,7 @@ class ChatterActionPlanner:
         except Exception as e:
             logger.warning(f"批量更新数据库兴趣度失败: {e}")
 
-    def _update_stats_from_execution_result(self, execution_result: Dict[str, any]):
+    def _update_stats_from_execution_result(self, execution_result: dict[str, any]):
         """根据执行结果更新规划器统计"""
         if not execution_result:
             return
@@ -244,7 +242,7 @@ class ChatterActionPlanner:
         self.planner_stats["replies_generated"] += reply_count
         self.planner_stats["other_actions_executed"] += other_count
 
-    def _build_return_result(self, plan: "Plan") -> Tuple[List[Dict], Optional[Dict]]:
+    def _build_return_result(self, plan: "Plan") -> tuple[list[dict], dict | None]:
         """构建返回结果"""
         final_actions = plan.decided_actions or []
         final_target_message = next((act.action_message for act in final_actions if act.action_message), None)
@@ -261,7 +259,7 @@ class ChatterActionPlanner:
 
         return final_actions_dict, final_target_message_dict
 
-    def get_planner_stats(self) -> Dict[str, any]:
+    def get_planner_stats(self) -> dict[str, any]:
         """获取规划器统计"""
         return self.planner_stats.copy()
 
@@ -270,7 +268,7 @@ class ChatterActionPlanner:
         chat_mood = mood_manager.get_mood_by_chat_id(self.chat_id)
         return chat_mood.mood_state
 
-    def get_mood_stats(self) -> Dict[str, any]:
+    def get_mood_stats(self) -> dict[str, any]:
         """获取情绪状态统计"""
         chat_mood = mood_manager.get_mood_by_chat_id(self.chat_id)
         return {

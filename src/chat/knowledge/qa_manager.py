@@ -1,15 +1,16 @@
 import time
-from typing import Tuple, List, Dict, Optional, Any
+from typing import Any
 
-from .global_logger import logger
+from src.chat.utils.utils import get_embedding
+from src.config.config import global_config, model_config
+from src.llm_models.utils_model import LLMRequest
+
 from .embedding_store import EmbeddingManager
+from .global_logger import logger
 from .kg_manager import KGManager
 
 # from .lpmmconfig import global_config
 from .utils.dyn_topk import dyn_select_top_k
-from src.llm_models.utils_model import LLMRequest
-from src.chat.utils.utils import get_embedding
-from src.config.config import global_config, model_config
 
 MAX_KNOWLEDGE_LENGTH = 10000  # 最大知识长度
 
@@ -26,7 +27,7 @@ class QAManager:
 
     async def process_query(
         self, question: str
-    ) -> Optional[Tuple[List[Tuple[str, float, float]], Optional[Dict[str, float]]]]:
+    ) -> tuple[list[tuple[str, float, float]], dict[str, float] | None] | None:
         """处理查询"""
 
         # 生成问题的Embedding
@@ -98,7 +99,7 @@ class QAManager:
 
         return result, ppr_node_weights
 
-    async def get_knowledge(self, question: str) -> Optional[Dict[str, Any]]:
+    async def get_knowledge(self, question: str) -> dict[str, Any] | None:
         """
         获取知识，返回结构化字典
 

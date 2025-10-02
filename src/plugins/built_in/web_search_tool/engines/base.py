@@ -3,7 +3,7 @@ Base search engine interface
 """
 
 from abc import ABC, abstractmethod
-from typing import Dict, List, Any
+from typing import Any
 
 
 class BaseSearchEngine(ABC):
@@ -12,7 +12,7 @@ class BaseSearchEngine(ABC):
     """
 
     @abstractmethod
-    async def search(self, args: Dict[str, Any]) -> List[Dict[str, Any]]:
+    async def search(self, args: dict[str, Any]) -> list[dict[str, Any]]:
         """
         执行搜索
 

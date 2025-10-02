@@ -4,10 +4,10 @@
 """
 
 import time
-from typing import Dict, List, Optional, Tuple, Any, Union, TypedDict
+from abc import ABC, abstractmethod
 from dataclasses import dataclass, field
 from enum import Enum
-from abc import ABC, abstractmethod
+from typing import Any, TypedDict
 
 from src.common.logger import get_logger
 from src.config.config import global_config
@@ -51,8 +51,8 @@ class EnergyContext(TypedDict):
     """能量计算上下文"""
 
     stream_id: str
-    messages: List[Any]
-    user_id: Optional[str]
+    messages: list[Any]
+    user_id: str | None
 
 
 class EnergyResult(TypedDict):
@@ -61,7 +61,7 @@ class EnergyResult(TypedDict):
     energy: float
     level: EnergyLevel
     distribution_interval: float
-    component_scores: Dict[str, float]
+    component_scores: dict[str, float]
     cached: bool
 
 
@@ -69,7 +69,7 @@ class EnergyCalculator(ABC):
     """能量计算器抽象基类"""
 
     @abstractmethod
-    def calculate(self, context: Dict[str, Any]) -> float:
+    def calculate(self, context: dict[str, Any]) -> float:
         """计算能量值"""
         pass
 
@@ -82,7 +82,7 @@ class EnergyCalculator(ABC):
 class InterestEnergyCalculator(EnergyCalculator):
     """兴趣度能量计算器"""
 
-    def calculate(self, context: Dict[str, Any]) -> float:
+    def calculate(self, context: dict[str, Any]) -> float:
         """基于消息兴趣度计算能量"""
         messages = context.get("messages", [])
         if not messages:
@@ -120,7 +120,7 @@ class ActivityEnergyCalculator(EnergyCalculator):
     def __init__(self):
         self.action_weights = {"reply": 0.4, "react": 0.3, "mention": 0.2, "other": 0.1}
 
-    def calculate(self, context: Dict[str, Any]) -> float:
+    def calculate(self, context: dict[str, Any]) -> float:
         """基于活跃度计算能量"""
         messages = context.get("messages", [])
         if not messages:
@@ -150,7 +150,7 @@ class ActivityEnergyCalculator(EnergyCalculator):
 class RecencyEnergyCalculator(EnergyCalculator):
     """最近性能量计算器"""
 
-    def calculate(self, context: Dict[str, Any]) -> float:
+    def calculate(self, context: dict[str, Any]) -> float:
         """基于最近性计算能量"""
         messages = context.get("messages", [])
         if not messages:
@@ -197,7 +197,7 @@ class RecencyEnergyCalculator(EnergyCalculator):
 class RelationshipEnergyCalculator(EnergyCalculator):
     """关系能量计算器"""
 
-    async def calculate(self, context: Dict[str, Any]) -> float:
+    async def calculate(self, context: dict[str, Any]) -> float:
         """基于关系计算能量"""
         user_id = context.get("user_id")
         if not user_id:
@@ -223,7 +223,7 @@ class EnergyManager:
     """能量管理器 - 统一管理所有能量计算"""
 
     def __init__(self) -> None:
-        self.calculators: List[EnergyCalculator] = [
+        self.calculators: list[EnergyCalculator] = [
             InterestEnergyCalculator(),
             ActivityEnergyCalculator(),
             RecencyEnergyCalculator(),
@@ -231,14 +231,14 @@ class EnergyManager:
         ]
 
         # 能量缓存
-        self.energy_cache: Dict[str, Tuple[float, float]] = {}  # stream_id -> (energy, timestamp)
+        self.energy_cache: dict[str, tuple[float, float]] = {}  # stream_id -> (energy, timestamp)
         self.cache_ttl: int = 60  # 1分钟缓存
 
         # AFC阈值配置
-        self.thresholds: Dict[str, float] = {"high_match": 0.8, "reply": 0.4, "non_reply": 0.2}
+        self.thresholds: dict[str, float] = {"high_match": 0.8, "reply": 0.4, "non_reply": 0.2}
 
         # 统计信息
-        self.stats: Dict[str, Union[int, float, str]] = {
+        self.stats: dict[str, int | float | str] = {
             "total_calculations": 0,
             "cache_hits": 0,
             "cache_misses": 0,
@@ -272,7 +272,7 @@ class EnergyManager:
         except Exception as e:
             logger.warning(f"加载AFC阈值失败，使用默认值: {e}")
 
-    async def calculate_focus_energy(self, stream_id: str, messages: List[Any], user_id: Optional[str] = None) -> float:
+    async def calculate_focus_energy(self, stream_id: str, messages: list[Any], user_id: str | None = None) -> float:
         """计算聊天流的focus_energy"""
         start_time = time.time()
 
@@ -297,7 +297,7 @@ class EnergyManager:
         }
 
         # 计算各组件能量
-        component_scores: Dict[str, float] = {}
+        component_scores: dict[str, float] = {}
         total_weight = 0.0
 
         for calculator in self.calculators:
@@ -437,7 +437,7 @@ class EnergyManager:
         if expired_keys:
             logger.debug(f"清理了 {len(expired_keys)} 个过期能量缓存")
 
-    def get_statistics(self) -> Dict[str, Any]:
+    def get_statistics(self) -> dict[str, Any]:
         """获取统计信息"""
         return {
             "cache_size": len(self.energy_cache),
@@ -446,7 +446,7 @@ class EnergyManager:
             "performance_stats": self.stats.copy(),
         }
 
-    def update_thresholds(self, new_thresholds: Dict[str, float]) -> None:
+    def update_thresholds(self, new_thresholds: dict[str, float]) -> None:
         """更新阈值"""
         self.thresholds.update(new_thresholds)
 

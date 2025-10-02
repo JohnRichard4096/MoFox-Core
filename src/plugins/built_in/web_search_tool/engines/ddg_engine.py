@@ -2,10 +2,12 @@
 DuckDuckGo search engine implementation
 """
 
-from typing import Dict, List, Any
+from typing import Any
+
 from asyncddgs import aDDGS
 
 from src.common.logger import get_logger
+
 from .base import BaseSearchEngine
 
 logger = get_logger("ddg_engine")
@@ -20,7 +22,7 @@ class DDGSearchEngine(BaseSearchEngine):
         """检查DuckDuckGo搜索引擎是否可用"""
         return True  # DuckDuckGo不需要API密钥，总是可用
 
-    async def search(self, args: Dict[str, Any]) -> List[Dict[str, Any]]:
+    async def search(self, args: dict[str, Any]) -> list[dict[str, Any]]:
         """执行DuckDuckGo搜索"""
         query = args["query"]
         num_results = args.get("num_results", 3)

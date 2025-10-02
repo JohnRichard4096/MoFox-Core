@@ -5,12 +5,11 @@ PlanExecutor: 接收 Plan 对象并执行其中的所有动作。
 
 import asyncio
 import time
-from typing import Dict, List
 
-from src.config.config import global_config
 from src.chat.planner_actions.action_manager import ChatterActionManager
-from src.common.data_models.info_data_model import Plan, ActionPlannerInfo
+from src.common.data_models.info_data_model import ActionPlannerInfo, Plan
 from src.common.logger import get_logger
+from src.config.config import global_config
 
 logger = get_logger("plan_executor")
 
@@ -52,7 +51,7 @@ class ChatterPlanExecutor:
         """设置关系追踪器"""
         self.relationship_tracker = relationship_tracker
 
-    async def execute(self, plan: Plan) -> Dict[str, any]:
+    async def execute(self, plan: Plan) -> dict[str, any]:
         """
         遍历并执行Plan对象中`decided_actions`列表里的所有动作。
 
@@ -110,7 +109,7 @@ class ChatterPlanExecutor:
             "results": execution_results,
         }
 
-    async def _execute_reply_actions(self, reply_actions: List[ActionPlannerInfo], plan: Plan) -> Dict[str, any]:
+    async def _execute_reply_actions(self, reply_actions: list[ActionPlannerInfo], plan: Plan) -> dict[str, any]:
         """串行执行所有回复动作，增加去重逻辑，避免对同一消息多次回复"""
         results = []
 
@@ -162,7 +161,7 @@ class ChatterPlanExecutor:
 
     async def _execute_single_reply_action(
         self, action_info: ActionPlannerInfo, plan: Plan, clear_unread: bool = True
-    ) -> Dict[str, any]:
+    ) -> dict[str, any]:
         """执行单个回复动作"""
         start_time = time.time()
         success = False
@@ -240,7 +239,7 @@ class ChatterPlanExecutor:
             else reply_content,
         }
 
-    async def _execute_other_actions(self, other_actions: List[ActionPlannerInfo], plan: Plan) -> Dict[str, any]:
+    async def _execute_other_actions(self, other_actions: list[ActionPlannerInfo], plan: Plan) -> dict[str, any]:
         """执行其他动作"""
         results = []
 
@@ -269,7 +268,7 @@ class ChatterPlanExecutor:
 
         return {"results": results}
 
-    async def _execute_single_other_action(self, action_info: ActionPlannerInfo, plan: Plan) -> Dict[str, any]:
+    async def _execute_single_other_action(self, action_info: ActionPlannerInfo, plan: Plan) -> dict[str, any]:
         """执行单个其他动作"""
         start_time = time.time()
         success = False
@@ -378,7 +377,7 @@ class ChatterPlanExecutor:
             logger.debug(f"action_message类型: {type(action_info.action_message)}")
             logger.debug(f"action_message内容: {action_info.action_message}")
 
-    def get_execution_stats(self) -> Dict[str, any]:
+    def get_execution_stats(self) -> dict[str, any]:
         """获取执行统计信息"""
         stats = self.execution_stats.copy()
 
@@ -409,7 +408,7 @@ class ChatterPlanExecutor:
             "execution_times": [],
         }
 
-    def get_recent_performance(self, limit: int = 10) -> List[Dict[str, any]]:
+    def get_recent_performance(self, limit: int = 10) -> list[dict[str, any]]:
         """获取最近的执行性能"""
         recent_times = self.execution_stats["execution_times"][-limit:]
         if not recent_times:

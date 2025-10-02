@@ -1,10 +1,9 @@
+from src.common.logger import get_logger
 from src.plugin_system.apis.plugin_register_api import register_plugin
+from src.plugin_system.base.base_action import ActionActivationType, BaseAction, ChatMode
 from src.plugin_system.base.base_plugin import BasePlugin
 from src.plugin_system.base.component_types import ComponentInfo
-from src.common.logger import get_logger
-from src.plugin_system.base.base_action import BaseAction, ActionActivationType, ChatMode
 from src.plugin_system.base.config_types import ConfigField
-from typing import Tuple, List, Type
 
 logger = get_logger("tts")
 
@@ -44,7 +43,7 @@ class TTSAction(BaseAction):
     # 关联类型
     associated_types = ["tts_text"]
 
-    async def execute(self) -> Tuple[bool, str]:
+    async def execute(self) -> tuple[bool, str]:
         """处理TTS文本转语音动作"""
         logger.info(f"{self.log_prefix} 执行TTS动作: {self.reasoning}")
 
@@ -140,7 +139,7 @@ class TTSPlugin(BasePlugin):
         },
     }
 
-    def get_plugin_components(self) -> List[Tuple[ComponentInfo, Type]]:
+    def get_plugin_components(self) -> list[tuple[ComponentInfo, type]]:
         """返回插件包含的组件列表"""
 
         # 从配置获取组件启用状态

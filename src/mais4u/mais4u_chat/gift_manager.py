@@ -1,5 +1,5 @@
 import asyncio
-from typing import Dict, Tuple, Callable, Optional
+from collections.abc import Callable
 from dataclasses import dataclass
 
 from src.chat.message_receive.message import MessageRecvS4U
@@ -23,11 +23,11 @@ class GiftManager:
 
     def __init__(self):
         """初始化礼物管理器"""
-        self.pending_gifts: Dict[Tuple[str, str], PendingGift] = {}
+        self.pending_gifts: dict[tuple[str, str], PendingGift] = {}
         self.debounce_timeout = 5.0  # 3秒防抖时间
 
     async def handle_gift(
-        self, message: MessageRecvS4U, callback: Optional[Callable[[MessageRecvS4U], None]] = None
+        self, message: MessageRecvS4U, callback: Callable[[MessageRecvS4U], None] | None = None
     ) -> bool:
         """处理礼物消息，返回是否应该立即处理
 
@@ -53,7 +53,7 @@ class GiftManager:
         await self._create_pending_gift(gift_key, message, callback)
         return False
 
-    async def _merge_gift(self, gift_key: Tuple[str, str], new_message: MessageRecvS4U) -> None:
+    async def _merge_gift(self, gift_key: tuple[str, str], new_message: MessageRecvS4U) -> None:
         """合并礼物消息"""
         pending_gift = self.pending_gifts[gift_key]
 
@@ -81,7 +81,7 @@ class GiftManager:
         logger.debug(f"合并礼物: {gift_key}, 总数量: {pending_gift.total_count}")
 
     async def _create_pending_gift(
-        self, gift_key: Tuple[str, str], message: MessageRecvS4U, callback: Optional[Callable[[MessageRecvS4U], None]]
+        self, gift_key: tuple[str, str], message: MessageRecvS4U, callback: Callable[[MessageRecvS4U], None] | None
     ) -> None:
         """创建新的等待礼物"""
         try:
@@ -100,7 +100,7 @@ class GiftManager:
 
         logger.debug(f"创建等待礼物: {gift_key}, 初始数量: {initial_count}")
 
-    async def _gift_timeout(self, gift_key: Tuple[str, str]) -> None:
+    async def _gift_timeout(self, gift_key: tuple[str, str]) -> None:
         """礼物防抖超时处理"""
         try:
             # 等待防抖时间

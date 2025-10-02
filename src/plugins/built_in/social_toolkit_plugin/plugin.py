@@ -1,24 +1,25 @@
-import re
-from typing import List, Tuple, Type, Optional
-
-from src.plugin_system import (
-    BasePlugin,
-    register_plugin,
-    BaseAction,
-    ComponentInfo,
-    ActionActivationType,
-    ConfigField,
-)
-from src.common.logger import get_logger
-from .qq_emoji_list import qq_face
-from src.plugin_system.base.component_types import ChatType
-from src.person_info.person_info import get_person_info_manager
-from dateutil.parser import parse as parse_datetime
-from src.manager.async_task_manager import AsyncTask, async_task_manager
-from src.plugin_system.apis import send_api, llm_api, generator_api
-from src.chat.message_receive.chat_stream import ChatStream
 import asyncio
 import datetime
+import re
+
+from dateutil.parser import parse as parse_datetime
+
+from src.chat.message_receive.chat_stream import ChatStream
+from src.common.logger import get_logger
+from src.manager.async_task_manager import AsyncTask, async_task_manager
+from src.person_info.person_info import get_person_info_manager
+from src.plugin_system import (
+    ActionActivationType,
+    BaseAction,
+    BasePlugin,
+    ComponentInfo,
+    ConfigField,
+    register_plugin,
+)
+from src.plugin_system.apis import generator_api, llm_api, send_api
+from src.plugin_system.base.component_types import ChatType
+
+from .qq_emoji_list import qq_face
 
 logger = get_logger("set_emoji_like_plugin")
 
@@ -30,7 +31,7 @@ class ReminderTask(AsyncTask):
         self,
         delay: float,
         stream_id: str,
-        group_id: Optional[str],
+        group_id: str | None,
         is_group: bool,
         target_user_id: str,
         target_user_name: str,
@@ -162,7 +163,7 @@ class PokeAction(BaseAction):
     """
     associated_types = ["text"]
 
-    async def execute(self) -> Tuple[bool, str]:
+    async def execute(self) -> tuple[bool, str]:
         """执行戳一戳的动作"""
         user_id = self.action_data.get("user_id")
         user_name = self.action_data.get("user_name")
@@ -242,7 +243,7 @@ class SetEmojiLikeAction(BaseAction):
         if match:
             emoji_options.append(match.group(1))
 
-    async def execute(self) -> Tuple[bool, str]:
+    async def execute(self) -> tuple[bool, str]:
         """执行设置表情回应的动作"""
         message_id = None
         set_like = self.action_data.get("set", True)
@@ -360,7 +361,7 @@ class RemindAction(BaseAction):
         "例如：'10分钟后提醒我收快递'、'明天早上九点喊一下李四参加晨会'",
     ]
 
-    async def execute(self) -> Tuple[bool, str]:
+    async def execute(self) -> tuple[bool, str]:
         """执行设置提醒的动作"""
         user_name = self.action_data.get("user_name")
         remind_time_str = self.action_data.get("remind_time")
@@ -386,14 +387,14 @@ class RemindAction(BaseAction):
             # 优先尝试直接解析
             try:
                 target_time = parse_datetime(remind_time_str, fuzzy=True)
-            except Exception:
+            except Exception as e:
                 # 如果直接解析失败，调用 LLM 进行转换
                 logger.info(f"[ReminderPlugin] 直接解析时间 '{remind_time_str}' 失败，尝试使用 LLM 进行转换...")
 
                 # 获取所有可用的模型配置
                 available_models = llm_api.get_available_models()
                 if "utils_small" not in available_models:
-                    raise ValueError("未找到 'utils_small' 模型配置，无法解析时间")
+                    raise ValueError("未找到 'utils_small' 模型配置，无法解析时间") from e
 
                 # 明确使用 'planner' 模型
                 model_to_use = available_models["utils_small"]
@@ -419,7 +420,7 @@ class RemindAction(BaseAction):
                 )
 
                 if not success or not response:
-                    raise ValueError(f"LLM未能返回有效的时间字符串: {response}")
+                    raise ValueError(f"LLM未能返回有效的时间字符串: {response}") from e
 
                 converted_time_str = response.strip()
                 logger.info(f"[ReminderPlugin] LLM 转换结果: '{converted_time_str}'")
@@ -533,8 +534,8 @@ class SetEmojiLikePlugin(BasePlugin):
     # 插件基本信息
     plugin_name: str = "social_toolkit_plugin"  # 内部标识符
     enable_plugin: bool = True
-    dependencies: List[str] = []  # 插件依赖列表
-    python_dependencies: List[str] = []  # Python包依赖列表，现在使用内置API
+    dependencies: list[str] = []  # 插件依赖列表
+    python_dependencies: list[str] = []  # Python包依赖列表，现在使用内置API
     config_file_name: str = "config.toml"  # 配置文件名
 
     # 配置节描述
@@ -555,7 +556,7 @@ class SetEmojiLikePlugin(BasePlugin):
         },
     }
 
-    def get_plugin_components(self) -> List[Tuple[ComponentInfo, Type]]:
+    def get_plugin_components(self) -> list[tuple[ComponentInfo, type]]:
         enable_components = []
         if self.get_config("components.action_set_emoji_like"):
             enable_components.append((SetEmojiLikeAction.get_action_info(), SetEmojiLikeAction))

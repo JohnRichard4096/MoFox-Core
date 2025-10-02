@@ -1,10 +1,10 @@
 import asyncio
-import orjson
 from collections import deque
 from datetime import datetime
-from typing import Dict, List, Optional
-from aiohttp import web, WSMsgType
+
 import aiohttp_cors
+import orjson
+from aiohttp import WSMsgType, web
 
 from src.chat.message_receive.message import MessageRecv
 from src.common.logger import get_logger
@@ -57,8 +57,8 @@ class ContextWebManager:
     def __init__(self, max_messages: int = 10, port: int = 8765):
         self.max_messages = max_messages
         self.port = port
-        self.contexts: Dict[str, deque] = {}  # chat_id -> deque of ContextMessage
-        self.websockets: List[web.WebSocketResponse] = []
+        self.contexts: dict[str, deque] = {}  # chat_id -> deque of ContextMessage
+        self.websockets: list[web.WebSocketResponse] = []
         self.app = None
         self.runner = None
         self.site = None
@@ -674,7 +674,7 @@ class ContextWebManager:
 
 
 # 全局实例
-_context_web_manager: Optional[ContextWebManager] = None
+_context_web_manager: ContextWebManager | None = None
 
 
 def get_context_web_manager() -> ContextWebManager:

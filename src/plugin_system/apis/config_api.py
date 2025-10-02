@@ -8,6 +8,7 @@
 """
 
 from typing import Any
+
 from src.common.logger import get_logger
 from src.config.config import global_config
 

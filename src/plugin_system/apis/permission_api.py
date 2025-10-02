@@ -1,9 +1,9 @@
 """纯异步权限API定义。所有外部调用方必须使用 await。"""
 
-from typing import Optional, List, Dict, Any
+from abc import ABC, abstractmethod
 from dataclasses import dataclass
 from enum import Enum
-from abc import ABC, abstractmethod
+from typing import Any
 
 from src.common.logger import get_logger
 
@@ -48,18 +48,18 @@ class IPermissionManager(ABC):
     async def revoke_permission(self, user: UserInfo, permission_node: str) -> bool: ...
 
     @abstractmethod
-    async def get_user_permissions(self, user: UserInfo) -> List[str]: ...
+    async def get_user_permissions(self, user: UserInfo) -> list[str]: ...
 
     @abstractmethod
-    async def get_all_permission_nodes(self) -> List[PermissionNode]: ...
+    async def get_all_permission_nodes(self) -> list[PermissionNode]: ...
 
     @abstractmethod
-    async def get_plugin_permission_nodes(self, plugin_name: str) -> List[PermissionNode]: ...
+    async def get_plugin_permission_nodes(self, plugin_name: str) -> list[PermissionNode]: ...
 
 
 class PermissionAPI:
     def __init__(self):
-        self._permission_manager: Optional[IPermissionManager] = None
+        self._permission_manager: IPermissionManager | None = None
         # 需要保留的前缀（视为绝对节点名，不再自动加 plugins.<plugin>. 前缀）
         self.RESERVED_PREFIXES: tuple[str, ...] = "system."
         # 系统节点列表 (name, description, default_granted)
@@ -147,11 +147,11 @@ class PermissionAPI:
         self._ensure_manager()
         return await self._permission_manager.revoke_permission(UserInfo(platform, user_id), permission_node)
 
-    async def get_user_permissions(self, platform: str, user_id: str) -> List[str]:
+    async def get_user_permissions(self, platform: str, user_id: str) -> list[str]:
         self._ensure_manager()
         return await self._permission_manager.get_user_permissions(UserInfo(platform, user_id))
 
-    async def get_all_permission_nodes(self) -> List[Dict[str, Any]]:
+    async def get_all_permission_nodes(self) -> list[dict[str, Any]]:
         self._ensure_manager()
         nodes = await self._permission_manager.get_all_permission_nodes()
         return [
@@ -164,7 +164,7 @@ class PermissionAPI:
             for n in nodes
         ]
 
-    async def get_plugin_permission_nodes(self, plugin_name: str) -> List[Dict[str, Any]]:
+    async def get_plugin_permission_nodes(self, plugin_name: str) -> list[dict[str, Any]]:
         self._ensure_manager()
         nodes = await self._permission_manager.get_plugin_permission_nodes(plugin_name)
         return [

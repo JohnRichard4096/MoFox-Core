@@ -1,25 +1,24 @@
-import traceback
 import os
 import re
+import traceback
+from typing import Any
 
-from typing import Dict, Any, Optional
 from maim_message import UserInfo
-
-from src.common.logger import get_logger
-from src.config.config import global_config
-from src.mood.mood_manager import mood_manager  # 导入情绪管理器
-from src.chat.message_receive.chat_stream import get_chat_manager, ChatStream
-from src.chat.message_receive.message import MessageRecv, MessageRecvS4U
-from src.chat.message_receive.storage import MessageStorage
-from src.chat.message_manager import message_manager
-from src.chat.utils.prompt import Prompt, global_prompt_manager
-from src.plugin_system.core import component_registry, event_manager, global_announcement_manager
-from src.plugin_system.base import BaseCommand, EventType
-from src.mais4u.mais4u_chat.s4u_msg_processor import S4UMessageProcessor
-from src.chat.utils.utils import is_mentioned_bot_in_message
 
 # 导入反注入系统
 from src.chat.antipromptinjector import initialize_anti_injector
+from src.chat.message_manager import message_manager
+from src.chat.message_receive.chat_stream import ChatStream, get_chat_manager
+from src.chat.message_receive.message import MessageRecv, MessageRecvS4U
+from src.chat.message_receive.storage import MessageStorage
+from src.chat.utils.prompt import Prompt, global_prompt_manager
+from src.chat.utils.utils import is_mentioned_bot_in_message
+from src.common.logger import get_logger
+from src.config.config import global_config
+from src.mais4u.mais4u_chat.s4u_msg_processor import S4UMessageProcessor
+from src.mood.mood_manager import mood_manager  # 导入情绪管理器
+from src.plugin_system.base import BaseCommand, EventType
+from src.plugin_system.core import component_registry, event_manager, global_announcement_manager
 
 # 获取项目根目录（假设本文件在src/chat/message_receive/下，根目录为上上上级目录）
 PROJECT_ROOT = os.path.abspath(os.path.join(os.path.dirname(__file__), "../../.."))
@@ -220,7 +219,7 @@ class ChatBot:
                 logger.error(traceback.format_exc())
 
                 try:
-                    await plus_command_instance.send_text(f"命令执行出错: {str(e)}")
+                    await plus_command_instance.send_text(f"命令执行出错: {e!s}")
                 except Exception as send_error:
                     logger.error(f"发送错误消息失败: {send_error}")
 
@@ -288,7 +287,7 @@ class ChatBot:
                     logger.error(traceback.format_exc())
 
                     try:
-                        await command_instance.send_text(f"命令执行出错: {str(e)}")
+                        await command_instance.send_text(f"命令执行出错: {e!s}")
                     except Exception as send_error:
                         logger.error(f"发送错误消息失败: {send_error}")
 
@@ -341,7 +340,7 @@ class ChatBot:
         except Exception as e:
             logger.error(f"处理适配器响应时出错: {e}")
 
-    async def do_s4u(self, message_data: Dict[str, Any]):
+    async def do_s4u(self, message_data: dict[str, Any]):
         message = MessageRecvS4U(message_data)
         group_info = message.message_info.group_info
         user_info = message.message_info.user_info
@@ -364,7 +363,7 @@ class ChatBot:
 
         return
 
-    async def message_process(self, message_data: Dict[str, Any]) -> None:
+    async def message_process(self, message_data: dict[str, Any]) -> None:
         """处理转化后的统一格式消息"""
         try:
             # 首先处理可能的切片消息重组
@@ -462,7 +461,7 @@ class ChatBot:
             # TODO:暂不可用
             # 确认从接口发来的message是否有自定义的prompt模板信息
             if message.message_info.template_info and not message.message_info.template_info.template_default:
-                template_group_name: Optional[str] = message.message_info.template_info.template_name  # type: ignore
+                template_group_name: str | None = message.message_info.template_info.template_name  # type: ignore
                 template_items = message.message_info.template_info.template_items
                 async with global_prompt_manager.async_message_scope(template_group_name):
                     if isinstance(template_items, dict):

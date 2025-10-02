@@ -1,4 +1,3 @@
-# -*- coding: utf-8 -*-
 """
 反注入系统决策模块
 
@@ -7,7 +6,7 @@
 - counter_attack: 反击消息生成器
 """
 
-from .decision_maker import ProcessingDecisionMaker
 from .counter_attack import CounterAttackGenerator
+from .decision_maker import ProcessingDecisionMaker
 
-__all__ = ["ProcessingDecisionMaker", "CounterAttackGenerator"]
+__all__ = ["CounterAttackGenerator", "ProcessingDecisionMaker"]

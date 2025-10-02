@@ -1,12 +1,16 @@
 import os
-import tomlkit
 import shutil
+from dataclasses import MISSING, dataclass, field, fields
 from datetime import datetime
+from typing import Any, Literal, TypeVar, get_args, get_origin
+
+import tomlkit
 from tomlkit import TOMLDocument
 from tomlkit.items import Table
-from dataclasses import dataclass, fields, MISSING, field
-from typing import TypeVar, Type, Any, get_origin, get_args, Literal
+from typing_extensions import Self
+
 from src.common.logger import get_logger
+from src.mais4u.constant_s4u import ENABLE_S4U
 
 logger = get_logger("s4u_config")
 
@@ -45,7 +49,7 @@ class S4UConfigBase:
     """S4U配置类的基类"""
 
     @classmethod
-    def from_dict(cls: Type[T], data: dict[str, Any]) -> T:
+    def from_dict(cls, data: dict[str, Any]) -> Self:
         """从字典加载配置字段"""
         data = table_to_dict(data)  # 递归转dict，兼容tomlkit Table
         if not is_dict_like(data):
@@ -80,7 +84,7 @@ class S4UConfigBase:
         return cls()
 
     @classmethod
-    def _convert_field(cls, value: Any, field_type: Type[Any]) -> Any:
+    def _convert_field(cls, value: Any, field_type: type[Any]) -> Any:
         """转换字段值为指定类型"""
         # 如果是嵌套的 dataclass，递归调用 from_dict 方法
         if isinstance(field_type, type) and issubclass(field_type, S4UConfigBase):
@@ -273,9 +277,9 @@ def update_s4u_config():
         return
 
     # 读取旧配置文件和模板文件
-    with open(CONFIG_PATH, "r", encoding="utf-8") as f:
+    with open(CONFIG_PATH, encoding="utf-8") as f:
         old_config = tomlkit.load(f)
-    with open(TEMPLATE_PATH, "r", encoding="utf-8") as f:
+    with open(TEMPLATE_PATH, encoding="utf-8") as f:
         new_config = tomlkit.load(f)
 
     # 检查version是否相同
@@ -346,7 +350,7 @@ def load_s4u_config(config_path: str) -> S4UGlobalConfig:
     :return: S4UGlobalConfig对象
     """
     # 读取配置文件
-    with open(config_path, "r", encoding="utf-8") as f:
+    with open(config_path, encoding="utf-8") as f:
         config_data = tomlkit.load(f)
 
     # 创建S4UGlobalConfig对象

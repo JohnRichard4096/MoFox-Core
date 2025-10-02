@@ -3,7 +3,6 @@
 提供简单易用的命令参数解析功能
 """
 
-from typing import List, Optional
 import shlex
 
 
@@ -20,7 +19,7 @@ class CommandArgs:
             raw_args: 原始参数字符串
         """
         self._raw_args = raw_args.strip()
-        self._parsed_args: Optional[List[str]] = None
+        self._parsed_args: list[str] | None = None
 
     def get_raw(self) -> str:
         """获取完整的参数字符串
@@ -30,7 +29,7 @@ class CommandArgs:
         """
         return self._raw_args
 
-    def get_args(self) -> List[str]:
+    def get_args(self) -> list[str]:
         """获取解析后的参数列表
 
         将参数按空格分割，支持引号包围的参数

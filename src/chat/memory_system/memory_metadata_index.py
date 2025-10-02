@@ -1,15 +1,15 @@
-# -*- coding: utf-8 -*-
 """
 记忆元数据索引管理器
 使用JSON文件存储记忆元数据，支持快速模糊搜索和过滤
 """
 
-import orjson
 import threading
-from pathlib import Path
-from typing import Dict, List, Optional, Set, Any
-from dataclasses import dataclass, asdict
+from dataclasses import asdict, dataclass
 from datetime import datetime
+from pathlib import Path
+from typing import Any
+
+import orjson
 
 from src.common.logger import get_logger
 
@@ -25,10 +25,10 @@ class MemoryMetadataIndexEntry:
 
     # 分类信息
     memory_type: str  # MemoryType.value
-    subjects: List[str]  # 主语列表
-    objects: List[str]  # 宾语列表
-    keywords: List[str]  # 关键词列表
-    tags: List[str]  # 标签列表
+    subjects: list[str]  # 主语列表
+    objects: list[str]  # 宾语列表
+    keywords: list[str]  # 关键词列表
+    tags: list[str]  # 标签列表
 
     # 数值字段（用于范围过滤）
     importance: int  # ImportanceLevel.value (1-4)
@@ -37,8 +37,8 @@ class MemoryMetadataIndexEntry:
     access_count: int  # 访问次数
 
     # 可选字段
-    chat_id: Optional[str] = None
-    content_preview: Optional[str] = None  # 内容预览（前100字符）
+    chat_id: str | None = None
+    content_preview: str | None = None  # 内容预览（前100字符）
 
 
 class MemoryMetadataIndex:
@@ -46,13 +46,13 @@ class MemoryMetadataIndex:
 
     def __init__(self, index_file: str = "data/memory_metadata_index.json"):
         self.index_file = Path(index_file)
-        self.index: Dict[str, MemoryMetadataIndexEntry] = {}  # memory_id -> entry
+        self.index: dict[str, MemoryMetadataIndexEntry] = {}  # memory_id -> entry
 
         # 倒排索引（用于快速查找）
-        self.type_index: Dict[str, Set[str]] = {}  # type -> {memory_ids}
-        self.subject_index: Dict[str, Set[str]] = {}  # subject -> {memory_ids}
-        self.keyword_index: Dict[str, Set[str]] = {}  # keyword -> {memory_ids}
-        self.tag_index: Dict[str, Set[str]] = {}  # tag -> {memory_ids}
+        self.type_index: dict[str, set[str]] = {}  # type -> {memory_ids}
+        self.subject_index: dict[str, set[str]] = {}  # subject -> {memory_ids}
+        self.keyword_index: dict[str, set[str]] = {}  # keyword -> {memory_ids}
+        self.tag_index: dict[str, set[str]] = {}  # tag -> {memory_ids}
 
         self.lock = threading.RLock()
 
@@ -178,7 +178,7 @@ class MemoryMetadataIndex:
                 self._remove_from_inverted_indices(memory_id)
                 del self.index[memory_id]
 
-    def batch_add_or_update(self, entries: List[MemoryMetadataIndexEntry]):
+    def batch_add_or_update(self, entries: list[MemoryMetadataIndexEntry]):
         """批量添加或更新"""
         with self.lock:
             for entry in entries:
@@ -191,18 +191,18 @@ class MemoryMetadataIndex:
 
     def search(
         self,
-        memory_types: Optional[List[str]] = None,
-        subjects: Optional[List[str]] = None,
-        keywords: Optional[List[str]] = None,
-        tags: Optional[List[str]] = None,
-        importance_min: Optional[int] = None,
-        importance_max: Optional[int] = None,
-        created_after: Optional[float] = None,
-        created_before: Optional[float] = None,
-        user_id: Optional[str] = None,
-        limit: Optional[int] = None,
+        memory_types: list[str] | None = None,
+        subjects: list[str] | None = None,
+        keywords: list[str] | None = None,
+        tags: list[str] | None = None,
+        importance_min: int | None = None,
+        importance_max: int | None = None,
+        created_after: float | None = None,
+        created_before: float | None = None,
+        user_id: str | None = None,
+        limit: int | None = None,
         flexible_mode: bool = True,  # 新增：灵活匹配模式
-    ) -> List[str]:
+    ) -> list[str]:
         """
         搜索符合条件的记忆ID列表（支持模糊匹配）
 
@@ -237,14 +237,14 @@ class MemoryMetadataIndex:
 
     def _search_flexible(
         self,
-        memory_types: Optional[List[str]] = None,
-        subjects: Optional[List[str]] = None,
-        created_after: Optional[float] = None,
-        created_before: Optional[float] = None,
-        user_id: Optional[str] = None,
-        limit: Optional[int] = None,
+        memory_types: list[str] | None = None,
+        subjects: list[str] | None = None,
+        created_after: float | None = None,
+        created_before: float | None = None,
+        user_id: str | None = None,
+        limit: int | None = None,
         **kwargs,  # 接受但不使用的参数
-    ) -> List[str]:
+    ) -> list[str]:
         """
         灵活搜索模式：2/4项匹配即可，支持部分匹配
 
@@ -374,20 +374,20 @@ class MemoryMetadataIndex:
 
     def _search_strict(
         self,
-        memory_types: Optional[List[str]] = None,
-        subjects: Optional[List[str]] = None,
-        keywords: Optional[List[str]] = None,
-        tags: Optional[List[str]] = None,
-        importance_min: Optional[int] = None,
-        importance_max: Optional[int] = None,
-        created_after: Optional[float] = None,
-        created_before: Optional[float] = None,
-        user_id: Optional[str] = None,
-        limit: Optional[int] = None,
-    ) -> List[str]:
+        memory_types: list[str] | None = None,
+        subjects: list[str] | None = None,
+        keywords: list[str] | None = None,
+        tags: list[str] | None = None,
+        importance_min: int | None = None,
+        importance_max: int | None = None,
+        created_after: float | None = None,
+        created_before: float | None = None,
+        user_id: str | None = None,
+        limit: int | None = None,
+    ) -> list[str]:
         """严格搜索模式（原有逻辑）"""
         # 初始候选集（所有记忆）
-        candidate_ids: Optional[Set[str]] = None
+        candidate_ids: set[str] | None = None
 
         # 用户过滤（必选）
         if user_id:
@@ -471,11 +471,11 @@ class MemoryMetadataIndex:
 
         return result_ids
 
-    def get_entry(self, memory_id: str) -> Optional[MemoryMetadataIndexEntry]:
+    def get_entry(self, memory_id: str) -> MemoryMetadataIndexEntry | None:
         """获取单个索引条目"""
         return self.index.get(memory_id)
 
-    def get_stats(self) -> Dict[str, Any]:
+    def get_stats(self) -> dict[str, Any]:
         """获取索引统计信息"""
         with self.lock:
             return {

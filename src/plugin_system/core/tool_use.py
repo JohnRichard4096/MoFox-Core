@@ -1,16 +1,17 @@
+import inspect
 import time
-from typing import List, Dict, Tuple, Optional, Any
+from typing import Any
+
+from src.chat.message_receive.chat_stream import get_chat_manager
+from src.chat.utils.prompt import Prompt, global_prompt_manager
+from src.common.cache_manager import tool_cache
+from src.common.logger import get_logger
+from src.config.config import global_config, model_config
+from src.llm_models.payload_content import ToolCall
+from src.llm_models.utils_model import LLMRequest
 from src.plugin_system.apis.tool_api import get_llm_available_tool_definitions, get_tool_instance
 from src.plugin_system.base.base_tool import BaseTool
 from src.plugin_system.core.global_announcement_manager import global_announcement_manager
-from src.llm_models.utils_model import LLMRequest
-from src.llm_models.payload_content import ToolCall
-from src.config.config import global_config, model_config
-from src.chat.utils.prompt import Prompt, global_prompt_manager
-import inspect
-from src.chat.message_receive.chat_stream import get_chat_manager
-from src.common.logger import get_logger
-from src.common.cache_manager import tool_cache
 
 logger = get_logger("tool_use")
 
@@ -56,14 +57,14 @@ class ToolExecutor:
         self.llm_model = LLMRequest(model_set=model_config.model_task_config.tool_use, request_type="tool_executor")
 
         # 二步工具调用状态管理
-        self._pending_step_two_tools: Dict[str, Dict[str, Any]] = {}
+        self._pending_step_two_tools: dict[str, dict[str, Any]] = {}
         """待处理的第二步工具调用，格式为 {tool_name: step_two_definition}"""
 
         logger.info(f"{self.log_prefix}工具执行器初始化完成")
 
     async def execute_from_chat_message(
         self, target_message: str, chat_history: str, sender: str, return_details: bool = False
-    ) -> Tuple[List[Dict[str, Any]], List[str], str]:
+    ) -> tuple[list[dict[str, Any]], list[str], str]:
         """从聊天消息执行工具
 
         Args:
@@ -113,7 +114,7 @@ class ToolExecutor:
         else:
             return tool_results, [], ""
 
-    def _get_tool_definitions(self) -> List[Dict[str, Any]]:
+    def _get_tool_definitions(self) -> list[dict[str, Any]]:
         all_tools = get_llm_available_tool_definitions()
         user_disabled_tools = global_announcement_manager.get_disabled_chat_tools(self.chat_id)
 
@@ -129,7 +130,7 @@ class ToolExecutor:
 
         return tool_definitions
 
-    async def execute_tool_calls(self, tool_calls: Optional[List[ToolCall]]) -> Tuple[List[Dict[str, Any]], List[str]]:
+    async def execute_tool_calls(self, tool_calls: list[ToolCall] | None) -> tuple[list[dict[str, Any]], list[str]]:
         """执行工具调用
 
         Args:
@@ -138,7 +139,7 @@ class ToolExecutor:
         Returns:
             Tuple[List[Dict], List[str]]: (工具执行结果列表, 使用的工具名称列表)
         """
-        tool_results: List[Dict[str, Any]] = []
+        tool_results: list[dict[str, Any]] = []
         used_tools = []
 
         if not tool_calls:
@@ -192,7 +193,7 @@ class ToolExecutor:
                 error_info = {
                     "type": "tool_error",
                     "id": f"tool_error_{time.time()}",
-                    "content": f"工具{tool_name}执行失败: {str(e)}",
+                    "content": f"工具{tool_name}执行失败: {e!s}",
                     "tool_name": tool_name,
                     "timestamp": time.time(),
                 }
@@ -201,8 +202,8 @@ class ToolExecutor:
         return tool_results, used_tools
 
     async def execute_tool_call(
-        self, tool_call: ToolCall, tool_instance: Optional[BaseTool] = None
-    ) -> Optional[Dict[str, Any]]:
+        self, tool_call: ToolCall, tool_instance: BaseTool | None = None
+    ) -> dict[str, Any] | None:
         """执行单个工具调用，并处理缓存"""
 
         function_args = tool_call.args or {}
@@ -256,8 +257,8 @@ class ToolExecutor:
         return result
 
     async def _original_execute_tool_call(
-        self, tool_call: ToolCall, tool_instance: Optional[BaseTool] = None
-    ) -> Optional[Dict[str, Any]]:
+        self, tool_call: ToolCall, tool_instance: BaseTool | None = None
+    ) -> dict[str, Any] | None:
         """执行单个工具调用的原始逻辑"""
         try:
             function_name = tool_call.func_name
@@ -323,10 +324,10 @@ class ToolExecutor:
             logger.warning(f"{self.log_prefix}工具 {function_name} 返回空结果")
             return None
         except Exception as e:
-            logger.error(f"执行工具调用时发生错误: {str(e)}")
+            logger.error(f"执行工具调用时发生错误: {e!s}")
             raise e
 
-    async def execute_specific_tool_simple(self, tool_name: str, tool_args: Dict) -> Optional[Dict]:
+    async def execute_specific_tool_simple(self, tool_name: str, tool_args: dict) -> dict | None:
         """直接执行指定工具
 
         Args:

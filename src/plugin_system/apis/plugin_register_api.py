@@ -6,8 +6,8 @@ logger = get_logger("plugin_manager")  # 复用plugin_manager名称
 
 
 def register_plugin(cls):
-    from src.plugin_system.core.plugin_manager import plugin_manager
     from src.plugin_system.base.base_plugin import BasePlugin
+    from src.plugin_system.core.plugin_manager import plugin_manager
 
     """插件注册装饰器
 

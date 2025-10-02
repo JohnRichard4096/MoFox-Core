@@ -1,18 +1,19 @@
-# -*- coding: utf-8 -*-
 """
 结构化记忆单元设计
 实现高质量、结构化的记忆单元，符合文档设计规范
 """
 
+import hashlib
 import time
 import uuid
-import orjson
-from typing import Dict, List, Optional, Any, Union, Iterable
+from collections.abc import Iterable
 from dataclasses import dataclass, field
 from enum import Enum
-import hashlib
+from typing import Any
 
 import numpy as np
+import orjson
+
 from src.common.logger import get_logger
 
 logger = get_logger(__name__)
@@ -56,17 +57,17 @@ class ImportanceLevel(Enum):
 class ContentStructure:
     """主谓宾结构，包含自然语言描述"""
 
-    subject: Union[str, List[str]]
+    subject: str | list[str]
     predicate: str
-    object: Union[str, Dict]
+    object: str | dict
     display: str = ""
 
-    def to_dict(self) -> Dict[str, Any]:
+    def to_dict(self) -> dict[str, Any]:
         """转换为字典格式"""
         return {"subject": self.subject, "predicate": self.predicate, "object": self.object, "display": self.display}
 
     @classmethod
-    def from_dict(cls, data: Dict[str, Any]) -> "ContentStructure":
+    def from_dict(cls, data: dict[str, Any]) -> "ContentStructure":
         """从字典创建实例"""
         return cls(
             subject=data.get("subject", ""),
@@ -75,7 +76,7 @@ class ContentStructure:
             display=data.get("display", ""),
         )
 
-    def to_subject_list(self) -> List[str]:
+    def to_subject_list(self) -> list[str]:
         """将主语转换为列表形式"""
         if isinstance(self.subject, list):
             return [s for s in self.subject if isinstance(s, str) and s.strip()]
@@ -99,7 +100,7 @@ class MemoryMetadata:
     # 基础信息
     memory_id: str  # 唯一标识符
     user_id: str  # 用户ID
-    chat_id: Optional[str] = None  # 聊天ID（群聊或私聊）
+    chat_id: str | None = None  # 聊天ID（群聊或私聊）
 
     # 时间信息
     created_at: float = 0.0  # 创建时间戳
@@ -124,9 +125,9 @@ class MemoryMetadata:
     last_forgetting_check: float = 0.0  # 上次遗忘检查时间
 
     # 来源信息
-    source_context: Optional[str] = None  # 来源上下文片段
+    source_context: str | None = None  # 来源上下文片段
     # 兼容旧字段: 一些代码或旧版本可能直接访问 metadata.source
-    source: Optional[str] = None
+    source: str | None = None
 
     def __post_init__(self):
         """后初始化处理"""
@@ -209,7 +210,7 @@ class MemoryMetadata:
         # 设置最小和最大阈值
         return max(7.0, min(threshold, 365.0))  # 7天到1年之间
 
-    def should_forget(self, current_time: Optional[float] = None) -> bool:
+    def should_forget(self, current_time: float | None = None) -> bool:
         """判断是否应该遗忘"""
         if current_time is None:
             current_time = time.time()
@@ -222,7 +223,7 @@ class MemoryMetadata:
 
         return days_since_activation > self.forgetting_threshold
 
-    def is_dormant(self, current_time: Optional[float] = None, inactive_days: int = 90) -> bool:
+    def is_dormant(self, current_time: float | None = None, inactive_days: int = 90) -> bool:
         """判断是否处于休眠状态（长期未激活）"""
         if current_time is None:
             current_time = time.time()
@@ -230,7 +231,7 @@ class MemoryMetadata:
         days_since_last_access = (current_time - self.last_accessed) / 86400
         return days_since_last_access > inactive_days
 
-    def to_dict(self) -> Dict[str, Any]:
+    def to_dict(self) -> dict[str, Any]:
         """转换为字典格式"""
         return {
             "memory_id": self.memory_id,
@@ -252,7 +253,7 @@ class MemoryMetadata:
         }
 
     @classmethod
-    def from_dict(cls, data: Dict[str, Any]) -> "MemoryMetadata":
+    def from_dict(cls, data: dict[str, Any]) -> "MemoryMetadata":
         """从字典创建实例"""
         return cls(
             memory_id=data.get("memory_id", ""),
@@ -286,17 +287,17 @@ class MemoryChunk:
     memory_type: MemoryType  # 记忆类型
 
     # 扩展信息
-    keywords: List[str] = field(default_factory=list)  # 关键词列表
-    tags: List[str] = field(default_factory=list)  # 标签列表
-    categories: List[str] = field(default_factory=list)  # 分类列表
+    keywords: list[str] = field(default_factory=list)  # 关键词列表
+    tags: list[str] = field(default_factory=list)  # 标签列表
+    categories: list[str] = field(default_factory=list)  # 分类列表
 
     # 语义信息
-    embedding: Optional[List[float]] = None  # 语义向量
-    semantic_hash: Optional[str] = None  # 语义哈希值
+    embedding: list[float] | None = None  # 语义向量
+    semantic_hash: str | None = None  # 语义哈希值
 
     # 关联信息
-    related_memories: List[str] = field(default_factory=list)  # 关联记忆ID列表
-    temporal_context: Optional[Dict[str, Any]] = None  # 时间上下文
+    related_memories: list[str] = field(default_factory=list)  # 关联记忆ID列表
+    temporal_context: dict[str, Any] | None = None  # 时间上下文
 
     def __post_init__(self):
         """后初始化处理"""
@@ -310,7 +311,7 @@ class MemoryChunk:
 
         try:
             # 使用向量和内容生成稳定的哈希
-            content_str = f"{self.content.subject}:{self.content.predicate}:{str(self.content.object)}"
+            content_str = f"{self.content.subject}:{self.content.predicate}:{self.content.object!s}"
             embedding_str = ",".join(map(str, [round(x, 6) for x in self.embedding]))
 
             hash_input = f"{content_str}|{embedding_str}"
@@ -342,7 +343,7 @@ class MemoryChunk:
         return self.content.display or str(self.content)
 
     @property
-    def subjects(self) -> List[str]:
+    def subjects(self) -> list[str]:
         """获取主语列表"""
         return self.content.to_subject_list()
 
@@ -354,11 +355,11 @@ class MemoryChunk:
         """更新相关度评分"""
         self.metadata.update_relevance(new_score)
 
-    def should_forget(self, current_time: Optional[float] = None) -> bool:
+    def should_forget(self, current_time: float | None = None) -> bool:
         """判断是否应该遗忘"""
         return self.metadata.should_forget(current_time)
 
-    def is_dormant(self, current_time: Optional[float] = None, inactive_days: int = 90) -> bool:
+    def is_dormant(self, current_time: float | None = None, inactive_days: int = 90) -> bool:
         """判断是否处于休眠状态（长期未激活）"""
         return self.metadata.is_dormant(current_time, inactive_days)
 
@@ -386,7 +387,7 @@ class MemoryChunk:
         if memory_id and memory_id not in self.related_memories:
             self.related_memories.append(memory_id)
 
-    def set_embedding(self, embedding: List[float]):
+    def set_embedding(self, embedding: list[float]):
         """设置语义向量"""
         self.embedding = embedding
         self._generate_semantic_hash()
@@ -415,7 +416,7 @@ class MemoryChunk:
             logger.warning(f"计算记忆相似度失败: {e}")
             return 0.0
 
-    def to_dict(self) -> Dict[str, Any]:
+    def to_dict(self) -> dict[str, Any]:
         """转换为完整的字典格式"""
         return {
             "metadata": self.metadata.to_dict(),
@@ -431,7 +432,7 @@ class MemoryChunk:
         }
 
     @classmethod
-    def from_dict(cls, data: Dict[str, Any]) -> "MemoryChunk":
+    def from_dict(cls, data: dict[str, Any]) -> "MemoryChunk":
         """从字典创建实例"""
         metadata = MemoryMetadata.from_dict(data.get("metadata", {}))
         content = ContentStructure.from_dict(data.get("content", {}))
@@ -541,7 +542,7 @@ class MemoryChunk:
         return f"MemoryChunk(id={self.memory_id[:8]}..., type={self.memory_type.value}, user={self.user_id})"
 
 
-def _build_display_text(subjects: Iterable[str], predicate: str, obj: Union[str, Dict]) -> str:
+def _build_display_text(subjects: Iterable[str], predicate: str, obj: str | dict) -> str:
     """根据主谓宾生成自然语言描述"""
     subjects_clean = [s.strip() for s in subjects if s and isinstance(s, str)]
     subject_part = "、".join(subjects_clean) if subjects_clean else "对话参与者"
@@ -569,15 +570,15 @@ def _build_display_text(subjects: Iterable[str], predicate: str, obj: Union[str,
 
 def create_memory_chunk(
     user_id: str,
-    subject: Union[str, List[str]],
+    subject: str | list[str],
     predicate: str,
-    obj: Union[str, Dict],
+    obj: str | dict,
     memory_type: MemoryType,
-    chat_id: Optional[str] = None,
-    source_context: Optional[str] = None,
+    chat_id: str | None = None,
+    source_context: str | None = None,
     importance: ImportanceLevel = ImportanceLevel.NORMAL,
     confidence: ConfidenceLevel = ConfidenceLevel.MEDIUM,
-    display: Optional[str] = None,
+    display: str | None = None,
     **kwargs,
 ) -> MemoryChunk:
     """便捷的内存块创建函数"""
@@ -593,10 +594,10 @@ def create_memory_chunk(
         source_context=source_context,
     )
 
-    subjects: List[str]
+    subjects: list[str]
     if isinstance(subject, list):
         subjects = [s for s in subject if isinstance(s, str) and s.strip()]
-        subject_payload: Union[str, List[str]] = subjects
+        subject_payload: str | list[str] = subjects
     else:
         cleaned = subject.strip() if isinstance(subject, str) else ""
         subjects = [cleaned] if cleaned else []

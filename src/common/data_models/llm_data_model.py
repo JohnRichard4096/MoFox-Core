@@ -1,5 +1,5 @@
 from dataclasses import dataclass
-from typing import Optional, List, Tuple, TYPE_CHECKING, Any
+from typing import TYPE_CHECKING, Any
 
 from . import BaseDataModel
 
@@ -9,10 +9,10 @@ if TYPE_CHECKING:
 
 @dataclass
 class LLMGenerationDataModel(BaseDataModel):
-    content: Optional[str] = None
-    reasoning: Optional[str] = None
-    model: Optional[str] = None
-    tool_calls: Optional[List["ToolCall"]] = None
-    prompt: Optional[str] = None
-    selected_expressions: Optional[List[int]] = None
-    reply_set: Optional[List[Tuple[str, Any]]] = None
+    content: str | None = None
+    reasoning: str | None = None
+    model: str | None = None
+    tool_calls: list["ToolCall"] | None = None
+    prompt: str | None = None
+    selected_expressions: list[int] | None = None
+    reply_set: list[tuple[str, Any]] | None = None

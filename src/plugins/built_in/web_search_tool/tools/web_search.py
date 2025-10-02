@@ -3,18 +3,18 @@ Web search tool implementation
 """
 
 import asyncio
-from typing import Any, Dict, List
+from typing import Any
 
+from src.common.cache_manager import tool_cache
 from src.common.logger import get_logger
 from src.plugin_system import BaseTool, ToolParamType
 from src.plugin_system.apis import config_api
-from src.common.cache_manager import tool_cache
 
+from ..engines.bing_engine import BingSearchEngine
+from ..engines.ddg_engine import DDGSearchEngine
 from ..engines.exa_engine import ExaSearchEngine
 from ..engines.tavily_engine import TavilySearchEngine
-from ..engines.ddg_engine import DDGSearchEngine
-from ..engines.bing_engine import BingSearchEngine
-from ..utils.formatters import format_search_results, deduplicate_results
+from ..utils.formatters import deduplicate_results, format_search_results
 
 logger = get_logger("web_search_tool")
 
@@ -51,7 +51,7 @@ class WebSurfingTool(BaseTool):
             "bing": BingSearchEngine(),
         }
 
-    async def execute(self, function_args: Dict[str, Any]) -> Dict[str, Any]:
+    async def execute(self, function_args: dict[str, Any]) -> dict[str, Any]:
         query = function_args.get("query")
         if not query:
             return {"error": "搜索查询不能为空。"}
@@ -88,8 +88,8 @@ class WebSurfingTool(BaseTool):
         return result
 
     async def _execute_parallel_search(
-        self, function_args: Dict[str, Any], enabled_engines: List[str]
-    ) -> Dict[str, Any]:
+        self, function_args: dict[str, Any], enabled_engines: list[str]
+    ) -> dict[str, Any]:
         """并行搜索策略：同时使用所有启用的搜索引擎"""
         search_tasks = []
 
@@ -124,11 +124,11 @@ class WebSurfingTool(BaseTool):
 
         except Exception as e:
             logger.error(f"执行并行网络搜索时发生异常: {e}", exc_info=True)
-            return {"error": f"执行网络搜索时发生严重错误: {str(e)}"}
+            return {"error": f"执行网络搜索时发生严重错误: {e!s}"}
 
     async def _execute_fallback_search(
-        self, function_args: Dict[str, Any], enabled_engines: List[str]
-    ) -> Dict[str, Any]:
+        self, function_args: dict[str, Any], enabled_engines: list[str]
+    ) -> dict[str, Any]:
         """回退搜索策略：按顺序尝试搜索引擎，失败则尝试下一个"""
         for engine_name in enabled_engines:
             engine = self.engines.get(engine_name)
@@ -154,7 +154,7 @@ class WebSurfingTool(BaseTool):
 
         return {"error": "所有搜索引擎都失败了。"}
 
-    async def _execute_single_search(self, function_args: Dict[str, Any], enabled_engines: List[str]) -> Dict[str, Any]:
+    async def _execute_single_search(self, function_args: dict[str, Any], enabled_engines: list[str]) -> dict[str, Any]:
         """单一搜索策略：只使用第一个可用的搜索引擎"""
         for engine_name in enabled_engines:
             engine = self.engines.get(engine_name)
@@ -174,6 +174,6 @@ class WebSurfingTool(BaseTool):
 
             except Exception as e:
                 logger.error(f"{engine_name} 搜索失败: {e}")
-                return {"error": f"{engine_name} 搜索失败: {str(e)}"}
+                return {"error": f"{engine_name} 搜索失败: {e!s}"}
 
         return {"error": "没有可用的搜索引擎。"}

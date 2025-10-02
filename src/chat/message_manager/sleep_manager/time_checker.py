@@ -1,6 +1,6 @@
-from datetime import datetime, time, timedelta
-from typing import Optional, List, Dict, Any
 import random
+from datetime import datetime, time, timedelta
+from typing import Any
 
 from src.common.logger import get_logger
 from src.config.config import global_config
@@ -37,11 +37,11 @@ class TimeChecker:
         return self._daily_sleep_offset, self._daily_wake_offset
 
     @staticmethod
-    def get_today_schedule() -> Optional[List[Dict[str, Any]]]:
+    def get_today_schedule() -> list[dict[str, Any]] | None:
         """从全局 ScheduleManager 获取今天的日程安排。"""
         return schedule_manager.today_schedule
 
-    def is_in_theoretical_sleep_time(self, now_time: time) -> tuple[bool, Optional[str]]:
+    def is_in_theoretical_sleep_time(self, now_time: time) -> tuple[bool, str | None]:
         if global_config.sleep_system.sleep_by_schedule:
             if self.get_today_schedule():
                 return self._is_in_schedule_sleep_time(now_time)
@@ -50,7 +50,7 @@ class TimeChecker:
         else:
             return self._is_in_sleep_time(now_time)
 
-    def _is_in_schedule_sleep_time(self, now_time: time) -> tuple[bool, Optional[str]]:
+    def _is_in_schedule_sleep_time(self, now_time: time) -> tuple[bool, str | None]:
         """检查当前时间是否落在日程表的任何一个睡眠活动中"""
         sleep_keywords = ["休眠", "睡觉", "梦乡"]
         today_schedule = self.get_today_schedule()
@@ -79,7 +79,7 @@ class TimeChecker:
                     continue
         return False, None
 
-    def _is_in_sleep_time(self, now_time: time) -> tuple[bool, Optional[str]]:
+    def _is_in_sleep_time(self, now_time: time) -> tuple[bool, str | None]:
         """检查当前时间是否在固定的睡眠时间内（应用偏移量）"""
         try:
             start_time_str = global_config.sleep_system.fixed_sleep_time

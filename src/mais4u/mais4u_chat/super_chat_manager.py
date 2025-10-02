@@ -1,9 +1,9 @@
 import asyncio
 import time
 from dataclasses import dataclass
-from typing import Dict, List, Optional
-from src.common.logger import get_logger
+
 from src.chat.message_receive.message import MessageRecvS4U
+from src.common.logger import get_logger
 
 # 全局SuperChat管理器实例
 from src.mais4u.s4u_config import s4u_config
@@ -23,7 +23,7 @@ class SuperChatRecord:
     message_text: str
     timestamp: float
     expire_time: float
-    group_name: Optional[str] = None
+    group_name: str | None = None
 
     def is_expired(self) -> bool:
         """检查SuperChat是否已过期"""
@@ -53,8 +53,8 @@ class SuperChatManager:
     """SuperChat管理器，负责管理和跟踪SuperChat消息"""
 
     def __init__(self):
-        self.super_chats: Dict[str, List[SuperChatRecord]] = {}  # chat_id -> SuperChat列表
-        self._cleanup_task: Optional[asyncio.Task] = None
+        self.super_chats: dict[str, list[SuperChatRecord]] = {}  # chat_id -> SuperChat列表
+        self._cleanup_task: asyncio.Task | None = None
         self._is_initialized = False
         logger.info("SuperChat管理器已初始化")
 
@@ -186,7 +186,7 @@ class SuperChatManager:
 
         logger.info(f"添加SuperChat记录: {user_info.user_nickname} - {price}元 - {message.superchat_message_text}")
 
-    def get_superchats_by_chat(self, chat_id: str) -> List[SuperChatRecord]:
+    def get_superchats_by_chat(self, chat_id: str) -> list[SuperChatRecord]:
         """获取指定聊天的所有有效SuperChat"""
         # 确保清理任务已启动
         self._ensure_cleanup_task_started()
@@ -198,7 +198,7 @@ class SuperChatManager:
         valid_superchats = [sc for sc in self.super_chats[chat_id] if not sc.is_expired()]
         return valid_superchats
 
-    def get_all_valid_superchats(self) -> Dict[str, List[SuperChatRecord]]:
+    def get_all_valid_superchats(self) -> dict[str, list[SuperChatRecord]]:
         """获取所有有效的SuperChat"""
         # 确保清理任务已启动
         self._ensure_cleanup_task_started()

@@ -1,34 +1,30 @@
 #!/usr/bin/env python3
-# -*- coding: utf-8 -*-
-"""纯 inkfox 视频关键帧分析工具
-
-仅依赖 `inkfox.video` 提供的 Rust 扩展能力：
-    - extract_keyframes_from_video
-    - get_system_info
-
-功能：
-    - 关键帧提取 (base64, timestamp)
-    - 批量 / 逐帧 LLM 描述
-    - 自动模式 (<=3 帧批量，否则逐帧)
+"""
+视频分析器模块 - Rust优化版本
+集成了Rust视频关键帧提取模块，提供高性能的视频分析功能
+支持SIMD优化、多线程处理和智能关键帧检测
 """
 
-from __future__ import annotations
-
-import os
-import io
 import asyncio
 import base64
 import tempfile
 from pathlib import Path
 from typing import List, Tuple, Optional, Dict, Any
 import hashlib
+import io
+import os
+import tempfile
 import time
+from pathlib import Path
 
+import numpy as np
 from PIL import Image
-
-from src.common.logger import get_logger
-from src.common.database.sqlalchemy_models import get_db_session, Videos
 from sqlalchemy import select
+
+from src.common.database.sqlalchemy_models import Videos, get_db_session
+from src.common.logger import get_logger
+from src.config.config import global_config, model_config
+from src.llm_models.utils_model import LLMRequest
 
 logger = get_logger("utils_video")
 
@@ -205,7 +201,7 @@ class VideoAnalyzer:
         hash_obj.update(video_data)
         return hash_obj.hexdigest()
 
-    async def _check_video_exists(self, video_hash: str) -> Optional[Videos]:
+    async def _check_video_exists(self, video_hash: str) -> Videos | None:
         """检查视频是否已经分析过"""
         try:
             async with get_db_session() as session:
@@ -222,8 +218,8 @@ class VideoAnalyzer:
             return None
 
     async def _store_video_result(
-        self, video_hash: str, description: str, metadata: Optional[Dict] = None
-    ) -> Optional[Videos]:
+        self, video_hash: str, description: str, metadata: dict | None = None
+    ) -> Videos | None:
         """存储视频分析结果到数据库"""
         # 检查描述是否为错误信息，如果是则不保存
         if description.startswith("❌"):
@@ -283,7 +279,7 @@ class VideoAnalyzer:
         else:
             logger.warning(f"无效的分析模式: {mode}")
 
-    async def extract_frames(self, video_path: str) -> List[Tuple[str, float]]:
+    async def extract_frames(self, video_path: str) -> list[tuple[str, float]]:
         """提取视频帧 - 智能选择最佳实现"""
         # 检查是否应该使用Rust实现
         if RUST_VIDEO_AVAILABLE and self.frame_extraction_mode == "keyframe":
@@ -305,8 +301,8 @@ class VideoAnalyzer:
                 logger.info(f"🔄 抽帧模式为 {self.frame_extraction_mode}，使用Python抽帧实现")
             return await self._extract_frames_python_fallback(video_path)
 
-    # ---- 系统信息 ----
-    def _log_system(self) -> None:
+    async def _extract_frames_rust_advanced(self, video_path: str) -> list[tuple[str, float]]:
+        """使用 Rust 高级接口的帧提取"""
         try:
             info = video.get_system_info()  # type: ignore[attr-defined]
             logger.info(
@@ -329,25 +325,174 @@ class VideoAnalyzer:
                 threads=self.threads,
                 verbose=False,
             )
-            files = sorted(Path(tmp).glob("keyframe_*.jpg"))[: self.max_frames]
-            total_ms = getattr(result, "total_time_ms", 0)
-            frames: List[Tuple[str, float]] = []
-            for i, f in enumerate(files):
-                img = Image.open(f).convert("RGB")
-                if max(img.size) > self.max_image_size:
-                    scale = self.max_image_size / max(img.size)
-                    img = img.resize((int(img.width * scale), int(img.height * scale)), Image.Resampling.LANCZOS)
-                buf = io.BytesIO()
-                img.save(buf, format="JPEG", quality=self.frame_quality)
-                b64 = base64.b64encode(buf.getvalue()).decode()
-                ts = (i / max(1, len(files) - 1)) * (total_ms / 1000.0) if total_ms else float(i)
-                frames.append((b64, ts))
+
+            logger.info(f"检测到 {len(keyframe_indices)} 个关键帧")
+
+            # 3. 转换选定的关键帧为 base64
+            frames = []
+            frame_count = 0
+
+            for idx in keyframe_indices[: self.max_frames]:
+                if idx < len(frames_data):
+                    try:
+                        frame = frames_data[idx]
+                        frame_data = frame.get_data()
+
+                        # 将灰度数据转换为PIL图像
+                        frame_array = np.frombuffer(frame_data, dtype=np.uint8).reshape((frame.height, frame.width))
+                        pil_image = Image.fromarray(
+                            frame_array,
+                            mode="L",  # 灰度模式
+                        )
+
+                        # 转换为RGB模式以便保存为JPEG
+                        pil_image = pil_image.convert("RGB")
+
+                        # 调整图像大小
+                        if max(pil_image.size) > self.max_image_size:
+                            ratio = self.max_image_size / max(pil_image.size)
+                            new_size = tuple(int(dim * ratio) for dim in pil_image.size)
+                            pil_image = pil_image.resize(new_size, Image.Resampling.LANCZOS)
+
+                        # 转换为 base64
+                        buffer = io.BytesIO()
+                        pil_image.save(buffer, format="JPEG", quality=self.frame_quality)
+                        frame_base64 = base64.b64encode(buffer.getvalue()).decode("utf-8")
+
+                        # 估算时间戳
+                        estimated_timestamp = frame.frame_number * (1.0 / 30.0)  # 假设30fps
+
+                        frames.append((frame_base64, estimated_timestamp))
+                        frame_count += 1
+
+                        logger.debug(
+                            f"处理关键帧 {frame_count}: 帧号 {frame.frame_number}, 时间 {estimated_timestamp:.2f}s"
+                        )
+
+                    except Exception as e:
+                        logger.error(f"处理关键帧 {idx} 失败: {e}")
+                        continue
+
+            logger.info(f"✅ Rust 高级提取完成: {len(frames)} 关键帧")
             return frames
 
-    # ---- 批量分析 ----
-    async def _analyze_batch(self, frames: List[Tuple[str, float]], question: Optional[str]) -> str:
-        from src.llm_models.payload_content.message import MessageBuilder, RoleType
-        from src.llm_models.utils_model import RequestType
+        except Exception as e:
+            logger.error(f"❌ Rust 高级帧提取失败: {e}")
+            # 回退到基础方法
+            logger.info("回退到基础 Rust 方法")
+            return await self._extract_frames_rust(video_path)
+
+    async def _extract_frames_rust(self, video_path: str) -> list[tuple[str, float]]:
+        """使用 Rust 实现的帧提取"""
+        try:
+            logger.info("🔄 使用 Rust 模块提取关键帧...")
+
+            # 创建临时输出目录
+            with tempfile.TemporaryDirectory() as temp_dir:
+                # 使用便捷函数进行关键帧提取，使用配置参数
+                result = rust_video.extract_keyframes_from_video(
+                    video_path=video_path,
+                    output_dir=temp_dir,
+                    threshold=self.rust_keyframe_threshold,
+                    max_frames=self.max_frames * 2,  # 提取更多帧以便筛选
+                    max_save=self.max_frames,
+                    ffmpeg_path=self.ffmpeg_path,
+                    use_simd=self.rust_use_simd,
+                    threads=self.rust_threads,
+                    verbose=False,  # 使用固定值，不需要配置
+                )
+
+                logger.info(
+                    f"Rust 处理完成: 总帧数 {result.total_frames}, 关键帧 {result.keyframes_extracted}, 处理速度 {result.processing_fps:.1f} FPS"
+                )
+
+                # 转换保存的关键帧为 base64 格式
+                frames = []
+                temp_dir_path = Path(temp_dir)
+
+                # 获取所有保存的关键帧文件
+                keyframe_files = sorted(temp_dir_path.glob("keyframe_*.jpg"))
+
+                for i, keyframe_file in enumerate(keyframe_files):
+                    if len(frames) >= self.max_frames:
+                        break
+
+                    try:
+                        # 读取关键帧文件
+                        with open(keyframe_file, "rb") as f:
+                            image_data = f.read()
+
+                        # 转换为 PIL 图像并压缩
+                        pil_image = Image.open(io.BytesIO(image_data))
+
+                        # 调整图像大小
+                        if max(pil_image.size) > self.max_image_size:
+                            ratio = self.max_image_size / max(pil_image.size)
+                            new_size = tuple(int(dim * ratio) for dim in pil_image.size)
+                            pil_image = pil_image.resize(new_size, Image.Resampling.LANCZOS)
+
+                        # 转换为 base64
+                        buffer = io.BytesIO()
+                        pil_image.save(buffer, format="JPEG", quality=self.frame_quality)
+                        frame_base64 = base64.b64encode(buffer.getvalue()).decode("utf-8")
+
+                        # 估算时间戳（基于帧索引和总时长）
+                        if result.total_frames > 0:
+                            # 假设关键帧在时间上均匀分布
+                            estimated_timestamp = (i * result.total_time_ms / 1000.0) / result.keyframes_extracted
+                        else:
+                            estimated_timestamp = i * 1.0  # 默认每秒一帧
+
+                        frames.append((frame_base64, estimated_timestamp))
+
+                        logger.debug(f"处理关键帧 {i + 1}: 估算时间 {estimated_timestamp:.2f}s")
+
+                    except Exception as e:
+                        logger.error(f"处理关键帧 {keyframe_file.name} 失败: {e}")
+                        continue
+
+                logger.info(f"✅ Rust 提取完成: {len(frames)} 关键帧")
+                return frames
+
+        except Exception as e:
+            logger.error(f"❌ Rust 帧提取失败: {e}")
+            raise e
+
+    async def _extract_frames_python_fallback(self, video_path: str) -> list[tuple[str, float]]:
+        """Python降级抽帧实现 - 支持多种抽帧模式"""
+        try:
+            # 导入旧版本分析器
+            from .utils_video_legacy import get_legacy_video_analyzer
+
+            logger.info("🔄 使用Python降级抽帧实现...")
+            legacy_analyzer = get_legacy_video_analyzer()
+
+            # 同步配置参数
+            legacy_analyzer.max_frames = self.max_frames
+            legacy_analyzer.frame_quality = self.frame_quality
+            legacy_analyzer.max_image_size = self.max_image_size
+            legacy_analyzer.frame_extraction_mode = self.frame_extraction_mode
+            legacy_analyzer.frame_interval_seconds = self.frame_interval_seconds
+            legacy_analyzer.use_multiprocessing = self.use_multiprocessing
+
+            # 使用旧版本的抽帧功能
+            frames = await legacy_analyzer.extract_frames(video_path)
+
+            logger.info(f"✅ Python降级抽帧完成: {len(frames)} 帧")
+            return frames
+
+        except Exception as e:
+            logger.error(f"❌ Python降级抽帧失败: {e}")
+            return []
+
+    async def analyze_frames_batch(self, frames: list[tuple[str, float]], user_question: str = None) -> str:
+        """批量分析所有帧"""
+        logger.info(f"开始批量分析{len(frames)}帧")
+
+        if not frames:
+            return "❌ 没有可分析的帧"
+
+        # 构建提示词并格式化人格信息，要不然占位符的那个会爆炸
         prompt = self.batch_analysis_prompt.format(
             personality_core=self.personality_core, personality_side=self.personality_side
         )
@@ -376,7 +521,7 @@ class VideoAnalyzer:
             logger.error(f"❌ 视频识别失败: {e}")
             raise e
 
-    async def _analyze_multiple_frames(self, frames: List[Tuple[str, float]], prompt: str) -> str:
+    async def _analyze_multiple_frames(self, frames: list[tuple[str, float]], prompt: str) -> str:
         """使用多图片分析方法"""
         logger.info(f"开始构建包含{len(frames)}帧的分析请求")
 
@@ -412,53 +557,75 @@ class VideoAnalyzer:
             temperature=None,
             max_tokens=None,
         )
-        return resp.content or "❌ 未获得响应"
 
-    # ---- 逐帧分析 ----
-    async def _analyze_sequential(self, frames: List[Tuple[str, float]], question: Optional[str]) -> str:
-        results: List[str] = []
-        for i, (b64, ts) in enumerate(frames):
-            prompt = f"分析第{i+1}帧" + (f" (时间: {ts:.2f}s)" if self.enable_frame_timing else "")
-            if question:
-                prompt += f"\n关注: {question}"
+        logger.info(f"视频识别完成，响应长度: {len(api_response.content or '')} ")
+        return api_response.content or "❌ 未获得响应内容"
+
+    async def analyze_frames_sequential(self, frames: list[tuple[str, float]], user_question: str = None) -> str:
+        """逐帧分析并汇总"""
+        logger.info(f"开始逐帧分析{len(frames)}帧")
+
+        frame_analyses = []
+
+        for i, (frame_base64, timestamp) in enumerate(frames):
             try:
                 text, _ = await self.video_llm.generate_response_for_image(
                     prompt=prompt, image_base64=b64, image_format="jpeg"
                 )
-                results.append(f"第{i+1}帧: {text}")
-            except Exception as e:  # pragma: no cover
-                results.append(f"第{i+1}帧: 失败 {e}")
-            if i < len(frames) - 1:
-                await asyncio.sleep(self.frame_analysis_delay)
-        summary_prompt = "基于以下逐帧结果给出完整总结:\n\n" + "\n".join(results)
-        try:
-            final, _ = await self.video_llm.generate_response_for_image(
-                prompt=summary_prompt, image_base64=frames[-1][0], image_format="jpeg"
-            )
-            return final
-        except Exception:  # pragma: no cover
-            return "\n".join(results)
+                logger.info("✅ 逐帧分析和汇总完成")
+                return summary
+            else:
+                return "❌ 没有可用于汇总的帧"
+        except Exception as e:
+            logger.error(f"❌ 汇总分析失败: {e}")
+            # 如果汇总失败，返回各帧分析结果
+            return f"视频逐帧分析结果：\n\n{chr(10).join(frame_analyses)}"
 
-    # ---- 主入口 ----
-    async def analyze_video(self, video_path: str, question: Optional[str] = None) -> Tuple[bool, str]:
-        if not os.path.exists(video_path):
-            return False, "❌ 文件不存在"
-        frames = await self.extract_keyframes(video_path)
-        if not frames:
-            return False, "❌ 未提取到关键帧"
-        mode = self.analysis_mode
-        if mode == "auto":
-            mode = "batch" if len(frames) <= 20 else "sequential"
-        text = await (self._analyze_batch(frames, question) if mode == "batch" else self._analyze_sequential(frames, question))
-        return True, text
+    async def analyze_video(self, video_path: str, user_question: str = None) -> tuple[bool, str]:
+        """分析视频的主要方法
+
+        Returns:
+            Tuple[bool, str]: (是否成功, 分析结果或错误信息)
+        """
+        if self.disabled:
+            error_msg = "❌ 视频分析功能已禁用：没有可用的视频处理实现"
+            logger.warning(error_msg)
+            return (False, error_msg)
+
+        try:
+            logger.info(f"开始分析视频: {os.path.basename(video_path)}")
+
+            # 提取帧
+            frames = await self.extract_frames(video_path)
+            if not frames:
+                error_msg = "❌ 无法从视频中提取有效帧"
+                return (False, error_msg)
+
+            # 根据模式选择分析方法
+            if self.analysis_mode == "auto":
+                # 智能选择：少于等于3帧用批量，否则用逐帧
+                mode = "batch" if len(frames) <= 3 else "sequential"
+                logger.info(f"自动选择分析模式: {mode} (基于{len(frames)}帧)")
+            else:
+                mode = self.analysis_mode
+
+            # 执行分析
+            if mode == "batch":
+                result = await self.analyze_frames_batch(frames, user_question)
+            else:  # sequential
+                result = await self.analyze_frames_sequential(frames, user_question)
+
+            logger.info("✅ 视频分析完成")
+            return (True, result)
+
+        except Exception as e:
+            error_msg = f"❌ 视频分析失败: {e!s}"
+            logger.error(error_msg)
+            return (False, error_msg)
 
     async def analyze_video_from_bytes(
-        self,
-        video_bytes: bytes,
-        filename: Optional[str] = None,
-        prompt: Optional[str] = None,
-        question: Optional[str] = None,
-    ) -> Dict[str, str]:
+        self, video_bytes: bytes, filename: str = None, user_question: str = None, prompt: str = None
+    ) -> dict[str, str]:
         """从字节数据分析视频
 
         Args:
@@ -568,34 +735,81 @@ class VideoAnalyzer:
                 return {"summary": result}
 
         except Exception as e:
-            error_msg = f"❌ 从字节数据分析视频失败: {str(e)}"
+            error_msg = f"❌ 从字节数据分析视频失败: {e!s}"
             logger.error(error_msg)
 
-    async def _save_cache(self, video_hash: str, summary: str, file_size: int) -> None:
+            # 不保存错误信息到数据库，允许后续重试
+            logger.info("💡 错误信息不保存到数据库，允许后续重试")
+
+            # 处理失败，通知等待者并清理资源
+            try:
+                if video_hash and video_event:
+                    async with video_lock_manager:
+                        if video_hash in video_events:
+                            video_events[video_hash].set()
+                        video_locks.pop(video_hash, None)
+                        video_events.pop(video_hash, None)
+            except Exception as cleanup_e:
+                logger.error(f"❌ 清理锁资源失败: {cleanup_e}")
+
+            return {"summary": error_msg}
+
+    def is_supported_video(self, file_path: str) -> bool:
+        """检查是否为支持的视频格式"""
+        supported_formats = {".mp4", ".avi", ".mov", ".mkv", ".flv", ".wmv", ".m4v", ".3gp", ".webm"}
+        return Path(file_path).suffix.lower() in supported_formats
+
+    def get_processing_capabilities(self) -> dict[str, any]:
+        """获取处理能力信息"""
+        if not RUST_VIDEO_AVAILABLE:
+            return {"error": "Rust视频处理模块不可用", "available": False, "reason": "rust_video模块未安装或加载失败"}
+
         try:
-            async with get_db_session() as session:  # type: ignore
-                stmt = insert(Videos).values(  # type: ignore
-                    video_id="",
-                    video_hash=video_hash,
-                    description=summary,
-                    count=1,
-                    timestamp=time.time(),
-                    vlm_processed=True,
-                    duration=None,
-                    frame_count=None,
-                    fps=None,
-                    resolution=None,
-                    file_size=file_size,
-                )
-                try:
-                    await session.execute(stmt)
-                    await session.commit()
-                    logger.debug(f"视频缓存写入 success hash={video_hash}")
-                except sa_exc.IntegrityError:  # 可能并发已写入
-                    await session.rollback()
-                    logger.debug(f"视频缓存已存在 hash={video_hash}")
-        except Exception:  # pragma: no cover
-                logger.debug("视频缓存写入失败")
+            system_info = rust_video.get_system_info()
+
+            # 创建一个临时的extractor来获取CPU特性
+            extractor = rust_video.VideoKeyframeExtractor(threads=0, verbose=False)
+            cpu_features = extractor.get_cpu_features()
+
+            capabilities = {
+                "system": {
+                    "threads": system_info.get("threads", 0),
+                    "rust_version": system_info.get("version", "unknown"),
+                },
+                "cpu_features": cpu_features,
+                "recommended_settings": self._get_recommended_settings(cpu_features),
+                "analysis_modes": ["auto", "batch", "sequential"],
+                "supported_formats": [".mp4", ".avi", ".mov", ".mkv", ".flv", ".wmv", ".m4v", ".3gp", ".webm"],
+                "available": True,
+            }
+
+            return capabilities
+
+        except Exception as e:
+            logger.error(f"获取处理能力信息失败: {e}")
+            return {"error": str(e), "available": False}
+
+    def _get_recommended_settings(self, cpu_features: dict[str, bool]) -> dict[str, any]:
+        """根据CPU特性推荐最佳设置"""
+        settings = {
+            "use_simd": any(cpu_features.values()),
+            "block_size": 8192,
+            "threads": 0,  # 自动检测
+        }
+
+        # 根据CPU特性调整设置
+        if cpu_features.get("avx2", False):
+            settings["block_size"] = 16384  # AVX2支持更大的块
+            settings["optimization_level"] = "avx2"
+        elif cpu_features.get("sse2", False):
+            settings["block_size"] = 8192
+            settings["optimization_level"] = "sse2"
+        else:
+            settings["use_simd"] = False
+            settings["block_size"] = 4096
+            settings["optimization_level"] = "scalar"
+
+        return settings
 
 
 # ---- 外部接口 ----
@@ -613,7 +827,14 @@ def is_video_analysis_available() -> bool:
     return True
 
 
-def get_video_analysis_status() -> Dict[str, Any]:
+def get_video_analysis_status() -> dict[str, any]:
+    """获取视频分析功能的详细状态信息
+
+    Returns:
+        Dict[str, any]: 包含功能状态信息的字典
+    """
+    # 检查OpenCV是否可用
+    opencv_available = False
     try:
         info = video.get_system_info()  # type: ignore[attr-defined]
     except Exception as e:  # pragma: no cover

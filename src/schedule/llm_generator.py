@@ -1,16 +1,18 @@
 # mmc/src/schedule/llm_generator.py
 
 import asyncio
-import orjson
 from datetime import datetime
-from typing import List, Optional, Dict, Any
-from lunar_python import Lunar
+from typing import Any
+
+import orjson
 from json_repair import repair_json
+from lunar_python import Lunar
 
 from src.common.database.sqlalchemy_models import MonthlyPlan
+from src.common.logger import get_logger
 from src.config.config import global_config, model_config
 from src.llm_models.utils_model import LLMRequest
-from src.common.logger import get_logger
+
 from .schemas import ScheduleData
 
 logger = get_logger("schedule_llm_generator")
@@ -37,7 +39,7 @@ class ScheduleLLMGenerator:
     def __init__(self):
         self.llm = LLMRequest(model_set=model_config.model_task_config.schedule_generator, request_type="schedule")
 
-    async def generate_schedule_with_llm(self, sampled_plans: List[MonthlyPlan]) -> Optional[List[Dict[str, Any]]]:
+    async def generate_schedule_with_llm(self, sampled_plans: list[MonthlyPlan]) -> list[dict[str, Any]] | None:
         now = datetime.now()
         today_str = now.strftime("%Y-%m-%d")
         weekday = now.strftime("%A")
@@ -143,7 +145,7 @@ class MonthlyPlanLLMGenerator:
     def __init__(self):
         self.llm = LLMRequest(model_set=model_config.model_task_config.schedule_generator, request_type="monthly_plan")
 
-    async def generate_plans_with_llm(self, target_month: str, archived_plans: List[MonthlyPlan]) -> List[str]:
+    async def generate_plans_with_llm(self, target_month: str, archived_plans: list[MonthlyPlan]) -> list[str]:
         guidelines = global_config.planning_system.monthly_plan_guidelines or DEFAULT_MONTHLY_PLAN_GUIDELINES
         personality = global_config.personality.personality_core
         personality_side = global_config.personality.personality_side
@@ -209,7 +211,7 @@ class MonthlyPlanLLMGenerator:
         return []
 
     @staticmethod
-    def _parse_plans_response(response: str) -> List[str]:
+    def _parse_plans_response(response: str) -> list[str]:
         try:
             response = response.strip()
             lines = [line.strip() for line in response.split("\n") if line.strip()]

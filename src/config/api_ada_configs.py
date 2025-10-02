@@ -1,6 +1,7 @@
-from typing import List, Dict, Any, Literal, Union, Optional
-from pydantic import Field
 from threading import Lock
+from typing import Any, Literal
+
+from pydantic import Field
 
 from src.config.config_base import ValidatedConfigBase
 
@@ -10,7 +11,7 @@ class APIProvider(ValidatedConfigBase):
 
     name: str = Field(..., min_length=1, description="API提供商名称")
     base_url: str = Field(..., description="API基础URL")
-    api_key: Union[str, List[str]] = Field(..., min_length=1, description="API密钥，支持单个密钥或密钥列表轮询")
+    api_key: str | list[str] = Field(..., min_length=1, description="API密钥，支持单个密钥或密钥列表轮询")
     client_type: Literal["openai", "gemini", "aiohttp_gemini"] = Field(
         default="openai", description="客户端类型（如openai/google等，默认为openai）"
     )
@@ -70,7 +71,7 @@ class ModelInfo(ValidatedConfigBase):
     price_in: float = Field(default=0.0, ge=0, description="每M token输入价格")
     price_out: float = Field(default=0.0, ge=0, description="每M token输出价格")
     force_stream_mode: bool = Field(default=False, description="是否强制使用流式输出模式")
-    extra_params: Dict[str, Any] = Field(default_factory=dict, description="额外参数（用于API调用时的额外配置）")
+    extra_params: dict[str, Any] = Field(default_factory=dict, description="额外参数（用于API调用时的额外配置）")
     anti_truncation: bool = Field(default=False, description="是否启用反截断功能，防止模型输出被截断")
 
     @classmethod
@@ -101,11 +102,11 @@ class ModelInfo(ValidatedConfigBase):
 class TaskConfig(ValidatedConfigBase):
     """任务配置类"""
 
-    model_list: List[str] = Field(..., description="任务使用的模型列表")
+    model_list: list[str] = Field(..., description="任务使用的模型列表")
     max_tokens: int = Field(default=800, description="任务最大输出token数")
     temperature: float = Field(default=0.7, description="模型温度")
     concurrency_count: int = Field(default=1, description="并发请求数量")
-    embedding_dimension: Optional[int] = Field(
+    embedding_dimension: int | None = Field(
         default=None,
         description="嵌入模型输出向量维度，仅在嵌入任务中使用",
         ge=1,
@@ -168,9 +169,9 @@ class ModelTaskConfig(ValidatedConfigBase):
 class APIAdapterConfig(ValidatedConfigBase):
     """API Adapter配置类"""
 
-    models: List[ModelInfo] = Field(..., min_length=1, description="模型列表")
+    models: list[ModelInfo] = Field(..., min_length=1, description="模型列表")
     model_task_config: ModelTaskConfig = Field(..., description="模型任务配置")
-    api_providers: List[APIProvider] = Field(..., min_length=1, description="API提供商列表")
+    api_providers: list[APIProvider] = Field(..., min_length=1, description="API提供商列表")
 
     def __init__(self, **data):
         super().__init__(**data)

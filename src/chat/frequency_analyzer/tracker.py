@@ -1,7 +1,7 @@
-import orjson
 import time
-from typing import Dict, List, Optional
 from pathlib import Path
+
+import orjson
 
 from src.common.logger import get_logger
 
@@ -19,10 +19,10 @@ class ChatFrequencyTracker:
     """
 
     def __init__(self):
-        self._timestamps: Dict[str, List[float]] = self._load_timestamps()
+        self._timestamps: dict[str, list[float]] = self._load_timestamps()
 
     @staticmethod
-    def _load_timestamps() -> Dict[str, List[float]]:
+    def _load_timestamps() -> dict[str, list[float]]:
         """从本地文件加载时间戳数据。"""
         if not TRACKER_FILE.exists():
             return {}
@@ -61,7 +61,7 @@ class ChatFrequencyTracker:
         logger.debug(f"为 chat_id '{chat_id}' 记录了新的聊天时间: {now}")
         self._save_timestamps()
 
-    def get_timestamps_for_chat(self, chat_id: str) -> Optional[List[float]]:
+    def get_timestamps_for_chat(self, chat_id: str) -> list[float] | None:
         """
         获取指定聊天的所有时间戳记录。
 

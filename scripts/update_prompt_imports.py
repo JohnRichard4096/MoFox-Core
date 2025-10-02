@@ -30,7 +30,7 @@ def update_prompt_imports(file_path):
         print(f"文件不存在: {file_path}")
         return False
 
-    with open(file_path, "r", encoding="utf-8") as f:
+    with open(file_path, encoding="utf-8") as f:
         content = f.read()
 
     # 替换导入语句

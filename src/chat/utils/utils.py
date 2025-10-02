@@ -3,20 +3,21 @@ import random
 import re
 import string
 import time
+from collections import Counter
+from typing import Any
+
 import jieba
 import numpy as np
-
-from collections import Counter
 from maim_message import UserInfo
-from typing import Optional, Tuple, Dict, List, Any, Coroutine
 
-from src.common.logger import get_logger
-from src.common.message_repository import find_messages, count_messages
-from src.config.config import global_config, model_config
-from src.chat.message_receive.message import MessageRecv
 from src.chat.message_receive.chat_stream import get_chat_manager
+from src.chat.message_receive.message import MessageRecv
+from src.common.logger import get_logger
+from src.common.message_repository import count_messages, find_messages
+from src.config.config import global_config, model_config
 from src.llm_models.utils_model import LLMRequest
-from src.person_info.person_info import Person
+from src.person_info.person_info import PersonInfoManager, get_person_info_manager
+
 from .typo_generator import ChineseTypoGenerator
 
 logger = get_logger("chat_utils")
@@ -86,9 +87,9 @@ def is_mentioned_bot_in_message(message: MessageRecv) -> tuple[bool, float]:
         if not is_mentioned:
             # 判断是否被回复
             if re.match(
-                rf"\[回复 (.+?)\({str(global_config.bot.qq_account)}\)：(.+?)\]，说：", message.processed_plain_text
+                rf"\[回复 (.+?)\({global_config.bot.qq_account!s}\)：(.+?)\]，说：", message.processed_plain_text
             ) or re.match(
-                rf"\[回复<(.+?)(?=:{str(global_config.bot.qq_account)}>)\:{str(global_config.bot.qq_account)}>：(.+?)\]，说：",
+                rf"\[回复<(.+?)(?=:{global_config.bot.qq_account!s}>)\:{global_config.bot.qq_account!s}>：(.+?)\]，说：",
                 message.processed_plain_text,
             ):
                 is_mentioned = True
@@ -110,14 +111,14 @@ def is_mentioned_bot_in_message(message: MessageRecv) -> tuple[bool, float]:
     return is_mentioned, reply_probability
 
 
-async def get_embedding(text, request_type="embedding") -> Optional[List[float]]:
+async def get_embedding(text, request_type="embedding") -> list[float] | None:
     """获取文本的embedding向量"""
     # 每次都创建新的LLMRequest实例以避免事件循环冲突
     llm = LLMRequest(model_set=model_config.model_task_config.embedding, request_type=request_type)
     try:
         embedding, _ = await llm.get_embedding(text)
     except Exception as e:
-        logger.error(f"获取embedding失败: {str(e)}")
+        logger.error(f"获取embedding失败: {e!s}")
         embedding = None
     return embedding
 
@@ -622,7 +623,7 @@ def translate_timestamp_to_human_readable(timestamp: float, mode: str = "normal"
         return time.strftime("%H:%M:%S", time.localtime(timestamp))
 
 
-async def get_chat_type_and_target_info(chat_id: str) -> Tuple[bool, Optional[Dict]]:
+def get_chat_type_and_target_info(chat_id: str) -> tuple[bool, dict | None]:
     """
     获取聊天类型（是否群聊）和私聊对象信息。
 
@@ -675,7 +676,6 @@ async def get_chat_type_and_target_info(chat_id: str) -> Tuple[bool, Optional[Di
                             if loop.is_running():
                                 # 如果事件循环在运行，从其他线程提交并等待结果
                                 try:
-
                                     fut = asyncio.run_coroutine_threadsafe(
                                         person_info_manager.get_value(person_id, "person_name"), loop
                                     )
@@ -711,7 +711,7 @@ async def get_chat_type_and_target_info(chat_id: str) -> Tuple[bool, Optional[Di
     return is_group_chat, chat_target_info
 
 
-def assign_message_ids(messages: List[Any]) -> List[Dict[str, Any]]:
+def assign_message_ids(messages: list[Any]) -> list[dict[str, Any]]:
     """
     为消息列表中的每个消息分配唯一的简短随机ID
 

@@ -1,17 +1,15 @@
-# -*- coding: utf-8 -*-
 """
 智能记忆遗忘引擎
 基于重要程度、置信度和激活频率的智能遗忘机制
 """
 
-import time
 import asyncio
-from typing import List, Dict, Optional, Tuple
-from datetime import datetime
+import time
 from dataclasses import dataclass
+from datetime import datetime
 
+from src.chat.memory_system.memory_chunk import ConfidenceLevel, ImportanceLevel, MemoryChunk
 from src.common.logger import get_logger
-from src.chat.memory_system.memory_chunk import MemoryChunk, ImportanceLevel, ConfidenceLevel
 
 logger = get_logger(__name__)
 
@@ -65,7 +63,7 @@ class ForgettingConfig:
 class MemoryForgettingEngine:
     """智能记忆遗忘引擎"""
 
-    def __init__(self, config: Optional[ForgettingConfig] = None):
+    def __init__(self, config: ForgettingConfig | None = None):
         self.config = config or ForgettingConfig()
         self.stats = ForgettingStats()
         self._last_forgetting_check = 0.0
@@ -116,7 +114,7 @@ class MemoryForgettingEngine:
         # 确保在合理范围内
         return max(self.config.min_forgetting_days, min(threshold, self.config.max_forgetting_days))
 
-    def should_forget_memory(self, memory: MemoryChunk, current_time: Optional[float] = None) -> bool:
+    def should_forget_memory(self, memory: MemoryChunk, current_time: float | None = None) -> bool:
         """
         判断记忆是否应该被遗忘
 
@@ -155,7 +153,7 @@ class MemoryForgettingEngine:
 
         return should_forget
 
-    def is_dormant_memory(self, memory: MemoryChunk, current_time: Optional[float] = None) -> bool:
+    def is_dormant_memory(self, memory: MemoryChunk, current_time: float | None = None) -> bool:
         """
         判断记忆是否处于休眠状态
 
@@ -168,7 +166,7 @@ class MemoryForgettingEngine:
         """
         return memory.is_dormant(current_time, self.config.dormant_threshold_days)
 
-    def should_force_forget_dormant(self, memory: MemoryChunk, current_time: Optional[float] = None) -> bool:
+    def should_force_forget_dormant(self, memory: MemoryChunk, current_time: float | None = None) -> bool:
         """
         判断是否应该强制遗忘休眠记忆
 
@@ -189,7 +187,7 @@ class MemoryForgettingEngine:
         days_since_last_access = (current_time - memory.metadata.last_accessed) / 86400
         return days_since_last_access > self.config.force_forget_dormant_days
 
-    async def check_memories_for_forgetting(self, memories: List[MemoryChunk]) -> Tuple[List[str], List[str]]:
+    async def check_memories_for_forgetting(self, memories: list[MemoryChunk]) -> tuple[list[str], list[str]]:
         """
         检查记忆列表，识别需要遗忘的记忆
 
@@ -241,7 +239,7 @@ class MemoryForgettingEngine:
 
         return normal_forgetting_ids, force_forgetting_ids
 
-    async def perform_forgetting_check(self, memories: List[MemoryChunk]) -> Dict[str, any]:
+    async def perform_forgetting_check(self, memories: list[MemoryChunk]) -> dict[str, any]:
         """
         执行完整的遗忘检查流程
 
@@ -314,7 +312,7 @@ class MemoryForgettingEngine:
         except Exception as e:
             logger.error(f"定期遗忘检查失败: {e}", exc_info=True)
 
-    def get_forgetting_stats(self) -> Dict[str, any]:
+    def get_forgetting_stats(self) -> dict[str, any]:
         """获取遗忘统计信息"""
         return {
             "total_checked": self.stats.total_checked,

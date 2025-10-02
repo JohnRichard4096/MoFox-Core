@@ -2,10 +2,10 @@
 Formatters for web search results
 """
 
-from typing import List, Dict, Any
+from typing import Any
 
 
-def format_search_results(results: List[Dict[str, Any]]) -> str:
+def format_search_results(results: list[dict[str, Any]]) -> str:
     """
     格式化搜索结果为字符串
     """
@@ -26,7 +26,7 @@ def format_search_results(results: List[Dict[str, Any]]) -> str:
     return formatted_string
 
 
-def format_url_parse_results(results: List[Dict[str, Any]]) -> str:
+def format_url_parse_results(results: list[dict[str, Any]]) -> str:
     """
     将成功解析的URL结果列表格式化为一段简洁的文本。
     """
@@ -45,7 +45,7 @@ def format_url_parse_results(results: List[Dict[str, Any]]) -> str:
     return "\n---\n".join(formatted_parts)
 
 
-def deduplicate_results(results: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
+def deduplicate_results(results: list[dict[str, Any]]) -> list[dict[str, Any]]:
     """
     根据URL去重搜索结果
     """

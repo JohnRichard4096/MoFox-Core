@@ -1,8 +1,8 @@
 from enum import Enum
-from typing import Optional, Any
+from typing import Any
 
 from pydantic import BaseModel
-from typing_extensions import TypedDict, Required
+from typing_extensions import Required, TypedDict
 
 
 class RespFormatType(Enum):
@@ -20,7 +20,7 @@ class JsonSchema(TypedDict, total=False):
     of 64.
     """
 
-    description: Optional[str]
+    description: str | None
     """
     A description of what the response format is for, used by the model to determine
     how to respond in the format.
@@ -32,7 +32,7 @@ class JsonSchema(TypedDict, total=False):
     to build JSON schemas [here](https://json-schema.org/).
     """
 
-    strict: Optional[bool]
+    strict: bool | None
     """
     Whether to enable strict schema adherence when generating the output. If set to
     true, the model will always follow the exact schema defined in the `schema`
@@ -100,7 +100,7 @@ def _link_definitions(schema: dict[str, Any]) -> dict[str, Any]:
             # 如果当前Schema是列表，则遍历每个元素
             for i in range(len(sub_schema)):
                 if isinstance(sub_schema[i], dict):
-                    sub_schema[i] = link_definitions_recursive(f"{path}/{str(i)}", sub_schema[i], defs)
+                    sub_schema[i] = link_definitions_recursive(f"{path}/{i!s}", sub_schema[i], defs)
         else:
             # 否则为字典
             if "$defs" in sub_schema:
@@ -140,8 +140,7 @@ def _remove_defs(schema: dict[str, Any]) -> dict[str, Any]:
                 schema[idx] = _remove_title(item)
     elif isinstance(schema, dict):
         # 是字典，移除title字段，并对所有dict/list子元素递归调用
-        if "$defs" in schema:
-            del schema["$defs"]
+        schema.pop("$defs", None)
         for key, value in schema.items():
             if isinstance(value, (dict, list)):
                 schema[key] = _remove_title(value)

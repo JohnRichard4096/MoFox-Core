@@ -1,4 +1,3 @@
-# -*- coding: utf-8 -*-
 """
 消息内容处理模块
 
@@ -6,10 +5,9 @@
 """
 
 import re
-from typing import Optional
 
-from src.common.logger import get_logger
 from src.chat.message_receive.message import MessageRecv
+from src.common.logger import get_logger
 
 logger = get_logger("anti_injector.message_processor")
 
@@ -66,7 +64,7 @@ class MessageProcessor:
         return new_content
 
     @staticmethod
-    def check_whitelist(message: MessageRecv, whitelist: list) -> Optional[tuple]:
+    def check_whitelist(message: MessageRecv, whitelist: list) -> tuple | None:
         """检查用户白名单
 
         Args:

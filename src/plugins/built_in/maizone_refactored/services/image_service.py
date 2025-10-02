@@ -1,12 +1,11 @@
-# -*- coding: utf-8 -*-
 """
 图片服务模块
 负责处理所有与图片相关的任务，特别是AI生成图片。
 """
 
 import base64
+from collections.abc import Callable
 from pathlib import Path
-from typing import Callable
 
 import aiohttp
 

@@ -1,15 +1,15 @@
 # 使用基于时间戳的文件处理器，简单的轮转份数限制
 
 import logging
-import orjson
 import threading
 import time
+from collections.abc import Callable
+from datetime import datetime, timedelta
+from pathlib import Path
+
+import orjson
 import structlog
 import tomlkit
-
-from pathlib import Path
-from typing import Callable, Optional
-from datetime import datetime, timedelta
 
 # 创建logs目录
 LOG_DIR = Path("logs")
@@ -212,7 +212,7 @@ def load_log_config():  # sourcery skip: use-contextlib-suppress
 
     try:
         if config_path.exists():
-            with open(config_path, "r", encoding="utf-8") as f:
+            with open(config_path, encoding="utf-8") as f:
                 config = tomlkit.load(f)
                 return config.get("log", default_config)
     except Exception as e:
@@ -982,7 +982,7 @@ raw_logger: structlog.stdlib.BoundLogger = structlog.get_logger()
 binds: dict[str, Callable] = {}
 
 
-def get_logger(name: Optional[str]) -> structlog.stdlib.BoundLogger:
+def get_logger(name: str | None) -> structlog.stdlib.BoundLogger:
     """获取logger实例，支持按名称绑定"""
     if name is None:
         return raw_logger

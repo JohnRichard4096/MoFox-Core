@@ -1,17 +1,16 @@
 #!/usr/bin/env python
-# -*- coding: utf-8 -*-
 """
 从现有ChromaDB数据重建JSON元数据索引
 """
 
 import asyncio
-import sys
 import os
+import sys
 
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
-from src.chat.memory_system.memory_system import MemorySystem
 from src.chat.memory_system.memory_metadata_index import MemoryMetadataIndexEntry
+from src.chat.memory_system.memory_system import MemorySystem
 from src.common.logger import get_logger
 
 logger = get_logger(__name__)

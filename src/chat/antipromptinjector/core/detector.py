@@ -1,4 +1,3 @@
-# -*- coding: utf-8 -*-
 """
 提示词注入检测器模块
 
@@ -8,18 +7,18 @@
 3. 缓存机制优化性能
 """
 
+import hashlib
 import re
 import time
-import hashlib
-from typing import Dict, List
 from dataclasses import asdict
 
 from src.common.logger import get_logger
 from src.config.config import global_config
-from ..types import DetectionResult
 
 # 导入LLM API
 from src.plugin_system.apis import llm_api
+
+from ..types import DetectionResult
 
 logger = get_logger("anti_injector.detector")
 
@@ -30,8 +29,8 @@ class PromptInjectionDetector:
     def __init__(self):
         """初始化检测器"""
         self.config = global_config.anti_prompt_injection
-        self._cache: Dict[str, DetectionResult] = {}
-        self._compiled_patterns: List[re.Pattern] = []
+        self._cache: dict[str, DetectionResult] = {}
+        self._compiled_patterns: list[re.Pattern] = []
         self._compile_patterns()
 
     def _compile_patterns(self):
@@ -224,7 +223,7 @@ class PromptInjectionDetector:
                 matched_patterns=[],
                 processing_time=processing_time,
                 detection_method="llm",
-                reason=f"LLM检测出错: {str(e)}",
+                reason=f"LLM检测出错: {e!s}",
             )
 
     @staticmethod
@@ -250,7 +249,7 @@ class PromptInjectionDetector:
 请客观分析，避免误判正常对话。"""
 
     @staticmethod
-    def _parse_llm_response(response: str) -> Dict:
+    def _parse_llm_response(response: str) -> dict:
         """解析LLM响应"""
         try:
             lines = response.strip().split("\n")
@@ -280,7 +279,7 @@ class PromptInjectionDetector:
 
         except Exception as e:
             logger.error(f"解析LLM响应失败: {e}")
-            return {"is_injection": False, "confidence": 0.0, "reasoning": f"解析失败: {str(e)}"}
+            return {"is_injection": False, "confidence": 0.0, "reasoning": f"解析失败: {e!s}"}
 
     async def detect(self, message: str) -> DetectionResult:
         """执行检测"""
@@ -331,7 +330,7 @@ class PromptInjectionDetector:
 
         return final_result
 
-    def _merge_results(self, results: List[DetectionResult]) -> DetectionResult:
+    def _merge_results(self, results: list[DetectionResult]) -> DetectionResult:
         """合并多个检测结果"""
         if not results:
             return DetectionResult(reason="无检测结果")
@@ -384,7 +383,7 @@ class PromptInjectionDetector:
         if expired_keys:
             logger.debug(f"清理了{len(expired_keys)}个过期缓存项")
 
-    def get_cache_stats(self) -> Dict:
+    def get_cache_stats(self) -> dict:
         """获取缓存统计信息"""
         return {
             "cache_size": len(self._cache),

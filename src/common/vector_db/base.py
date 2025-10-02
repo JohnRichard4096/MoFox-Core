@@ -1,5 +1,5 @@
 from abc import ABC, abstractmethod
-from typing import Any, Dict, List, Optional
+from typing import Any
 
 
 class VectorDBBase(ABC):
@@ -36,10 +36,10 @@ class VectorDBBase(ABC):
     def add(
         self,
         collection_name: str,
-        embeddings: List[List[float]],
-        documents: Optional[List[str]] = None,
-        metadatas: Optional[List[Dict[str, Any]]] = None,
-        ids: Optional[List[str]] = None,
+        embeddings: list[list[float]],
+        documents: list[str] | None = None,
+        metadatas: list[dict[str, Any]] | None = None,
+        ids: list[str] | None = None,
     ) -> None:
         """
         向指定集合中添加数据。
@@ -57,11 +57,11 @@ class VectorDBBase(ABC):
     def query(
         self,
         collection_name: str,
-        query_embeddings: List[List[float]],
+        query_embeddings: list[list[float]],
         n_results: int = 1,
-        where: Optional[Dict[str, Any]] = None,
+        where: dict[str, Any] | None = None,
         **kwargs: Any,
-    ) -> Dict[str, List[Any]]:
+    ) -> dict[str, list[Any]]:
         """
         在指定集合中查询相似向量。
 
@@ -81,8 +81,8 @@ class VectorDBBase(ABC):
     def delete(
         self,
         collection_name: str,
-        ids: Optional[List[str]] = None,
-        where: Optional[Dict[str, Any]] = None,
+        ids: list[str] | None = None,
+        where: dict[str, Any] | None = None,
     ) -> None:
         """
         从指定集合中删除数据。
@@ -98,13 +98,13 @@ class VectorDBBase(ABC):
     def get(
         self,
         collection_name: str,
-        ids: Optional[List[str]] = None,
-        where: Optional[Dict[str, Any]] = None,
-        limit: Optional[int] = None,
-        offset: Optional[int] = None,
-        where_document: Optional[Dict[str, Any]] = None,
-        include: Optional[List[str]] = None,
-    ) -> Dict[str, Any]:
+        ids: list[str] | None = None,
+        where: dict[str, Any] | None = None,
+        limit: int | None = None,
+        offset: int | None = None,
+        where_document: dict[str, Any] | None = None,
+        include: list[str] | None = None,
+    ) -> dict[str, Any]:
         """
         根据条件从集合中获取数据。
 

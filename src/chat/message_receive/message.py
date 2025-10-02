@@ -1,20 +1,19 @@
 import base64
 import time
-from abc import abstractmethod, ABCMeta
+from abc import ABCMeta, abstractmethod
 from dataclasses import dataclass
-from typing import Optional, Any
+from typing import Any, Optional
 
 import urllib3
-from maim_message import Seg, UserInfo, BaseMessageInfo, MessageBase
+from maim_message import BaseMessageInfo, MessageBase, Seg, UserInfo
 from rich.traceback import install
 
+from src.chat.message_receive.chat_stream import ChatStream
 from src.chat.utils.utils_image import get_image_manager
 from src.chat.utils.utils_video import get_video_analyzer, is_video_analysis_available
 from src.chat.utils.utils_voice import get_voice_text
 from src.common.logger import get_logger
 from src.config.config import global_config
-from src.chat.message_receive.chat_stream import ChatStream
-
 
 install(extra_lines=3)
 
@@ -41,8 +40,8 @@ class Message(MessageBase, metaclass=ABCMeta):
         message_id: str,
         chat_stream: "ChatStream",
         user_info: UserInfo,
-        message_segment: Optional[Seg] = None,
-        timestamp: Optional[float] = None,
+        message_segment: Seg | None = None,
+        timestamp: float | None = None,
         reply: Optional["MessageRecv"] = None,
         processed_plain_text: str = "",
     ):
@@ -264,7 +263,7 @@ class MessageRecv(Message):
                                 logger.warning("视频消息中没有base64数据")
                                 return "[收到视频消息，但数据异常]"
                         except Exception as e:
-                            logger.error(f"视频处理失败: {str(e)}")
+                            logger.error(f"视频处理失败: {e!s}")
                             import traceback
 
                             logger.error(f"错误详情: {traceback.format_exc()}")
@@ -278,7 +277,7 @@ class MessageRecv(Message):
                 logger.info("未启用视频识别")
                 return "[视频]"
         except Exception as e:
-            logger.error(f"处理消息段失败: {str(e)}, 类型: {segment.type}, 数据: {segment.data}")
+            logger.error(f"处理消息段失败: {e!s}, 类型: {segment.type}, 数据: {segment.data}")
             return f"[处理失败的{segment.type}消息]"
 
 
@@ -291,7 +290,7 @@ class MessageRecvS4U(MessageRecv):
         self.is_superchat = False
         self.gift_info = None
         self.gift_name = None
-        self.gift_count: Optional[str] = None
+        self.gift_count: str | None = None
         self.superchat_info = None
         self.superchat_price = None
         self.superchat_message_text = None
@@ -444,7 +443,7 @@ class MessageRecvS4U(MessageRecv):
                                 logger.warning("视频消息中没有base64数据")
                                 return "[收到视频消息，但数据异常]"
                         except Exception as e:
-                            logger.error(f"视频处理失败: {str(e)}")
+                            logger.error(f"视频处理失败: {e!s}")
                             import traceback
 
                             logger.error(f"错误详情: {traceback.format_exc()}")
@@ -458,7 +457,7 @@ class MessageRecvS4U(MessageRecv):
                 logger.info("未启用视频识别")
                 return "[视频]"
         except Exception as e:
-            logger.error(f"处理消息段失败: {str(e)}, 类型: {segment.type}, 数据: {segment.data}")
+            logger.error(f"处理消息段失败: {e!s}, 类型: {segment.type}, 数据: {segment.data}")
             return f"[处理失败的{segment.type}消息]"
 
 
@@ -471,10 +470,10 @@ class MessageProcessBase(Message):
         message_id: str,
         chat_stream: "ChatStream",
         bot_user_info: UserInfo,
-        message_segment: Optional[Seg] = None,
+        message_segment: Seg | None = None,
         reply: Optional["MessageRecv"] = None,
         thinking_start_time: float = 0,
-        timestamp: Optional[float] = None,
+        timestamp: float | None = None,
     ):
         # 调用父类初始化，传递时间戳
         super().__init__(
@@ -533,9 +532,9 @@ class MessageProcessBase(Message):
                     return f"[回复<{self.reply.message_info.user_info.user_nickname}> 的消息：{self.reply.processed_plain_text}]"  # type: ignore
                 return None
             else:
-                return f"[{seg.type}:{str(seg.data)}]"
+                return f"[{seg.type}:{seg.data!s}]"
         except Exception as e:
-            logger.error(f"处理消息段失败: {str(e)}, 类型: {seg.type}, 数据: {seg.data}")
+            logger.error(f"处理消息段失败: {e!s}, 类型: {seg.type}, 数据: {seg.data}")
             return f"[处理失败的{seg.type}消息]"
 
     def _generate_detailed_text(self) -> str:
@@ -565,8 +564,7 @@ class MessageSending(MessageProcessBase):
         is_emoji: bool = False,
         thinking_start_time: float = 0,
         apply_set_reply_logic: bool = False,
-        reply_to: Optional[str] = None,
-        selected_expressions:List[int] = None,
+        reply_to: str | None = None,
     ):
         # 调用父类初始化
         super().__init__(
@@ -638,11 +636,11 @@ class MessageSet:
         self.messages.append(message)
         self.messages.sort(key=lambda x: x.message_info.time)  # type: ignore
 
-    def get_message_by_index(self, index: int) -> Optional[MessageSending]:
+    def get_message_by_index(self, index: int) -> MessageSending | None:
         """通过索引获取消息"""
         return self.messages[index] if 0 <= index < len(self.messages) else None
 
-    def get_message_by_time(self, target_time: float) -> Optional[MessageSending]:
+    def get_message_by_time(self, target_time: float) -> MessageSending | None:
         """获取最接近指定时间的消息"""
         if not self.messages:
             return None

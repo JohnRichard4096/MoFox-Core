@@ -1,16 +1,17 @@
 #!/usr/bin/env python3
-# -*- coding: utf-8 -*-
 """
 Bilibili 工具基础模块
 提供 B 站视频信息获取和视频分析功能
 """
 
-import re
-import aiohttp
 import asyncio
-from typing import Optional, Dict, Any
-from src.common.logger import get_logger
+import re
+from typing import Any
+
+import aiohttp
+
 from src.chat.utils.utils_video import get_video_analyzer
+from src.common.logger import get_logger
 
 logger = get_logger("bilibili_tool")
 
@@ -25,7 +26,7 @@ class BilibiliVideoAnalyzer:
             "Referer": "https://www.bilibili.com/",
         }
 
-    def extract_bilibili_url(self, text: str) -> Optional[str]:
+    def extract_bilibili_url(self, text: str) -> str | None:
         """从文本中提取哔哩哔哩视频链接"""
         # 哔哩哔哩短链接模式
         short_pattern = re.compile(r"https?://b23\.tv/[\w]+", re.IGNORECASE)
@@ -44,7 +45,7 @@ class BilibiliVideoAnalyzer:
 
         return None
 
-    async def get_video_info(self, url: str) -> Optional[Dict[str, Any]]:
+    async def get_video_info(self, url: str) -> dict[str, Any] | None:
         """获取哔哩哔哩视频基本信息"""
         try:
             logger.info(f"🔍 解析视频URL: {url}")
@@ -127,7 +128,7 @@ class BilibiliVideoAnalyzer:
             logger.exception("详细错误信息:")
             return None
 
-    async def get_video_stream_url(self, aid: int, cid: int) -> Optional[str]:
+    async def get_video_stream_url(self, aid: int, cid: int) -> str | None:
         """获取视频流URL"""
         try:
             logger.info(f"🎥 获取视频流URL: aid={aid}, cid={cid}")
@@ -164,7 +165,7 @@ class BilibiliVideoAnalyzer:
                     return stream_url
 
             # 降级到FLV格式
-            if "durl" in play_data and play_data["durl"]:
+            if play_data.get("durl"):
                 logger.info("📹 使用FLV格式视频流")
                 stream_url = play_data["durl"][0].get("url")
                 if stream_url:
@@ -185,7 +186,7 @@ class BilibiliVideoAnalyzer:
             logger.exception("详细错误信息:")
             return None
 
-    async def download_video_bytes(self, stream_url: str, max_size_mb: int = 100) -> Optional[bytes]:
+    async def download_video_bytes(self, stream_url: str, max_size_mb: int = 100) -> bytes | None:
         """下载视频字节数据
 
         Args:
@@ -244,7 +245,7 @@ class BilibiliVideoAnalyzer:
             logger.exception("详细错误信息:")
             return None
 
-    async def analyze_bilibili_video(self, url: str, prompt: str = None) -> Dict[str, Any]:
+    async def analyze_bilibili_video(self, url: str, prompt: str = None) -> dict[str, Any]:
         """分析哔哩哔哩视频并返回详细信息和AI分析结果"""
         try:
             logger.info(f"🎬 开始分析哔哩哔哩视频: {url}")
@@ -322,10 +323,10 @@ class BilibiliVideoAnalyzer:
             return result
 
         except Exception as e:
-            error_msg = f"分析哔哩哔哩视频时发生异常: {str(e)}"
+            error_msg = f"分析哔哩哔哩视频时发生异常: {e!s}"
             logger.error(f"❌ {error_msg}")
             logger.exception("详细错误信息:")  # 记录完整的异常堆栈
-            return {"error": f"分析失败: {str(e)}"}
+            return {"error": f"分析失败: {e!s}"}
 
 
 # 全局实例

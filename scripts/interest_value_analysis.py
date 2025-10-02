@@ -1,7 +1,6 @@
-import time
-import sys
 import os
-from typing import Dict, List, Tuple, Optional
+import sys
+import time
 from datetime import datetime
 
 # Add project root to Python path
@@ -35,7 +34,7 @@ def format_timestamp(timestamp: float) -> str:
         return "未知时间"
 
 
-def calculate_interest_value_distribution(messages) -> Dict[str, int]:
+def calculate_interest_value_distribution(messages) -> dict[str, int]:
     """Calculate distribution of interest_value"""
     distribution = {
         "0.000-0.010": 0,
@@ -76,7 +75,7 @@ def calculate_interest_value_distribution(messages) -> Dict[str, int]:
     return distribution
 
 
-def get_interest_value_stats(messages) -> Dict[str, float]:
+def get_interest_value_stats(messages) -> dict[str, float]:
     """Calculate basic statistics for interest_value"""
     values = [
         float(msg.interest_value) for msg in messages if msg.interest_value is not None and msg.interest_value != 0.0
@@ -97,7 +96,7 @@ def get_interest_value_stats(messages) -> Dict[str, float]:
     }
 
 
-def get_available_chats() -> List[Tuple[str, str, int]]:
+def get_available_chats() -> list[tuple[str, str, int]]:
     """Get all available chats with message counts"""
     try:
         # 获取所有有消息的chat_id
@@ -130,7 +129,7 @@ def get_available_chats() -> List[Tuple[str, str, int]]:
         return []
 
 
-def get_time_range_input() -> Tuple[Optional[float], Optional[float]]:
+def get_time_range_input() -> tuple[float | None, float | None]:
     """Get time range input from user"""
     print("\n时间范围选择:")
     print("1. 最近1天")
@@ -170,7 +169,7 @@ def get_time_range_input() -> Tuple[Optional[float], Optional[float]]:
 
 
 def analyze_interest_values(
-    chat_id: Optional[str] = None, start_time: Optional[float] = None, end_time: Optional[float] = None
+    chat_id: str | None = None, start_time: float | None = None, end_time: float | None = None
 ) -> None:
     """Analyze interest values with optional filters"""
 

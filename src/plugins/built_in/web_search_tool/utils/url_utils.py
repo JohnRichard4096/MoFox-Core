@@ -3,10 +3,9 @@ URL processing utilities
 """
 
 import re
-from typing import List
 
 
-def parse_urls_from_input(urls_input) -> List[str]:
+def parse_urls_from_input(urls_input) -> list[str]:
     """
     从输入中解析URL列表
     """
@@ -29,7 +28,7 @@ def parse_urls_from_input(urls_input) -> List[str]:
     return urls
 
 
-def validate_urls(urls: List[str]) -> List[str]:
+def validate_urls(urls: list[str]) -> list[str]:
     """
     验证URL格式，返回有效的URL列表
     """

@@ -1,20 +1,20 @@
 import os
-from typing import Optional
 
-from fastapi import FastAPI, APIRouter
+from fastapi import APIRouter, FastAPI
 from fastapi.middleware.cors import CORSMiddleware  # 新增导入
 from rich.traceback import install
-from uvicorn import Config, Server as UvicornServer
+from uvicorn import Config
+from uvicorn import Server as UvicornServer
 
 install(extra_lines=3)
 
 
 class Server:
-    def __init__(self, host: Optional[str] = None, port: Optional[int] = None, app_name: str = "MaiMCore"):
+    def __init__(self, host: str | None = None, port: int | None = None, app_name: str = "MaiMCore"):
         self.app = FastAPI(title=app_name)
         self._host: str = "127.0.0.1"
         self._port: int = 8080
-        self._server: Optional[UvicornServer] = None
+        self._server: UvicornServer | None = None
         self.set_address(host, port)
 
         # 配置 CORS
@@ -57,7 +57,7 @@ class Server:
         """
         self.app.include_router(router, prefix=prefix)
 
-    def set_address(self, host: Optional[str] = None, port: Optional[int] = None):
+    def set_address(self, host: str | None = None, port: int | None = None):
         """设置服务器地址和端口"""
         if host:
             self._host = host
@@ -76,7 +76,7 @@ class Server:
             raise
         except Exception as e:
             await self.shutdown()
-            raise RuntimeError(f"服务器运行错误: {str(e)}") from e
+            raise RuntimeError(f"服务器运行错误: {e!s}") from e
         finally:
             await self.shutdown()
 

@@ -6,11 +6,12 @@
 import datetime
 import os
 import time
+from collections.abc import AsyncGenerator
 from contextlib import asynccontextmanager
-from typing import Optional, Any, Dict, AsyncGenerator
+from typing import Any
 
-from sqlalchemy import Column, String, Float, Integer, Boolean, Text, Index, DateTime, text
-from sqlalchemy.ext.asyncio import create_async_engine, AsyncSession, async_sessionmaker
+from sqlalchemy import Boolean, Column, DateTime, Float, Index, Integer, String, Text, text
+from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker, create_async_engine
 from sqlalchemy.ext.declarative import declarative_base
 from sqlalchemy.orm import Mapped, mapped_column
 
@@ -423,7 +424,7 @@ class Expression(Base):
     last_active_time: Mapped[float] = mapped_column(Float, nullable=False)
     chat_id: Mapped[str] = mapped_column(get_string_field(64), nullable=False, index=True)
     type: Mapped[str] = mapped_column(Text, nullable=False)
-    create_date: Mapped[Optional[float]] = mapped_column(Float, nullable=True)
+    create_date: Mapped[float | None] = mapped_column(Float, nullable=True)
 
     __table_args__ = (Index("idx_expression_chat_id", "chat_id"),)
 
@@ -710,7 +711,7 @@ async def initialize_database():
     config = global_config.database
 
     # 配置引擎参数
-    engine_kwargs: Dict[str, Any] = {
+    engine_kwargs: dict[str, Any] = {
         "echo": False,  # 生产环境关闭SQL日志
         "future": True,
     }
@@ -759,12 +760,12 @@ async def initialize_database():
 
 
 @asynccontextmanager
-async def get_db_session() -> AsyncGenerator[Optional[AsyncSession], None]:
+async def get_db_session() -> AsyncGenerator[AsyncSession | None, None]:
     """
     异步数据库会话上下文管理器。
     在初始化失败时会yield None，调用方需要检查会话是否为None。
     """
-    session: Optional[AsyncSession] = None
+    session: AsyncSession | None = None
     SessionLocal = None
     try:
         _, SessionLocal = await initialize_database()

@@ -3,7 +3,9 @@ API密钥管理器，提供轮询机制
 """
 
 import itertools
-from typing import List, Optional, TypeVar, Generic, Callable
+from collections.abc import Callable
+from typing import Generic, TypeVar
+
 from src.common.logger import get_logger
 
 logger = get_logger("api_key_manager")
@@ -16,7 +18,7 @@ class APIKeyManager(Generic[T]):
     API密钥管理器，支持轮询机制
     """
 
-    def __init__(self, api_keys: List[str], client_factory: Callable[[str], T], service_name: str = "Unknown"):
+    def __init__(self, api_keys: list[str], client_factory: Callable[[str], T], service_name: str = "Unknown"):
         """
         初始化API密钥管理器
 
@@ -26,8 +28,8 @@ class APIKeyManager(Generic[T]):
             service_name: 服务名称，用于日志记录
         """
         self.service_name = service_name
-        self.clients: List[T] = []
-        self.client_cycle: Optional[itertools.cycle] = None
+        self.clients: list[T] = []
+        self.client_cycle: itertools.cycle | None = None
 
         if api_keys:
             # 过滤有效的API密钥，排除None、空字符串、"None"字符串等
@@ -54,7 +56,7 @@ class APIKeyManager(Generic[T]):
         """检查是否有可用的客户端"""
         return bool(self.clients and self.client_cycle)
 
-    def get_next_client(self) -> Optional[T]:
+    def get_next_client(self) -> T | None:
         """获取下一个客户端（轮询）"""
         if not self.is_available():
             return None
@@ -66,7 +68,7 @@ class APIKeyManager(Generic[T]):
 
 
 def create_api_key_manager_from_config(
-    config_keys: Optional[List[str]], client_factory: Callable[[str], T], service_name: str
+    config_keys: list[str] | None, client_factory: Callable[[str], T], service_name: str
 ) -> APIKeyManager[T]:
     """
     从配置创建API密钥管理器的便捷函数

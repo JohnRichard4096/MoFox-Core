@@ -1,23 +1,23 @@
-# -*- coding: utf-8 -*-
 """
 内容服务模块
 负责生成所有与QQ空间相关的文本内容，例如说说、评论等。
 """
 
-from typing import Callable, Optional
-import datetime
-
-import base64
-import aiohttp
-from src.common.logger import get_logger
-import imghdr
 import asyncio
-from src.plugin_system.apis import llm_api, config_api, generator_api
-from src.plugin_system.apis.cross_context_api import get_chat_history_by_group_name
-from src.chat.message_receive.chat_stream import get_chat_manager
+import base64
+import datetime
+import imghdr
+from collections.abc import Callable
+
+import aiohttp
 from maim_message import UserInfo
-from src.llm_models.utils_model import LLMRequest
+
+from src.chat.message_receive.chat_stream import get_chat_manager
+from src.common.logger import get_logger
 from src.config.api_ada_configs import TaskConfig
+from src.llm_models.utils_model import LLMRequest
+from src.plugin_system.apis import config_api, generator_api, llm_api
+from src.plugin_system.apis.cross_context_api import get_chat_history_by_group_name
 
 # 导入旧的工具函数，我们稍后会考虑是否也需要重构它
 from ..utils.history_utils import get_send_history
@@ -38,7 +38,7 @@ class ContentService:
         """
         self.get_config = get_config
 
-    async def generate_story(self, topic: str, context: Optional[str] = None) -> str:
+    async def generate_story(self, topic: str, context: str | None = None) -> str:
         """
         根据指定主题和可选的上下文生成一条QQ空间说说。
 
@@ -231,7 +231,7 @@ class ContentService:
                     return ""
         return ""
 
-    async def _describe_image(self, image_url: str) -> Optional[str]:
+    async def _describe_image(self, image_url: str) -> str | None:
         """
         使用LLM识别图片内容。
         """

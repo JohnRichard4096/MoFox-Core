@@ -1,13 +1,13 @@
-# -*- coding: utf-8 -*-
 """
 好友动态监控服务
 """
 
 import asyncio
 import traceback
-from typing import Callable
+from collections.abc import Callable
 
 from src.common.logger import get_logger
+
 from .qzone_service import QZoneService
 
 logger = get_logger("MaiZone.MonitorService")

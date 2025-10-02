@@ -1,6 +1,6 @@
 class InternalManager:
     def __init__(self):
-        self.now_internal_state = str()
+        self.now_internal_state = ""
 
     def set_internal_state(self, internal_state: str):
         self.now_internal_state = internal_state

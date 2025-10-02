@@ -1,4 +1,3 @@
-# -*- coding: utf-8 -*-
 """
 用户封禁管理模块
 
@@ -6,12 +5,12 @@
 """
 
 import datetime
-from typing import Optional, Tuple
 
 from sqlalchemy import select
 
-from src.common.logger import get_logger
 from src.common.database.sqlalchemy_models import BanUser, get_db_session
+from src.common.logger import get_logger
+
 from ..types import DetectionResult
 
 logger = get_logger("anti_injector.user_ban")
@@ -28,7 +27,7 @@ class UserBanManager:
         """
         self.config = config
 
-    async def check_user_ban(self, user_id: str, platform: str) -> Optional[Tuple[bool, Optional[str], str]]:
+    async def check_user_ban(self, user_id: str, platform: str) -> tuple[bool, str | None, str] | None:
         """检查用户是否被封禁
 
         Args:

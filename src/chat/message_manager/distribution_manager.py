@@ -5,12 +5,12 @@
 
 import asyncio
 import time
-from typing import Dict, Optional, Any
+from typing import Any
 
+from src.chat.chatter_manager import ChatterManager
+from src.chat.energy_system import energy_manager
 from src.common.logger import get_logger
 from src.config.config import global_config
-from src.chat.energy_system import energy_manager
-from src.chat.chatter_manager import ChatterManager
 from src.plugin_system.apis.chat_api import get_chat_manager
 
 logger = get_logger("stream_loop_manager")
@@ -19,13 +19,13 @@ logger = get_logger("stream_loop_manager")
 class StreamLoopManager:
     """流循环管理器 - 每个流一个独立的无限循环任务"""
 
-    def __init__(self, max_concurrent_streams: Optional[int] = None):
+    def __init__(self, max_concurrent_streams: int | None = None):
         # 流循环任务管理
-        self.stream_loops: Dict[str, asyncio.Task] = {}
+        self.stream_loops: dict[str, asyncio.Task] = {}
         self.loop_lock = asyncio.Lock()
 
         # 统计信息
-        self.stats: Dict[str, Any] = {
+        self.stats: dict[str, Any] = {
             "active_streams": 0,
             "total_loops": 0,
             "total_process_cycles": 0,
@@ -37,13 +37,13 @@ class StreamLoopManager:
         self.max_concurrent_streams = max_concurrent_streams or global_config.chat.max_concurrent_distributions
 
         # 强制分发策略
-        self.force_dispatch_unread_threshold: Optional[int] = getattr(
+        self.force_dispatch_unread_threshold: int | None = getattr(
             global_config.chat, "force_dispatch_unread_threshold", 20
         )
         self.force_dispatch_min_interval: float = getattr(global_config.chat, "force_dispatch_min_interval", 0.1)
 
         # Chatter管理器
-        self.chatter_manager: Optional[ChatterManager] = None
+        self.chatter_manager: ChatterManager | None = None
 
         # 状态控制
         self.is_running = False
@@ -212,7 +212,7 @@ class StreamLoopManager:
 
             logger.info(f"流循环结束: {stream_id}")
 
-    async def _get_stream_context(self, stream_id: str) -> Optional[Any]:
+    async def _get_stream_context(self, stream_id: str) -> Any | None:
         """获取流上下文
 
         Args:
@@ -320,7 +320,7 @@ class StreamLoopManager:
             logger.debug(f"流 {stream_id} 使用默认间隔: {base_interval:.2f}s ({e})")
             return base_interval
 
-    def get_queue_status(self) -> Dict[str, Any]:
+    def get_queue_status(self) -> dict[str, Any]:
         """获取队列状态
 
         Returns:
@@ -374,14 +374,14 @@ class StreamLoopManager:
         except Exception:
             return 0
 
-    def _needs_force_dispatch_for_context(self, context: Any, unread_count: Optional[int] = None) -> bool:
+    def _needs_force_dispatch_for_context(self, context: Any, unread_count: int | None = None) -> bool:
         if not self.force_dispatch_unread_threshold or self.force_dispatch_unread_threshold <= 0:
             return False
 
         count = unread_count if unread_count is not None else self._get_unread_count(context)
         return count > self.force_dispatch_unread_threshold
 
-    def get_performance_summary(self) -> Dict[str, Any]:
+    def get_performance_summary(self) -> dict[str, Any]:
         """获取性能摘要
 
         Returns:

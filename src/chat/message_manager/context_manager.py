@@ -6,13 +6,14 @@
 
 import asyncio
 import time
-from typing import Dict, List, Optional, Any
+from typing import Any
 
+from src.chat.energy_system import energy_manager
+from src.common.data_models.database_data_model import DatabaseMessages
 from src.common.data_models.message_manager_data_model import StreamContext
 from src.common.logger import get_logger
 from src.config.config import global_config
-from src.common.data_models.database_data_model import DatabaseMessages
-from src.chat.energy_system import energy_manager
+
 from .distribution_manager import stream_loop_manager
 
 logger = get_logger("context_manager")
@@ -21,7 +22,7 @@ logger = get_logger("context_manager")
 class SingleStreamContextManager:
     """单流上下文管理器 - 每个实例只管理一个 stream 的上下文"""
 
-    def __init__(self, stream_id: str, context: StreamContext, max_context_size: Optional[int] = None):
+    def __init__(self, stream_id: str, context: StreamContext, max_context_size: int | None = None):
         self.stream_id = stream_id
         self.context = context
 
@@ -66,7 +67,7 @@ class SingleStreamContextManager:
             logger.error(f"添加消息到单流上下文失败 {self.stream_id}: {e}", exc_info=True)
             return False
 
-    async def update_message(self, message_id: str, updates: Dict[str, Any]) -> bool:
+    async def update_message(self, message_id: str, updates: dict[str, Any]) -> bool:
         """更新上下文中的消息
 
         Args:
@@ -84,7 +85,7 @@ class SingleStreamContextManager:
             logger.error(f"更新单流上下文消息失败 {self.stream_id}/{message_id}: {e}", exc_info=True)
             return False
 
-    def get_messages(self, limit: Optional[int] = None, include_unread: bool = True) -> List[DatabaseMessages]:
+    def get_messages(self, limit: int | None = None, include_unread: bool = True) -> list[DatabaseMessages]:
         """获取上下文消息
 
         Args:
@@ -117,7 +118,7 @@ class SingleStreamContextManager:
             logger.error(f"获取单流上下文消息失败 {self.stream_id}: {e}", exc_info=True)
             return []
 
-    def get_unread_messages(self) -> List[DatabaseMessages]:
+    def get_unread_messages(self) -> list[DatabaseMessages]:
         """获取未读消息"""
         try:
             return self.context.get_unread_messages()
@@ -125,7 +126,7 @@ class SingleStreamContextManager:
             logger.error(f"获取单流未读消息失败 {self.stream_id}: {e}", exc_info=True)
             return []
 
-    def mark_messages_as_read(self, message_ids: List[str]) -> bool:
+    def mark_messages_as_read(self, message_ids: list[str]) -> bool:
         """标记消息为已读"""
         try:
             if not hasattr(self.context, "mark_message_as_read"):
@@ -168,7 +169,7 @@ class SingleStreamContextManager:
             logger.error(f"清空单流上下文失败 {self.stream_id}: {e}", exc_info=True)
             return False
 
-    def get_statistics(self) -> Dict[str, Any]:
+    def get_statistics(self) -> dict[str, Any]:
         """获取流统计信息"""
         try:
             current_time = time.time()
@@ -285,7 +286,7 @@ class SingleStreamContextManager:
             logger.error(f"添加消息到单流上下文失败 (async) {self.stream_id}: {e}", exc_info=True)
             return False
 
-    async def update_message_async(self, message_id: str, updates: Dict[str, Any]) -> bool:
+    async def update_message_async(self, message_id: str, updates: dict[str, Any]) -> bool:
         """异步实现的 update_message：更新消息并在需要时 await 能量更新。"""
         try:
             self.context.update_message_info(message_id, **updates)
@@ -327,7 +328,7 @@ class SingleStreamContextManager:
         """更新流能量"""
         try:
             history_messages = self.context.get_history_messages(limit=self.max_context_size)
-            messages: List[DatabaseMessages] = list(history_messages)
+            messages: list[DatabaseMessages] = list(history_messages)
 
             if include_unread:
                 messages.extend(self.get_unread_messages())

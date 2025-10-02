@@ -7,15 +7,15 @@ import asyncio
 import time
 import traceback
 from datetime import datetime
-from typing import Dict, Any
+from typing import Any
 
+from src.chat.express.expression_learner import expression_learner_manager
+from src.chat.planner_actions.action_manager import ChatterActionManager
+from src.common.data_models.message_manager_data_model import StreamContext
+from src.common.logger import get_logger
 from src.plugin_system.base.base_chatter import BaseChatter
 from src.plugin_system.base.component_types import ChatType
-from src.common.data_models.message_manager_data_model import StreamContext
 from src.plugins.built_in.affinity_flow_chatter.planner import ChatterActionPlanner
-from src.chat.planner_actions.action_manager import ChatterActionManager
-from src.common.logger import get_logger
-from src.chat.express.expression_learner import expression_learner_manager
 
 logger = get_logger("affinity_chatter")
 
@@ -113,7 +113,7 @@ class AffinityChatter(BaseChatter):
                 "executed_count": 0,
             }
 
-    def get_stats(self) -> Dict[str, Any]:
+    def get_stats(self) -> dict[str, Any]:
         """
         获取处理器统计信息
 
@@ -122,7 +122,7 @@ class AffinityChatter(BaseChatter):
         """
         return self.stats.copy()
 
-    def get_planner_stats(self) -> Dict[str, Any]:
+    def get_planner_stats(self) -> dict[str, Any]:
         """
         获取规划器统计信息
 
@@ -131,7 +131,7 @@ class AffinityChatter(BaseChatter):
         """
         return self.planner.get_planner_stats()
 
-    def get_interest_scoring_stats(self) -> Dict[str, Any]:
+    def get_interest_scoring_stats(self) -> dict[str, Any]:
         """
         获取兴趣度评分统计信息
 
@@ -140,7 +140,7 @@ class AffinityChatter(BaseChatter):
         """
         return self.planner.get_interest_scoring_stats()
 
-    def get_relationship_stats(self) -> Dict[str, Any]:
+    def get_relationship_stats(self) -> dict[str, Any]:
         """
         获取用户关系统计信息
 
@@ -158,7 +158,7 @@ class AffinityChatter(BaseChatter):
         """
         return self.planner.get_current_mood_state()
 
-    def get_mood_stats(self) -> Dict[str, Any]:
+    def get_mood_stats(self) -> dict[str, Any]:
         """
         获取情绪状态统计信息
 

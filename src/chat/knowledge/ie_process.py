@@ -1,13 +1,14 @@
 import asyncio
-import orjson
 import time
-from typing import List, Union
 
-from .global_logger import logger
-from . import prompt_template
-from .knowledge_lib import INVALID_ENTITY
-from src.llm_models.utils_model import LLMRequest
+import orjson
 from json_repair import repair_json
+
+from src.llm_models.utils_model import LLMRequest
+
+from . import prompt_template
+from .global_logger import logger
+from .knowledge_lib import INVALID_ENTITY
 
 
 def _extract_json_from_text(text: str):
@@ -46,7 +47,7 @@ def _extract_json_from_text(text: str):
         return []
 
 
-def _entity_extract(llm_req: LLMRequest, paragraph: str) -> List[str]:
+def _entity_extract(llm_req: LLMRequest, paragraph: str) -> list[str]:
     # sourcery skip: reintroduce-else, swap-if-else-branches, use-named-expression
     """对段落进行实体提取，返回提取出的实体列表（JSON格式）"""
     entity_extract_context = prompt_template.build_entity_extract_context(paragraph)
@@ -92,7 +93,7 @@ def _entity_extract(llm_req: LLMRequest, paragraph: str) -> List[str]:
     return entity_extract_result
 
 
-def _rdf_triple_extract(llm_req: LLMRequest, paragraph: str, entities: list) -> List[List[str]]:
+def _rdf_triple_extract(llm_req: LLMRequest, paragraph: str, entities: list) -> list[list[str]]:
     """对段落进行实体提取，返回提取出的实体列表（JSON格式）"""
     rdf_extract_context = prompt_template.build_rdf_triple_extract_context(
         paragraph, entities=orjson.dumps(entities).decode("utf-8")
@@ -141,7 +142,7 @@ def _rdf_triple_extract(llm_req: LLMRequest, paragraph: str, entities: list) -> 
 
 def info_extract_from_str(
     llm_client_for_ner: LLMRequest, llm_client_for_rdf: LLMRequest, paragraph: str
-) -> Union[tuple[None, None], tuple[list[str], list[list[str]]]]:
+) -> tuple[None, None] | tuple[list[str], list[list[str]]]:
     try_count = 0
     while True:
         try:

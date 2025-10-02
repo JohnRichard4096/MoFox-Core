@@ -18,11 +18,10 @@ Frequency-Based Proactive Trigger
 import asyncio
 import time
 from datetime import datetime
-from typing import Dict, Optional
 
 from src.common.logger import get_logger
-# AFC manager has been moved to chatter plugin
 
+# AFC manager has been moved to chatter plugin
 # TODO: 需要重新实现主动思考和睡眠管理功能
 from .analyzer import chat_frequency_analyzer
 
@@ -42,10 +41,10 @@ class FrequencyBasedTrigger:
 
     def __init__(self):
         # TODO: 需要重新实现睡眠管理器
-        self._task: Optional[asyncio.Task] = None
+        self._task: asyncio.Task | None = None
         # 记录上次为用户触发的时间，用于冷却控制
         # 格式: { "chat_id": timestamp }
-        self._last_triggered: Dict[str, float] = {}
+        self._last_triggered: dict[str, float] = {}
 
     async def _run_trigger_cycle(self):
         """触发器的主要循环逻辑。"""

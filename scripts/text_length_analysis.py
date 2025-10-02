@@ -1,8 +1,7 @@
-import time
-import sys
 import os
 import re
-from typing import Dict, List, Tuple, Optional
+import sys
+import time
 from datetime import datetime
 
 # Add project root to Python path
@@ -63,7 +62,7 @@ def format_timestamp(timestamp: float) -> str:
         return "未知时间"
 
 
-def calculate_text_length_distribution(messages) -> Dict[str, int]:
+def calculate_text_length_distribution(messages) -> dict[str, int]:
     """Calculate distribution of processed_plain_text length"""
     distribution = {
         "0": 0,  # 空文本
@@ -126,7 +125,7 @@ def calculate_text_length_distribution(messages) -> Dict[str, int]:
     return distribution
 
 
-def get_text_length_stats(messages) -> Dict[str, float]:
+def get_text_length_stats(messages) -> dict[str, float]:
     """Calculate basic statistics for processed_plain_text length"""
     lengths = []
     null_count = 0
@@ -168,7 +167,7 @@ def get_text_length_stats(messages) -> Dict[str, float]:
     }
 
 
-def get_available_chats() -> List[Tuple[str, str, int]]:
+def get_available_chats() -> list[tuple[str, str, int]]:
     """Get all available chats with message counts"""
     try:
         # 获取所有有消息的chat_id，排除特殊类型消息
@@ -202,7 +201,7 @@ def get_available_chats() -> List[Tuple[str, str, int]]:
         return []
 
 
-def get_time_range_input() -> Tuple[Optional[float], Optional[float]]:
+def get_time_range_input() -> tuple[float | None, float | None]:
     """Get time range input from user"""
     print("\n时间范围选择:")
     print("1. 最近1天")
@@ -241,7 +240,7 @@ def get_time_range_input() -> Tuple[Optional[float], Optional[float]]:
         return None, None
 
 
-def get_top_longest_messages(messages, top_n: int = 10) -> List[Tuple[str, int, str, str]]:
+def get_top_longest_messages(messages, top_n: int = 10) -> list[tuple[str, int, str, str]]:
     """Get top N longest messages"""
     message_lengths = []
 
@@ -266,7 +265,7 @@ def get_top_longest_messages(messages, top_n: int = 10) -> List[Tuple[str, int, 
 
 
 def analyze_text_lengths(
-    chat_id: Optional[str] = None, start_time: Optional[float] = None, end_time: Optional[float] = None
+    chat_id: str | None = None, start_time: float | None = None, end_time: float | None = None
 ) -> None:
     """Analyze processed_plain_text lengths with optional filters"""
 

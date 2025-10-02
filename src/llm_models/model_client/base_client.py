@@ -1,12 +1,14 @@
 import asyncio
-from dataclasses import dataclass
 from abc import ABC, abstractmethod
-from typing import Callable, Any, Optional
+from collections.abc import Callable
+from dataclasses import dataclass
+from typing import Any
 
-from src.config.api_ada_configs import ModelInfo, APIProvider
+from src.config.api_ada_configs import APIProvider, ModelInfo
+
 from ..payload_content.message import Message
 from ..payload_content.resp_format import RespFormat
-from ..payload_content.tool_option import ToolOption, ToolCall
+from ..payload_content.tool_option import ToolCall, ToolOption
 
 
 @dataclass
@@ -75,9 +77,8 @@ class BaseClient(ABC):
         max_tokens: int = 1024,
         temperature: float = 0.7,
         response_format: RespFormat | None = None,
-        stream_response_handler: Optional[
-            Callable[[Any, asyncio.Event | None], tuple[APIResponse, tuple[int, int, int]]]
-        ] = None,
+        stream_response_handler: Callable[[Any, asyncio.Event | None], tuple[APIResponse, tuple[int, int, int]]]
+        | None = None,
         async_response_parser: Callable[[Any], tuple[APIResponse, tuple[int, int, int]]] | None = None,
         interrupt_flag: asyncio.Event | None = None,
         extra_params: dict[str, Any] | None = None,

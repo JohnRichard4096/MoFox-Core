@@ -1,5 +1,6 @@
-import orjson
 import os
+
+import orjson
 
 from src.common.logger import get_logger
 
@@ -24,7 +25,7 @@ class LocalStoreManager:
         """获取本地存储数据"""
         return self.store.get(item)
 
-    def __setitem__(self, key: str, value: str | list | dict | int | float | bool):
+    def __setitem__(self, key: str, value: str | list | dict | float | bool):
         """设置本地存储数据"""
         self.store[key] = value
         self.save_local_store()
@@ -48,7 +49,7 @@ class LocalStoreManager:
             logger.info("正在阅读记事本......我在看，我真的在看！")
             logger.debug(f"加载本地存储数据: {self.file_path}")
             try:
-                with open(self.file_path, "r", encoding="utf-8") as f:
+                with open(self.file_path, encoding="utf-8") as f:
                     self.store = orjson.loads(f.read())
                     logger.info("全都记起来了！")
             except orjson.JSONDecodeError:

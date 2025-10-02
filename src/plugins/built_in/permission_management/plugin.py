@@ -6,18 +6,16 @@
 """
 
 import re
-from typing import List, Optional, Tuple, Type
 
+from src.plugin_system.apis.logging_api import get_logger
+from src.plugin_system.apis.permission_api import permission_api
 from src.plugin_system.apis.plugin_register_api import register_plugin
 from src.plugin_system.base.base_plugin import BasePlugin
-from src.plugin_system.base.plus_command import PlusCommand
 from src.plugin_system.base.command_args import CommandArgs
-from src.plugin_system.apis.permission_api import permission_api
-from src.plugin_system.apis.logging_api import get_logger
-from src.plugin_system.base.component_types import PlusCommandInfo, ChatType
+from src.plugin_system.base.component_types import ChatType, PlusCommandInfo
 from src.plugin_system.base.config_types import ConfigField
+from src.plugin_system.base.plus_command import PlusCommand
 from src.plugin_system.utils.permission_decorators import require_permission
-
 
 logger = get_logger("Permission")
 
@@ -44,7 +42,7 @@ class PermissionCommand(PlusCommand):
             "plugin.permission.view", "权限查看：可以查看权限节点和用户权限信息", "permission_manager", True
         )
 
-    async def execute(self, args: CommandArgs) -> Tuple[bool, Optional[str], bool]:
+    async def execute(self, args: CommandArgs) -> tuple[bool, str | None, bool]:
         """执行权限管理命令"""
         if args.is_empty:
             await self._show_help()
@@ -114,7 +112,7 @@ class PermissionCommand(PlusCommand):
         await self.send_text(help_text)
 
     @staticmethod
-    def _parse_user_mention(mention: str) -> Optional[str]:
+    def _parse_user_mention(mention: str) -> str | None:
         """解析用户提及，提取QQ号
 
         支持的格式:
@@ -134,7 +132,7 @@ class PermissionCommand(PlusCommand):
         return None
 
     @staticmethod
-    def parse_user_from_args(args: CommandArgs, index: int = 0) -> Optional[str]:
+    def parse_user_from_args(args: CommandArgs, index: int = 0) -> str | None:
         """从CommandArgs中解析用户ID
 
         Args:
@@ -166,7 +164,7 @@ class PermissionCommand(PlusCommand):
         return None
 
     @require_permission("plugin.permission.manage", "❌ 你没有权限管理的权限")
-    async def _grant_permission(self, chat_stream, args: List[str]):
+    async def _grant_permission(self, chat_stream, args: list[str]):
         """授权用户权限"""
         if len(args) < 2:
             await self.send_text("❌ 用法: /permission grant <@用户|QQ号> <权限节点>")
@@ -189,7 +187,7 @@ class PermissionCommand(PlusCommand):
             await self.send_text("❌ 授权失败，请检查权限节点是否存在")
 
     @require_permission("plugin.permission.manage", "❌ 你没有权限管理的权限")
-    async def _revoke_permission(self, chat_stream, args: List[str]):
+    async def _revoke_permission(self, chat_stream, args: list[str]):
         """撤销用户权限"""
         if len(args) < 2:
             await self.send_text("❌ 用法: /permission revoke <@用户|QQ号> <权限节点>")
@@ -212,7 +210,7 @@ class PermissionCommand(PlusCommand):
             await self.send_text("❌ 撤销失败，请检查权限节点是否存在")
 
     @require_permission("plugin.permission.view", "❌ 你没有查看权限的权限")
-    async def _list_permissions(self, chat_stream, args: List[str]):
+    async def _list_permissions(self, chat_stream, args: list[str]):
         """列出用户权限"""
         target_user_id = None
 
@@ -244,7 +242,7 @@ class PermissionCommand(PlusCommand):
         await self.send_text(response)
 
     @require_permission("plugin.permission.view", "❌ 你没有查看权限的权限")
-    async def _check_permission(self, chat_stream, args: List[str]):
+    async def _check_permission(self, chat_stream, args: list[str]):
         """检查用户权限"""
         if len(args) < 2:
             await self.send_text("❌ 用法: /permission check <@用户|QQ号> <权限节点>")
@@ -273,7 +271,7 @@ class PermissionCommand(PlusCommand):
         await self.send_text(response)
 
     @require_permission("plugin.permission.view", "❌ 你没有查看权限的权限")
-    async def _list_nodes(self, chat_stream, args: List[str]):
+    async def _list_nodes(self, chat_stream, args: list[str]):
         """列出权限节点"""
         plugin_name = args[0] if args else None
 
@@ -388,6 +386,6 @@ class PermissionManagerPlugin(BasePlugin):
         }
     }
 
-    def get_plugin_components(self) -> List[Tuple[PlusCommandInfo, Type[PlusCommand]]]:
+    def get_plugin_components(self) -> list[tuple[PlusCommandInfo, type[PlusCommand]]]:
         """返回插件的PlusCommand组件"""
         return [(PermissionCommand.get_plus_command_info(), PermissionCommand)]

@@ -1,6 +1,5 @@
 from typing import Any
 
-
 # 常见Error Code Mapping (以OpenAI API为例)
 error_code_mapping = {
     400: "参数不正确",

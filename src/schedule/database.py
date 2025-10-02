@@ -1,7 +1,8 @@
 # mmc/src/schedule/database.py
 
-from typing import List
-from sqlalchemy import select, func, update, delete
+
+from sqlalchemy import delete, func, select, update
+
 from src.common.database.sqlalchemy_models import MonthlyPlan, get_db_session
 from src.common.logger import get_logger
 from src.config.config import global_config
@@ -9,7 +10,7 @@ from src.config.config import global_config
 logger = get_logger("schedule_database")
 
 
-async def add_new_plans(plans: List[str], month: str):
+async def add_new_plans(plans: list[str], month: str):
     """
     批量添加新生成的月度计划到数据库，并确保不超过上限。
 
@@ -55,7 +56,7 @@ async def add_new_plans(plans: List[str], month: str):
             raise
 
 
-async def get_active_plans_for_month(month: str) -> List[MonthlyPlan]:
+async def get_active_plans_for_month(month: str) -> list[MonthlyPlan]:
     """
     获取指定月份所有状态为 'active' 的计划。
 
@@ -75,7 +76,7 @@ async def get_active_plans_for_month(month: str) -> List[MonthlyPlan]:
             return []
 
 
-async def mark_plans_completed(plan_ids: List[int]):
+async def mark_plans_completed(plan_ids: list[int]):
     """
     将指定ID的计划标记为已完成。
 
@@ -103,7 +104,7 @@ async def mark_plans_completed(plan_ids: List[int]):
             raise
 
 
-async def delete_plans_by_ids(plan_ids: List[int]):
+async def delete_plans_by_ids(plan_ids: list[int]):
     """
     根据ID列表从数据库中物理删除月度计划。
 
@@ -134,7 +135,7 @@ async def delete_plans_by_ids(plan_ids: List[int]):
             raise
 
 
-async def update_plan_usage(plan_ids: List[int], used_date: str):
+async def update_plan_usage(plan_ids: list[int], used_date: str):
     """
     更新计划的使用统计信息。
 
@@ -182,7 +183,7 @@ async def update_plan_usage(plan_ids: List[int], used_date: str):
             raise
 
 
-async def get_smart_plans_for_daily_schedule(month: str, max_count: int = 3, avoid_days: int = 7) -> List[MonthlyPlan]:
+async def get_smart_plans_for_daily_schedule(month: str, max_count: int = 3, avoid_days: int = 7) -> list[MonthlyPlan]:
     """
     智能抽取月度计划用于每日日程生成。
 
@@ -255,7 +256,7 @@ async def archive_active_plans_for_month(month: str):
             raise
 
 
-async def get_archived_plans_for_month(month: str) -> List[MonthlyPlan]:
+async def get_archived_plans_for_month(month: str) -> list[MonthlyPlan]:
     """
     获取指定月份所有状态为 'archived' 的计划。
     用于生成下个月计划时的参考。

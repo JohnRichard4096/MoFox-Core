@@ -1,24 +1,23 @@
-# -*- coding: utf-8 -*-
 """
 向量数据库存储接口
 为记忆系统提供高效的向量存储和语义搜索能力
 """
 
-import time
-import orjson
 import asyncio
-from typing import Dict, List, Optional, Tuple, Any
-from dataclasses import dataclass
 import threading
+import time
+from dataclasses import dataclass
+from pathlib import Path
+from typing import Any
 
 import numpy as np
-from pathlib import Path
+import orjson
 
-from src.common.logger import get_logger
-from src.llm_models.utils_model import LLMRequest
-from src.config.config import model_config
-from src.common.config_helpers import resolve_embedding_dimension
 from src.chat.memory_system.memory_chunk import MemoryChunk
+from src.common.config_helpers import resolve_embedding_dimension
+from src.common.logger import get_logger
+from src.config.config import model_config
+from src.llm_models.utils_model import LLMRequest
 
 logger = get_logger(__name__)
 
@@ -48,7 +47,7 @@ class VectorStorageConfig:
 class VectorStorageManager:
     """向量存储管理器"""
 
-    def __init__(self, config: Optional[VectorStorageConfig] = None):
+    def __init__(self, config: VectorStorageConfig | None = None):
         self.config = config or VectorStorageConfig()
 
         resolved_dimension = resolve_embedding_dimension(self.config.dimension)
@@ -68,8 +67,8 @@ class VectorStorageManager:
         self.index_to_memory_id = {}  # vector index -> memory_id
 
         # 内存缓存
-        self.memory_cache: Dict[str, MemoryChunk] = {}
-        self.vector_cache: Dict[str, List[float]] = {}
+        self.memory_cache: dict[str, MemoryChunk] = {}
+        self.vector_cache: dict[str, list[float]] = {}
 
         # 统计信息
         self.storage_stats = {
@@ -125,7 +124,7 @@ class VectorStorageManager:
             )
             logger.info("✅ 嵌入模型初始化完成")
 
-    async def generate_query_embedding(self, query_text: str) -> Optional[List[float]]:
+    async def generate_query_embedding(self, query_text: str) -> list[float] | None:
         """生成查询向量，用于记忆召回"""
         if not query_text:
             logger.warning("查询文本为空，无法生成向量")
@@ -155,7 +154,7 @@ class VectorStorageManager:
             logger.error(f"❌ 生成查询向量失败: {exc}", exc_info=True)
             return None
 
-    async def store_memories(self, memories: List[MemoryChunk]):
+    async def store_memories(self, memories: list[MemoryChunk]):
         """存储记忆向量"""
         if not memories:
             return
@@ -231,7 +230,7 @@ class VectorStorageManager:
         logger.debug("记忆 %s 缺少可用展示文本，使用占位符生成嵌入输入", memory.memory_id)
         return memory.memory_id
 
-    async def _batch_generate_and_store_embeddings(self, memory_texts: List[Tuple[str, str]]):
+    async def _batch_generate_and_store_embeddings(self, memory_texts: list[tuple[str, str]]):
         """批量生成和存储嵌入向量"""
         if not memory_texts:
             return
@@ -253,12 +252,12 @@ class VectorStorageManager:
         except Exception as e:
             logger.error(f"❌ 批量生成嵌入向量失败: {e}")
 
-    async def _batch_generate_embeddings(self, memory_ids: List[str], texts: List[str]) -> Dict[str, List[float]]:
+    async def _batch_generate_embeddings(self, memory_ids: list[str], texts: list[str]) -> dict[str, list[float]]:
         """批量生成嵌入向量"""
         if not texts:
             return {}
 
-        results: Dict[str, List[float]] = {}
+        results: dict[str, list[float]] = {}
 
         try:
             semaphore = asyncio.Semaphore(min(4, max(1, len(texts))))
@@ -281,7 +280,9 @@ class VectorStorageManager:
                         logger.warning("生成记忆 %s 的嵌入向量失败: %s", memory_id, exc)
                         results[memory_id] = []
 
-            tasks = [asyncio.create_task(generate_embedding(mid, text)) for mid, text in zip(memory_ids, texts, strict=False)]
+            tasks = [
+                asyncio.create_task(generate_embedding(mid, text)) for mid, text in zip(memory_ids, texts, strict=False)
+            ]
             await asyncio.gather(*tasks, return_exceptions=True)
 
         except Exception as e:
@@ -291,7 +292,7 @@ class VectorStorageManager:
 
         return results
 
-    async def _add_single_memory(self, memory: MemoryChunk, embedding: List[float]):
+    async def _add_single_memory(self, memory: MemoryChunk, embedding: list[float]):
         """添加单个记忆到向量存储"""
         with self._lock:
             try:
@@ -337,7 +338,7 @@ class VectorStorageManager:
             except Exception as e:
                 logger.error(f"❌ 添加记忆到向量存储失败: {e}")
 
-    def _normalize_vector(self, vector: List[float]) -> List[float]:
+    def _normalize_vector(self, vector: list[float]) -> list[float]:
         """L2归一化向量"""
         if not vector:
             return vector
@@ -357,12 +358,12 @@ class VectorStorageManager:
 
     async def search_similar_memories(
         self,
-        query_vector: Optional[List[float]] = None,
+        query_vector: list[float] | None = None,
         *,
-        query_text: Optional[str] = None,
+        query_text: str | None = None,
         limit: int = 10,
-        scope_id: Optional[str] = None,
-    ) -> List[Tuple[str, float]]:
+        scope_id: str | None = None,
+    ) -> list[tuple[str, float]]:
         """搜索相似记忆"""
         start_time = time.time()
 
@@ -379,7 +380,7 @@ class VectorStorageManager:
                     logger.warning("查询向量生成失败")
                     return []
 
-            scope_filter: Optional[str] = None
+            scope_filter: str | None = None
             if isinstance(scope_id, str):
                 normalized_scope = scope_id.strip().lower()
                 if normalized_scope and normalized_scope not in {"global", "global_memory"}:
@@ -491,7 +492,7 @@ class VectorStorageManager:
             logger.error(f"❌ 向量搜索失败: {e}", exc_info=True)
             return []
 
-    async def get_memory_by_id(self, memory_id: str) -> Optional[MemoryChunk]:
+    async def get_memory_by_id(self, memory_id: str) -> MemoryChunk | None:
         """根据ID获取记忆"""
         # 先检查缓存
         if memory_id in self.memory_cache:
@@ -501,7 +502,7 @@ class VectorStorageManager:
         self.storage_stats["total_searches"] += 1
         return None
 
-    async def update_memory_embedding(self, memory_id: str, new_embedding: List[float]):
+    async def update_memory_embedding(self, memory_id: str, new_embedding: list[float]):
         """更新记忆的嵌入向量"""
         with self._lock:
             try:
@@ -636,7 +637,7 @@ class VectorStorageManager:
             # 加载记忆缓存
             cache_file = self.storage_path / "memory_cache.json"
             if cache_file.exists():
-                with open(cache_file, "r", encoding="utf-8") as f:
+                with open(cache_file, encoding="utf-8") as f:
                     cache_data = orjson.loads(f.read())
 
                 self.memory_cache = {
@@ -646,13 +647,13 @@ class VectorStorageManager:
             # 加载向量缓存
             vector_cache_file = self.storage_path / "vector_cache.json"
             if vector_cache_file.exists():
-                with open(vector_cache_file, "r", encoding="utf-8") as f:
+                with open(vector_cache_file, encoding="utf-8") as f:
                     self.vector_cache = orjson.loads(f.read())
 
             # 加载映射关系
             mapping_file = self.storage_path / "id_mapping.json"
             if mapping_file.exists():
-                with open(mapping_file, "r", encoding="utf-8") as f:
+                with open(mapping_file, encoding="utf-8") as f:
                     mapping_data = orjson.loads(f.read())
                 raw_memory_to_index = mapping_data.get("memory_id_to_index", {})
                 self.memory_id_to_index = {
@@ -689,7 +690,7 @@ class VectorStorageManager:
             # 加载统计信息
             stats_file = self.storage_path / "storage_stats.json"
             if stats_file.exists():
-                with open(stats_file, "r", encoding="utf-8") as f:
+                with open(stats_file, encoding="utf-8") as f:
                     self.storage_stats = orjson.loads(f.read())
 
             # 更新向量计数
@@ -806,7 +807,7 @@ class VectorStorageManager:
             if invalid_memory_ids:
                 logger.info(f"清理了 {len(invalid_memory_ids)} 个无效引用")
 
-    def get_storage_stats(self) -> Dict[str, Any]:
+    def get_storage_stats(self) -> dict[str, Any]:
         """获取存储统计信息"""
         stats = self.storage_stats.copy()
         if stats["total_searches"] > 0:
@@ -821,11 +822,11 @@ class SimpleVectorIndex:
 
     def __init__(self, dimension: int):
         self.dimension = dimension
-        self.vectors: List[List[float]] = []
-        self.vector_ids: List[int] = []
+        self.vectors: list[list[float]] = []
+        self.vector_ids: list[int] = []
         self.next_id = 0
 
-    def add_vector(self, vector: List[float]) -> int:
+    def add_vector(self, vector: list[float]) -> int:
         """添加向量"""
         if len(vector) != self.dimension:
             raise ValueError(f"向量维度不匹配，期望 {self.dimension}，实际 {len(vector)}")
@@ -837,7 +838,7 @@ class SimpleVectorIndex:
 
         return vector_id
 
-    def search(self, query_vector: List[float], limit: int) -> List[Tuple[int, float]]:
+    def search(self, query_vector: list[float], limit: int) -> list[tuple[int, float]]:
         """搜索相似向量"""
         if len(query_vector) != self.dimension:
             raise ValueError(f"查询向量维度不匹配，期望 {self.dimension}，实际 {len(query_vector)}")
@@ -853,7 +854,7 @@ class SimpleVectorIndex:
 
         return results[:limit]
 
-    def _calculate_cosine_similarity(self, v1: List[float], v2: List[float]) -> float:
+    def _calculate_cosine_similarity(self, v1: list[float], v2: list[float]) -> float:
         """计算余弦相似度"""
         try:
             dot_product = sum(x * y for x, y in zip(v1, v2, strict=False))

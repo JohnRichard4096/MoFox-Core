@@ -1,21 +1,21 @@
-import time
-import traceback
 import os
 import pickle
 import random
-from typing import List, Dict, Any
-from src.config.config import global_config
-from src.common.logger import get_logger
-from src.person_info.relationship_manager import get_relationship_manager
-from src.person_info.person_info import Person,get_person_id
+import time
+import traceback
+from typing import Any
+
 from src.chat.message_receive.chat_stream import get_chat_manager
 from src.chat.utils.chat_message_builder import (
+    get_raw_msg_before_timestamp_with_chat,
     get_raw_msg_by_timestamp_with_chat,
     get_raw_msg_by_timestamp_with_chat_inclusive,
-    get_raw_msg_before_timestamp_with_chat,
     num_new_messages_since,
 )
-import asyncio
+from src.common.logger import get_logger
+from src.config.config import global_config
+from src.person_info.person_info import PersonInfoManager, get_person_info_manager
+from src.person_info.relationship_manager import get_relationship_manager
 
 logger = get_logger("relationship_builder")
 
@@ -46,7 +46,7 @@ class RelationshipBuilder:
         self.chat_id = chat_id
         # 新的消息段缓存结构：
         # {person_id: [{"start_time": float, "end_time": float, "last_msg_time": float, "message_count": int}, ...]}
-        self.person_engaged_cache: Dict[str, List[Dict[str, Any]]] = {}
+        self.person_engaged_cache: dict[str, list[dict[str, Any]]] = {}
 
         # 持久化存储文件路径
         self.cache_file_path = os.path.join("data", "relationship", f"relationship_cache_{self.chat_id}.pkl")
@@ -402,7 +402,7 @@ class RelationshipBuilder:
     # 负责触发关系构建、整合消息段、更新用户印象
     # ================================
 
-    async def update_impression_on_segments(self, person_id: str, chat_id: str, segments: List[Dict[str, Any]]):
+    async def update_impression_on_segments(self, person_id: str, chat_id: str, segments: list[dict[str, Any]]):
         """基于消息段更新用户印象"""
         original_segment_count = len(segments)
         logger.debug(f"开始为 {person_id} 基于 {original_segment_count} 个消息段更新印象")

@@ -1,8 +1,8 @@
-from src.config.config import global_config, model_config
-from src.llm_models.utils_model import LLMRequest
+from rich.traceback import install
 
 from src.common.logger import get_logger
-from rich.traceback import install
+from src.config.config import global_config, model_config
+from src.llm_models.utils_model import LLMRequest
 
 install(extra_lines=3)
 
@@ -25,5 +25,5 @@ async def get_voice_text(voice_base64: str) -> str:
 
         return f"[语音：{text}]"
     except Exception as e:
-        logger.error(f"语音转文字失败: {str(e)}")
+        logger.error(f"语音转文字失败: {e!s}")
         return "[语音]"

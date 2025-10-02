@@ -1,20 +1,20 @@
-from typing import List, Tuple, Type, Dict, Any, Optional
 import logging
 import random
+from typing import Any
 
 from src.plugin_system import (
-    BasePlugin,
-    register_plugin,
-    ComponentInfo,
-    BaseEventHandler,
-    EventType,
-    BaseTool,
-    PlusCommand,
-    CommandArgs,
-    ChatType,
-    BaseAction,
     ActionActivationType,
+    BaseAction,
+    BaseEventHandler,
+    BasePlugin,
+    BaseTool,
+    ChatType,
+    CommandArgs,
+    ComponentInfo,
     ConfigField,
+    EventType,
+    PlusCommand,
+    register_plugin,
 )
 from src.plugin_system.base.base_event import HandlerResult
 
@@ -39,7 +39,7 @@ class GetSystemInfoTool(BaseTool):
     available_for_llm = True
     parameters = []
 
-    async def execute(self, function_args: Dict[str, Any]) -> Dict[str, Any]:
+    async def execute(self, function_args: dict[str, Any]) -> dict[str, Any]:
         return {"name": self.name, "content": "系统版本: 1.0.1, 状态: 运行正常"}
 
 
@@ -51,7 +51,7 @@ class HelloCommand(PlusCommand):
     command_aliases = ["hi", "你好"]
     chat_type_allow = ChatType.ALL
 
-    async def execute(self, args: CommandArgs) -> Tuple[bool, Optional[str], bool]:
+    async def execute(self, args: CommandArgs) -> tuple[bool, str | None, bool]:
         greeting = str(self.get_config("greeting.message", "Hello, World! 我是一个由 MoFox_Bot 驱动的插件。"))
         await self.send_text(greeting)
         return True, "成功发送问候", True
@@ -67,7 +67,7 @@ class RandomEmojiAction(BaseAction):
     action_require = ["当对话气氛轻松时", "可以用来回应简单的情感表达"]
     associated_types = ["text"]
 
-    async def execute(self) -> Tuple[bool, str]:
+    async def execute(self) -> tuple[bool, str]:
         emojis = ["😊", "😂", "👍", "🎉", "🤔", "🤖"]
         await self.send_text(random.choice(emojis))
         return True, "成功发送了一个随机表情"
@@ -99,9 +99,9 @@ class HelloWorldPlugin(BasePlugin):
         },
     }
 
-    def get_plugin_components(self) -> List[Tuple[ComponentInfo, Type]]:
+    def get_plugin_components(self) -> list[tuple[ComponentInfo, type]]:
         """根据配置文件动态注册插件的功能组件。"""
-        components: List[Tuple[ComponentInfo, Type]] = []
+        components: list[tuple[ComponentInfo, type]] = []
 
         components.append((StartupMessageHandler.get_handler_info(), StartupMessageHandler))
         components.append((GetSystemInfoTool.get_tool_info(), GetSystemInfoTool))

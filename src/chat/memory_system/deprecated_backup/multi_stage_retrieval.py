@@ -1,18 +1,18 @@
-# -*- coding: utf-8 -*-
 """
 多阶段召回机制
 实现粗粒度到细粒度的记忆检索优化
 """
 
 import time
-from typing import Dict, List, Optional, Set, Any
 from dataclasses import dataclass, field
 from enum import Enum
-import orjson
+from typing import Any
 
-from src.common.logger import get_logger
-from src.chat.memory_system.memory_chunk import MemoryChunk, MemoryType
+import orjson
 from src.chat.memory_system.enhanced_reranker import EnhancedReRanker, ReRankingConfig
+
+from src.chat.memory_system.memory_chunk import MemoryChunk, MemoryType
+from src.common.logger import get_logger
 
 logger = get_logger(__name__)
 
@@ -73,11 +73,11 @@ class StageResult:
     """阶段结果"""
 
     stage: RetrievalStage
-    memory_ids: List[str]
+    memory_ids: list[str]
     processing_time: float
     filtered_count: int
     score_threshold: float
-    details: List[Dict[str, Any]] = field(default_factory=list)
+    details: list[dict[str, Any]] = field(default_factory=list)
 
 
 @dataclass
@@ -86,17 +86,17 @@ class RetrievalResult:
 
     query: str
     user_id: str
-    final_memories: List[MemoryChunk]
-    stage_results: List[StageResult]
+    final_memories: list[MemoryChunk]
+    stage_results: list[StageResult]
     total_processing_time: float
     total_filtered: int
-    retrieval_stats: Dict[str, Any]
+    retrieval_stats: dict[str, Any]
 
 
 class MultiStageRetrieval:
     """多阶段召回系统"""
 
-    def __init__(self, config: Optional[RetrievalConfig] = None):
+    def __init__(self, config: RetrievalConfig | None = None):
         self.config = config or RetrievalConfig.from_global_config()
 
         # 初始化增强重排序器
@@ -124,11 +124,11 @@ class MultiStageRetrieval:
         self,
         query: str,
         user_id: str,
-        context: Dict[str, Any],
+        context: dict[str, Any],
         metadata_index,
         vector_storage,
-        all_memories_cache: Dict[str, MemoryChunk],
-        limit: Optional[int] = None,
+        all_memories_cache: dict[str, MemoryChunk],
+        limit: int | None = None,
     ) -> RetrievalResult:
         """多阶段记忆检索"""
         start_time = time.time()
@@ -136,7 +136,7 @@ class MultiStageRetrieval:
 
         stage_results = []
         current_memory_ids = set()
-        memory_debug_info: Dict[str, Dict[str, Any]] = {}
+        memory_debug_info: dict[str, dict[str, Any]] = {}
 
         try:
             logger.debug(f"开始多阶段检索：query='{query}', user_id='{user_id}'")
@@ -311,11 +311,11 @@ class MultiStageRetrieval:
         self,
         query: str,
         user_id: str,
-        context: Dict[str, Any],
+        context: dict[str, Any],
         metadata_index,
-        all_memories_cache: Dict[str, MemoryChunk],
+        all_memories_cache: dict[str, MemoryChunk],
         *,
-        debug_log: Optional[Dict[str, Dict[str, Any]]] = None,
+        debug_log: dict[str, dict[str, Any]] | None = None,
     ) -> StageResult:
         """阶段1：元数据过滤"""
         start_time = time.time()
@@ -345,7 +345,7 @@ class MultiStageRetrieval:
             result = await metadata_index.query_memories(index_query)
             result_ids = list(result.memory_ids)
             filtered_count = max(0, len(all_memories_cache) - len(result_ids))
-            details: List[Dict[str, Any]] = []
+            details: list[dict[str, Any]] = []
 
             # 如果未命中任何索引且未指定所有者过滤，则回退到最近访问的记忆
             if not result_ids:
@@ -440,12 +440,12 @@ class MultiStageRetrieval:
         self,
         query: str,
         user_id: str,
-        context: Dict[str, Any],
+        context: dict[str, Any],
         vector_storage,
-        candidate_ids: Set[str],
-        all_memories_cache: Dict[str, MemoryChunk],
+        candidate_ids: set[str],
+        all_memories_cache: dict[str, MemoryChunk],
         *,
-        debug_log: Optional[Dict[str, Dict[str, Any]]] = None,
+        debug_log: dict[str, dict[str, Any]] | None = None,
     ) -> StageResult:
         """阶段2：向量搜索"""
         start_time = time.time()
@@ -479,8 +479,8 @@ class MultiStageRetrieval:
 
             # 过滤候选记忆
             filtered_memories = []
-            details: List[Dict[str, Any]] = []
-            raw_details: List[Dict[str, Any]] = []
+            details: list[dict[str, Any]] = []
+            raw_details: list[dict[str, Any]] = []
             threshold = self.config.vector_similarity_threshold
 
             for memory_id, similarity in search_result:
@@ -561,7 +561,7 @@ class MultiStageRetrieval:
             )
 
     def _create_text_search_fallback(
-        self, candidate_ids: Set[str], all_memories_cache: Dict[str, MemoryChunk], query_text: str, start_time: float
+        self, candidate_ids: set[str], all_memories_cache: dict[str, MemoryChunk], query_text: str, start_time: float
     ) -> StageResult:
         """当向量搜索失败时，使用文本搜索作为回退策略"""
         try:
@@ -618,18 +618,18 @@ class MultiStageRetrieval:
         self,
         query: str,
         user_id: str,
-        context: Dict[str, Any],
-        candidate_ids: Set[str],
-        all_memories_cache: Dict[str, MemoryChunk],
+        context: dict[str, Any],
+        candidate_ids: set[str],
+        all_memories_cache: dict[str, MemoryChunk],
         *,
-        debug_log: Optional[Dict[str, Dict[str, Any]]] = None,
+        debug_log: dict[str, dict[str, Any]] | None = None,
     ) -> StageResult:
         """阶段3：语义重排序"""
         start_time = time.time()
 
         try:
             reranked_memories = []
-            details: List[Dict[str, Any]] = []
+            details: list[dict[str, Any]] = []
             threshold = self.config.semantic_similarity_threshold
 
             for memory_id in candidate_ids:
@@ -704,19 +704,19 @@ class MultiStageRetrieval:
         self,
         query: str,
         user_id: str,
-        context: Dict[str, Any],
-        candidate_ids: List[str],
-        all_memories_cache: Dict[str, MemoryChunk],
+        context: dict[str, Any],
+        candidate_ids: list[str],
+        all_memories_cache: dict[str, MemoryChunk],
         limit: int,
         *,
-        debug_log: Optional[Dict[str, Dict[str, Any]]] = None,
+        debug_log: dict[str, dict[str, Any]] | None = None,
     ) -> StageResult:
         """阶段4：上下文过滤"""
         start_time = time.time()
 
         try:
             final_memories = []
-            details: List[Dict[str, Any]] = []
+            details: list[dict[str, Any]] = []
 
             for memory_id in candidate_ids:
                 if memory_id not in all_memories_cache:
@@ -793,12 +793,12 @@ class MultiStageRetrieval:
         self,
         query: str,
         user_id: str,
-        context: Dict[str, Any],
-        all_memories_cache: Dict[str, MemoryChunk],
+        context: dict[str, Any],
+        all_memories_cache: dict[str, MemoryChunk],
         limit: int,
         *,
-        excluded_ids: Optional[Set[str]] = None,
-        debug_log: Optional[Dict[str, Dict[str, Any]]] = None,
+        excluded_ids: set[str] | None = None,
+        debug_log: dict[str, dict[str, Any]] | None = None,
     ) -> StageResult:
         """回退检索阶段 - 当主检索失败时使用更宽松的策略"""
         start_time = time.time()
@@ -881,8 +881,8 @@ class MultiStageRetrieval:
             )
 
     async def _generate_query_embedding(
-        self, query: str, context: Dict[str, Any], vector_storage
-    ) -> Optional[List[float]]:
+        self, query: str, context: dict[str, Any], vector_storage
+    ) -> list[float] | None:
         """生成查询向量"""
         try:
             query_plan = context.get("query_plan")
@@ -916,7 +916,7 @@ class MultiStageRetrieval:
             logger.error(f"生成查询向量时发生异常: {e}", exc_info=True)
             return None
 
-    async def _calculate_semantic_similarity(self, query: str, memory: MemoryChunk, context: Dict[str, Any]) -> float:
+    async def _calculate_semantic_similarity(self, query: str, memory: MemoryChunk, context: dict[str, Any]) -> float:
         """计算语义相似度 - 简化优化版本，提升召回率"""
         try:
             query_plan = context.get("query_plan")
@@ -947,8 +947,9 @@ class MultiStageRetrieval:
             # 核心匹配策略2：词汇匹配
             word_score = 0.0
             try:
-                import jieba
                 import re
+
+                import jieba
 
                 # 分词处理
                 query_words = list(jieba.cut(query_text)) + re.findall(r"[a-zA-Z]+", query_text)
@@ -1059,7 +1060,7 @@ class MultiStageRetrieval:
             logger.warning(f"计算语义相似度失败: {e}")
             return 0.0
 
-    async def _calculate_context_relevance(self, query: str, memory: MemoryChunk, context: Dict[str, Any]) -> float:
+    async def _calculate_context_relevance(self, query: str, memory: MemoryChunk, context: dict[str, Any]) -> float:
         """计算上下文相关度"""
         try:
             score = 0.0
@@ -1132,7 +1133,7 @@ class MultiStageRetrieval:
             return 0.0
 
     async def _calculate_final_score(
-        self, query: str, memory: MemoryChunk, context: Dict[str, Any], context_score: float
+        self, query: str, memory: MemoryChunk, context: dict[str, Any], context_score: float
     ) -> float:
         """计算最终评分"""
         try:
@@ -1184,7 +1185,7 @@ class MultiStageRetrieval:
             logger.warning(f"计算最终评分失败: {e}")
             return 0.0
 
-    def _calculate_subject_overlap(self, memory: MemoryChunk, required_subjects: Optional[List[str]]) -> float:
+    def _calculate_subject_overlap(self, memory: MemoryChunk, required_subjects: list[str] | None) -> float:
         if not required_subjects:
             return 0.0
 
@@ -1229,7 +1230,7 @@ class MultiStageRetrieval:
         except Exception:
             return 0.5
 
-    def _extract_memory_types_from_context(self, context: Dict[str, Any]) -> List[MemoryType]:
+    def _extract_memory_types_from_context(self, context: dict[str, Any]) -> list[MemoryType]:
         """从上下文中提取记忆类型"""
         try:
             query_plan = context.get("query_plan")
@@ -1256,10 +1257,10 @@ class MultiStageRetrieval:
         except Exception:
             return []
 
-    def _extract_keywords_from_query(self, query: str, query_plan: Optional[Any] = None) -> List[str]:
+    def _extract_keywords_from_query(self, query: str, query_plan: Any | None = None) -> list[str]:
         """从查询中提取关键词"""
         try:
-            extracted: List[str] = []
+            extracted: list[str] = []
 
             if query_plan and getattr(query_plan, "required_keywords", None):
                 extracted.extend([kw.lower() for kw in query_plan.required_keywords if isinstance(kw, str)])
@@ -1283,7 +1284,7 @@ class MultiStageRetrieval:
         except Exception:
             return []
 
-    def _update_retrieval_stats(self, total_time: float, stage_results: List[StageResult]):
+    def _update_retrieval_stats(self, total_time: float, stage_results: list[StageResult]):
         """更新检索统计"""
         self.retrieval_stats["total_queries"] += 1
 
@@ -1306,7 +1307,7 @@ class MultiStageRetrieval:
                 ]
                 stage_stat["avg_time"] = new_stage_avg
 
-    def get_retrieval_stats(self) -> Dict[str, Any]:
+    def get_retrieval_stats(self) -> dict[str, Any]:
         """获取检索统计信息"""
         return self.retrieval_stats.copy()
 
@@ -1328,12 +1329,12 @@ class MultiStageRetrieval:
         self,
         query: str,
         user_id: str,
-        context: Dict[str, Any],
-        candidate_ids: List[str],
-        all_memories_cache: Dict[str, MemoryChunk],
+        context: dict[str, Any],
+        candidate_ids: list[str],
+        all_memories_cache: dict[str, MemoryChunk],
         limit: int,
         *,
-        debug_log: Optional[Dict[str, Dict[str, Any]]] = None,
+        debug_log: dict[str, dict[str, Any]] | None = None,
     ) -> StageResult:
         """阶段5：增强重排序 - 使用多维度评分模型"""
         start_time = time.time()

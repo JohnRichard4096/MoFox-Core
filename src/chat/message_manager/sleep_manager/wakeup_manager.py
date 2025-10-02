@@ -1,9 +1,10 @@
 import asyncio
 import time
-from typing import Optional, TYPE_CHECKING
+from typing import TYPE_CHECKING
+
+from src.chat.message_manager.sleep_manager.wakeup_context import WakeUpContext
 from src.common.logger import get_logger
 from src.config.config import global_config
-from src.chat.message_manager.sleep_manager.wakeup_context import WakeUpContext
 
 if TYPE_CHECKING:
     from .sleep_manager import SleepManager
@@ -27,9 +28,9 @@ class WakeUpManager:
         """
         self.sleep_manager = sleep_manager
         self.context = WakeUpContext()  # 使用新的上下文管理器
-        self.angry_chat_id: Optional[str] = None
+        self.angry_chat_id: str | None = None
         self.last_decay_time = time.time()
-        self._decay_task: Optional[asyncio.Task] = None
+        self._decay_task: asyncio.Task | None = None
         self.is_running = False
         self.last_log_time = 0
         self.log_interval = 30
@@ -104,9 +105,7 @@ class WakeUpManager:
                     logger.debug(f"唤醒度衰减: {old_value:.1f} -> {self.context.wakeup_value:.1f}")
                     self.context.save()
 
-    def add_wakeup_value(
-        self, is_private_chat: bool, is_mentioned: bool = False, chat_id: Optional[str] = None
-    ) -> bool:
+    def add_wakeup_value(self, is_private_chat: bool, is_mentioned: bool = False, chat_id: str | None = None) -> bool:
         """
         增加唤醒度值
 

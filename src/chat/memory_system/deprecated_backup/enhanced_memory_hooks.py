@@ -1,15 +1,15 @@
-# -*- coding: utf-8 -*-
 """
 增强记忆系统钩子
 用于在消息处理过程中自动构建和检索记忆
 """
 
-from typing import Dict, List, Any, Optional
 from datetime import datetime
+from typing import Any
+
+from src.chat.memory_system.enhanced_memory_manager import enhanced_memory_manager
 
 from src.common.logger import get_logger
 from src.config.config import global_config
-from src.chat.memory_system.enhanced_memory_manager import enhanced_memory_manager
 
 logger = get_logger(__name__)
 
@@ -27,7 +27,7 @@ class EnhancedMemoryHooks:
         user_id: str,
         chat_id: str,
         message_id: str,
-        context: Optional[Dict[str, Any]] = None,
+        context: dict[str, Any] | None = None,
     ) -> bool:
         """
         处理消息并构建记忆
@@ -106,8 +106,8 @@ class EnhancedMemoryHooks:
         user_id: str,
         chat_id: str,
         limit: int = 5,
-        extra_context: Optional[Dict[str, Any]] = None,
-    ) -> List[Dict[str, Any]]:
+        extra_context: dict[str, Any] | None = None,
+    ) -> list[dict[str, Any]]:
         """
         为回复获取相关记忆
 

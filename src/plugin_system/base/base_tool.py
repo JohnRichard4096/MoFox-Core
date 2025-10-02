@@ -1,5 +1,6 @@
 from abc import ABC, abstractmethod
-from typing import Any, List, Optional, Tuple
+from typing import Any
+
 from rich.traceback import install
 
 from src.common.logger import get_logger
@@ -17,7 +18,7 @@ class BaseTool(ABC):
     """工具的名称"""
     description: str = ""
     """工具的描述"""
-    parameters: List[Tuple[str, ToolParamType, str, bool, List[str] | None]] = []
+    parameters: list[tuple[str, ToolParamType, str, bool, list[str] | None]] = []
     """工具的参数定义，为[("param_name", param_type, "description", required, enum_values)]格式
        param_name: 参数名称
        param_type: 参数类型
@@ -35,7 +36,7 @@ class BaseTool(ABC):
     """是否为该工具启用缓存"""
     cache_ttl: int = 3600
     """缓存的TTL值（秒），默认为3600秒（1小时）"""
-    semantic_cache_query_key: Optional[str] = None
+    semantic_cache_query_key: str | None = None
     """用于语义缓存的查询参数键名。如果设置，将使用此参数的值进行语义相似度搜索"""
 
     # 二步工具调用相关属性
@@ -43,10 +44,10 @@ class BaseTool(ABC):
     """是否为二步工具。如果为True，工具将分两步调用：第一步展示工具信息，第二步执行具体操作"""
     step_one_description: str = ""
     """第一步的描述，用于向LLM展示工具的基本功能"""
-    sub_tools: List[Tuple[str, str, List[Tuple[str, ToolParamType, str, bool, List[str] | None]]]] = []
+    sub_tools: list[tuple[str, str, list[tuple[str, ToolParamType, str, bool, list[str] | None]]]] = []
     """子工具列表，格式为[(子工具名, 子工具描述, 子工具参数)]。仅在二步工具中使用"""
 
-    def __init__(self, plugin_config: Optional[dict] = None):
+    def __init__(self, plugin_config: dict | None = None):
         self.plugin_config = plugin_config or {}  # 直接存储插件配置字典
 
     @classmethod
@@ -101,7 +102,7 @@ class BaseTool(ABC):
         raise ValueError(f"未找到子工具: {sub_tool_name}")
 
     @classmethod
-    def get_all_sub_tool_definitions(cls) -> List[dict[str, Any]]:
+    def get_all_sub_tool_definitions(cls) -> list[dict[str, Any]]:
         """获取所有子工具的定义
 
         Returns:

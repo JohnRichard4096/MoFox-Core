@@ -1,15 +1,15 @@
 import traceback
+from typing import Any
 
-from typing import List, Optional, Any, Dict
-from sqlalchemy import not_, select, func
-
+from sqlalchemy import func, not_, select
 from sqlalchemy.orm import DeclarativeBase
-from src.config.config import global_config
+
+from src.common.database.sqlalchemy_database_api import get_db_session
 
 # from src.common.database.database_model import Messages
 from src.common.database.sqlalchemy_models import Messages
-from src.common.database.sqlalchemy_database_api import get_db_session
 from src.common.logger import get_logger
+from src.config.config import global_config
 
 logger = get_logger(__name__)
 
@@ -18,7 +18,7 @@ class Base(DeclarativeBase):
     pass
 
 
-def _model_to_dict(instance: Base) -> Dict[str, Any]:
+def _model_to_dict(instance: Base) -> dict[str, Any]:
     """
     将 SQLAlchemy 模型实例转换为字典。
     """
@@ -32,12 +32,12 @@ def _model_to_dict(instance: Base) -> Dict[str, Any]:
 
 async def find_messages(
     message_filter: dict[str, Any],
-    sort: Optional[List[tuple[str, int]]] = None,
+    sort: list[tuple[str, int]] | None = None,
     limit: int = 0,
     limit_mode: str = "latest",
     filter_bot=False,
     filter_command=False,
-) -> List[dict[str, Any]]:
+) -> list[dict[str, Any]]:
     """
     根据提供的过滤器、排序和限制条件查找消息。
 

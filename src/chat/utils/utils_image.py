@@ -1,29 +1,27 @@
 import base64
+import hashlib
+import io
 import os
 import time
-import hashlib
 import uuid
-import io
-import numpy as np
+from typing import Any
 
-from typing import Optional, Tuple, Dict, Any
+import numpy as np
 from PIL import Image
 from rich.traceback import install
+from sqlalchemy import and_, select
 
+from src.common.database.sqlalchemy_models import ImageDescriptions, Images, get_db_session
 from src.common.logger import get_logger
-from src.common.database.sqlalchemy_models import Images, ImageDescriptions
 from src.config.config import global_config, model_config
 from src.llm_models.utils_model import LLMRequest
-from src.common.database.sqlalchemy_models import get_db_session
-
-from sqlalchemy import select, and_
 
 install(extra_lines=3)
 
 logger = get_logger("chat_image")
 
 
-def is_image_message(message: Dict[str, Any]) -> bool:
+def is_image_message(message: dict[str, Any]) -> bool:
     """
     判断消息是否为图片消息
 
@@ -69,7 +67,7 @@ class ImageManager:
         os.makedirs(self.IMAGE_DIR, exist_ok=True)
 
     @staticmethod
-    async def _get_description_from_db(image_hash: str, description_type: str) -> Optional[str]:
+    async def _get_description_from_db(image_hash: str, description_type: str) -> str | None:
         """从数据库获取图片描述
 
         Args:
@@ -93,7 +91,7 @@ class ImageManager:
                 ).scalar()
                 return record.description if record else None
         except Exception as e:
-            logger.error(f"从数据库获取描述失败 (SQLAlchemy): {str(e)}")
+            logger.error(f"从数据库获取描述失败 (SQLAlchemy): {e!s}")
             return None
 
     @staticmethod
@@ -136,7 +134,7 @@ class ImageManager:
                 await session.commit()
                 #  会在上下文管理器中自动调用
         except Exception as e:
-            logger.error(f"保存描述到数据库失败 (SQLAlchemy): {str(e)}")
+            logger.error(f"保存描述到数据库失败 (SQLAlchemy): {e!s}")
 
     @staticmethod
     async def get_emoji_tag(image_base64: str) -> str:
@@ -287,10 +285,10 @@ class ImageManager:
                                 session.add(new_img)
                             await session.commit()
                     except Exception as e:
-                        logger.error(f"保存到Images表失败: {str(e)}")
+                        logger.error(f"保存到Images表失败: {e!s}")
 
                 except Exception as e:
-                    logger.error(f"保存表情包文件或元数据失败: {str(e)}")
+                    logger.error(f"保存表情包文件或元数据失败: {e!s}")
             else:
                 logger.debug("偷取表情包功能已关闭，跳过保存。")
 
@@ -300,7 +298,7 @@ class ImageManager:
             return f"[表情包：{final_emotion}]"
 
         except Exception as e:
-            logger.error(f"获取表情包描述失败: {str(e)}")
+            logger.error(f"获取表情包描述失败: {e!s}")
             return "[表情包(处理失败)]"
 
     async def get_image_description(self, image_base64: str) -> str:
@@ -391,11 +389,11 @@ class ImageManager:
             logger.info(f"[VLM完成] 图片描述生成: {description}...")
             return f"[图片：{description}]"
         except Exception as e:
-            logger.error(f"获取图片描述失败: {str(e)}")
+            logger.error(f"获取图片描述失败: {e!s}")
             return "[图片(处理失败)]"
 
     @staticmethod
-    def transform_gif(gif_base64: str, similarity_threshold: float = 1000.0, max_frames: int = 15) -> Optional[str]:
+    def transform_gif(gif_base64: str, similarity_threshold: float = 1000.0, max_frames: int = 15) -> str | None:
         # sourcery skip: use-contextlib-suppress
         """将GIF转换为水平拼接的静态图像, 跳过相似的帧
 
@@ -512,10 +510,10 @@ class ImageManager:
             logger.error("GIF转换失败: 内存不足，可能是GIF太大或帧数太多")
             return None  # 内存不够啦
         except Exception as e:
-            logger.error(f"GIF转换失败: {str(e)}", exc_info=True)  # 记录详细错误信息
+            logger.error(f"GIF转换失败: {e!s}", exc_info=True)  # 记录详细错误信息
             return None  # 其他错误也返回None
 
-    async def process_image(self, image_base64: str) -> Tuple[str, str]:
+    async def process_image(self, image_base64: str) -> tuple[str, str]:
         # sourcery skip: hoist-if-from-if
         """处理图片并返回图片ID和描述
 
@@ -604,7 +602,7 @@ class ImageManager:
             return image_id, f"[picid:{image_id}]"
 
         except Exception as e:
-            logger.error(f"处理图片失败: {str(e)}")
+            logger.error(f"处理图片失败: {e!s}")
             return "", "[图片]"
 
 
@@ -637,4 +635,4 @@ def image_path_to_base64(image_path: str) -> str:
         if image_data := f.read():
             return base64.b64encode(image_data).decode("utf-8")
         else:
-            raise IOError(f"读取图片文件失败: {image_path}")
+            raise OSError(f"读取图片文件失败: {image_path}")

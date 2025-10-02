@@ -1,8 +1,8 @@
 from abc import ABC, abstractmethod
-from typing import Tuple, Optional, List, Union
 
 from src.common.logger import get_logger
-from .component_types import EventType, EventHandlerInfo, ComponentType
+
+from .component_types import ComponentType, EventHandlerInfo, EventType
 
 logger = get_logger("base_event_handler")
 
@@ -21,7 +21,7 @@ class BaseEventHandler(ABC):
     """处理器权重，越大权重越高"""
     intercept_message: bool = False
     """是否拦截消息，默认为否"""
-    init_subscribe: List[Union[EventType, str]] = [EventType.UNKNOWN]
+    init_subscribe: list[EventType | str] = [EventType.UNKNOWN]
     """初始化时订阅的事件名称"""
     plugin_name = None
 
@@ -44,7 +44,7 @@ class BaseEventHandler(ABC):
             self.plugin_config = getattr(self.__class__, "plugin_config", {})
 
     @abstractmethod
-    async def execute(self, kwargs: dict | None) -> Tuple[bool, bool, Optional[str]]:
+    async def execute(self, kwargs: dict | None) -> tuple[bool, bool, str | None]:
         """执行事件处理的抽象方法，子类必须实现
         Args:
             kwargs (dict | None): 事件消息对象，当你注册的事件为ON_START和ON_STOP时message为None

@@ -1,16 +1,15 @@
-from typing import Optional, Union, Dict
 from src.plugin_system.base.component_types import (
-    CommandInfo,
     ActionInfo,
+    CommandInfo,
+    ComponentType,
     EventHandlerInfo,
     PluginInfo,
-    ComponentType,
     ToolInfo,
 )
 
 
 # === 插件信息查询 ===
-def get_all_plugin_info() -> Dict[str, PluginInfo]:
+def get_all_plugin_info() -> dict[str, PluginInfo]:
     """
     获取所有插件的信息。
 
@@ -22,7 +21,7 @@ def get_all_plugin_info() -> Dict[str, PluginInfo]:
     return component_registry.get_all_plugins()
 
 
-def get_plugin_info(plugin_name: str) -> Optional[PluginInfo]:
+def get_plugin_info(plugin_name: str) -> PluginInfo | None:
     """
     获取指定插件的信息。
 
@@ -40,7 +39,7 @@ def get_plugin_info(plugin_name: str) -> Optional[PluginInfo]:
 # === 组件查询方法 ===
 def get_component_info(
     component_name: str, component_type: ComponentType
-) -> Optional[Union[CommandInfo, ActionInfo, EventHandlerInfo]]:
+) -> CommandInfo | ActionInfo | EventHandlerInfo | None:
     """
     获取指定组件的信息。
 
@@ -57,7 +56,7 @@ def get_component_info(
 
 def get_components_info_by_type(
     component_type: ComponentType,
-) -> Dict[str, Union[CommandInfo, ActionInfo, EventHandlerInfo]]:
+) -> dict[str, CommandInfo | ActionInfo | EventHandlerInfo]:
     """
     获取指定类型的所有组件信息。
 
@@ -74,7 +73,7 @@ def get_components_info_by_type(
 
 def get_enabled_components_info_by_type(
     component_type: ComponentType,
-) -> Dict[str, Union[CommandInfo, ActionInfo, EventHandlerInfo]]:
+) -> dict[str, CommandInfo | ActionInfo | EventHandlerInfo]:
     """
     获取指定类型的所有启用的组件信息。
 
@@ -90,7 +89,7 @@ def get_enabled_components_info_by_type(
 
 
 # === Action 查询方法 ===
-def get_registered_action_info(action_name: str) -> Optional[ActionInfo]:
+def get_registered_action_info(action_name: str) -> ActionInfo | None:
     """
     获取指定 Action 的注册信息。
 
@@ -105,7 +104,7 @@ def get_registered_action_info(action_name: str) -> Optional[ActionInfo]:
     return component_registry.get_registered_action_info(action_name)
 
 
-def get_registered_command_info(command_name: str) -> Optional[CommandInfo]:
+def get_registered_command_info(command_name: str) -> CommandInfo | None:
     """
     获取指定 Command 的注册信息。
 
@@ -120,7 +119,7 @@ def get_registered_command_info(command_name: str) -> Optional[CommandInfo]:
     return component_registry.get_registered_command_info(command_name)
 
 
-def get_registered_tool_info(tool_name: str) -> Optional[ToolInfo]:
+def get_registered_tool_info(tool_name: str) -> ToolInfo | None:
     """
     获取指定 Tool 的注册信息。
 
@@ -138,7 +137,7 @@ def get_registered_tool_info(tool_name: str) -> Optional[ToolInfo]:
 # === EventHandler 特定查询方法 ===
 def get_registered_event_handler_info(
     event_handler_name: str,
-) -> Optional[EventHandlerInfo]:
+) -> EventHandlerInfo | None:
     """
     获取指定 EventHandler 的注册信息。
 

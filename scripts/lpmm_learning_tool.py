@@ -1,35 +1,36 @@
 import asyncio
+import datetime
 import os
 import shutil
 import sys
-import orjson
-import datetime
-from pathlib import Path
 from concurrent.futures import ThreadPoolExecutor, as_completed
+from pathlib import Path
 from threading import Lock
-from typing import Optional
+
+import orjson
 from json_repair import repair_json
 
 # 将项目根目录添加到 sys.path
 sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), "..")))
 
-from src.common.logger import get_logger
-from src.chat.knowledge.utils.hash import get_sha256
-from src.llm_models.utils_model import LLMRequest
-from src.config.config import model_config
-from src.chat.knowledge.open_ie import OpenIE
-from src.chat.knowledge.embedding_store import EmbeddingManager
-from src.chat.knowledge.kg_manager import KGManager
 from rich.progress import (
-    Progress,
     BarColumn,
+    MofNCompleteColumn,
+    Progress,
+    SpinnerColumn,
+    TaskProgressColumn,
+    TextColumn,
     TimeElapsedColumn,
     TimeRemainingColumn,
-    TaskProgressColumn,
-    MofNCompleteColumn,
-    SpinnerColumn,
-    TextColumn,
 )
+
+from src.chat.knowledge.embedding_store import EmbeddingManager
+from src.chat.knowledge.kg_manager import KGManager
+from src.chat.knowledge.open_ie import OpenIE
+from src.chat.knowledge.utils.hash import get_sha256
+from src.common.logger import get_logger
+from src.config.config import model_config
+from src.llm_models.utils_model import LLMRequest
 
 logger = get_logger("LPMM_LearningTool")
 ROOT_PATH = os.path.abspath(os.path.join(os.path.dirname(__file__), ".."))
@@ -59,7 +60,7 @@ def clear_cache():
 
 
 def process_text_file(file_path):
-    with open(file_path, "r", encoding="utf-8") as f:
+    with open(file_path, encoding="utf-8") as f:
         raw = f.read()
     return [p.strip() for p in raw.split("\n\n") if p.strip()]
 
@@ -86,7 +87,7 @@ def preprocess_raw_data():
 # --- 模块二：信息提取 ---
 
 
-def _parse_and_repair_json(json_string: str) -> Optional[dict]:
+def _parse_and_repair_json(json_string: str) -> dict | None:
     """
     尝试解析JSON字符串，如果失败则尝试修复并重新解析。
 
@@ -249,7 +250,7 @@ def extract_information(paragraphs_dict, model_set):
 # --- 模块三：数据导入 ---
 
 
-async def import_data(openie_obj: Optional[OpenIE] = None):
+async def import_data(openie_obj: OpenIE | None = None):
     """
     将OpenIE数据导入知识库（Embedding Store 和 KG）
 

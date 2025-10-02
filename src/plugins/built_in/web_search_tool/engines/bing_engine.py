@@ -6,11 +6,13 @@ import asyncio
 import functools
 import random
 import traceback
-from typing import Dict, List, Any
+from typing import Any
+
 import requests
 from bs4 import BeautifulSoup
 
 from src.common.logger import get_logger
+
 from .base import BaseSearchEngine
 
 logger = get_logger("bing_engine")
@@ -68,7 +70,7 @@ class BingSearchEngine(BaseSearchEngine):
         """检查Bing搜索引擎是否可用"""
         return True  # Bing是免费搜索引擎，总是可用
 
-    async def search(self, args: Dict[str, Any]) -> List[Dict[str, Any]]:
+    async def search(self, args: dict[str, Any]) -> list[dict[str, Any]]:
         """执行Bing搜索"""
         query = args["query"]
         num_results = args.get("num_results", 3)
@@ -83,7 +85,7 @@ class BingSearchEngine(BaseSearchEngine):
             logger.error(f"Bing 搜索失败: {e}")
             return []
 
-    def _search_sync(self, keyword: str, num_results: int, time_range: str) -> List[Dict[str, Any]]:
+    def _search_sync(self, keyword: str, num_results: int, time_range: str) -> list[dict[str, Any]]:
         """同步执行Bing搜索"""
         if not keyword:
             return []
@@ -113,7 +115,7 @@ class BingSearchEngine(BaseSearchEngine):
         return list_result[:num_results] if len(list_result) > num_results else list_result
 
     @staticmethod
-    def _parse_html(url: str) -> List[Dict[str, Any]]:
+    def _parse_html(url: str) -> list[dict[str, Any]]:
         """解析处理结果"""
         try:
             logger.debug(f"访问Bing搜索URL: {url}")
@@ -141,11 +143,11 @@ class BingSearchEngine(BaseSearchEngine):
             try:
                 res = session.get(url=url, timeout=(3.05, 6), verify=True, allow_redirects=True)
             except (requests.exceptions.Timeout, requests.exceptions.ConnectionError) as e:
-                logger.warning(f"第一次请求超时，正在重试: {str(e)}")
+                logger.warning(f"第一次请求超时，正在重试: {e!s}")
                 try:
                     res = session.get(url=url, timeout=(5, 10), verify=False)
                 except Exception as e2:
-                    logger.error(f"第二次请求也失败: {str(e2)}")
+                    logger.error(f"第二次请求也失败: {e2!s}")
                     return []
 
             res.encoding = "utf-8"
@@ -175,7 +177,7 @@ class BingSearchEngine(BaseSearchEngine):
                 try:
                     root = BeautifulSoup(res.text, "html.parser")
                 except Exception as e:
-                    logger.error(f"HTML解析失败: {str(e)}")
+                    logger.error(f"HTML解析失败: {e!s}")
                     return []
 
             list_data = []
@@ -262,6 +264,6 @@ class BingSearchEngine(BaseSearchEngine):
             return list_data
 
         except Exception as e:
-            logger.error(f"解析Bing页面时出错: {str(e)}")
+            logger.error(f"解析Bing页面时出错: {e!s}")
             logger.debug(traceback.format_exc())
             return []

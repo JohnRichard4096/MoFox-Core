@@ -1,18 +1,18 @@
 # mmc/src/schedule/plan_manager.py
 
 from datetime import datetime
-from typing import List, Optional
 
 from src.common.logger import get_logger
 from src.config.config import global_config
+
 from .database import (
     add_new_plans,
-    get_archived_plans_for_month,
     archive_active_plans_for_month,
-    has_active_plans,
-    get_active_plans_for_month,
     delete_plans_by_ids,
+    get_active_plans_for_month,
+    get_archived_plans_for_month,
     get_smart_plans_for_daily_schedule,
+    has_active_plans,
 )
 from .llm_generator import MonthlyPlanLLMGenerator
 
@@ -24,7 +24,7 @@ class PlanManager:
         self.llm_generator = MonthlyPlanLLMGenerator()
         self.generation_running = False
 
-    async def ensure_and_generate_plans_if_needed(self, target_month: Optional[str] = None) -> bool:
+    async def ensure_and_generate_plans_if_needed(self, target_month: str | None = None) -> bool:
         if target_month is None:
             target_month = datetime.now().strftime("%Y-%m")
 
@@ -48,7 +48,7 @@ class PlanManager:
                 logger.info(f"当前月度计划内容:\n{plan_texts}")
             return True
 
-    async def _generate_monthly_plans_logic(self, target_month: Optional[str] = None) -> bool:
+    async def _generate_monthly_plans_logic(self, target_month: str | None = None) -> bool:
         if self.generation_running:
             logger.info("月度计划生成任务已在运行中，跳过重复启动")
             return False
@@ -91,8 +91,7 @@ class PlanManager:
         except Exception:
             return "1900-01"
 
-    @staticmethod
-    async def archive_current_month_plans(target_month: Optional[str] = None):
+    async def archive_current_month_plans(self, target_month: str | None = None):
         try:
             if target_month is None:
                 target_month = datetime.now().strftime("%Y-%m")
@@ -102,6 +101,6 @@ class PlanManager:
         except Exception as e:
             logger.error(f" 归档 {target_month} 月度计划时发生错误: {e}")
 
-    async def get_plans_for_schedule(self, month: str, max_count: int) -> List:
+    async def get_plans_for_schedule(self, month: str, max_count: int) -> list:
         avoid_days = global_config.planning_system.avoid_repetition_days
         return await get_smart_plans_for_daily_schedule(month, max_count=max_count, avoid_days=avoid_days)

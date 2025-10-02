@@ -30,7 +30,7 @@
 """
 
 from datetime import datetime
-from typing import List, Dict, Any, Optional
+from typing import Any
 
 from src.common.database.sqlalchemy_models import MonthlyPlan
 from src.common.logger import get_logger
@@ -44,7 +44,7 @@ class ScheduleAPI:
     """日程表与月度计划API - 负责日程和计划信息的查询与管理"""
 
     @staticmethod
-    async def get_today_schedule() -> Optional[List[Dict[str, Any]]]:
+    async def get_today_schedule() -> list[dict[str, Any]] | None:
         """(异步) 获取今天的日程安排
 
         Returns:
@@ -58,7 +58,7 @@ class ScheduleAPI:
             return None
 
     @staticmethod
-    async def get_current_activity() -> Optional[str]:
+    async def get_current_activity() -> str | None:
         """(异步) 获取当前正在进行的活动
 
         Returns:
@@ -87,7 +87,7 @@ class ScheduleAPI:
             return False
 
     @staticmethod
-    async def get_monthly_plans(target_month: Optional[str] = None) -> List[MonthlyPlan]:
+    async def get_monthly_plans(target_month: str | None = None) -> list[MonthlyPlan]:
         """(异步) 获取指定月份的有效月度计划
 
         Args:
@@ -106,7 +106,7 @@ class ScheduleAPI:
             return []
 
     @staticmethod
-    async def ensure_monthly_plans(target_month: Optional[str] = None) -> bool:
+    async def ensure_monthly_plans(target_month: str | None = None) -> bool:
         """(异步) 确保指定月份存在月度计划，如果不存在则触发生成
 
         Args:
@@ -125,7 +125,7 @@ class ScheduleAPI:
             return False
 
     @staticmethod
-    async def archive_monthly_plans(target_month: Optional[str] = None) -> bool:
+    async def archive_monthly_plans(target_month: str | None = None) -> bool:
         """(异步) 归档指定月份的月度计划
 
         Args:
@@ -150,12 +150,12 @@ class ScheduleAPI:
 # =============================================================================
 
 
-async def get_today_schedule() -> Optional[List[Dict[str, Any]]]:
+async def get_today_schedule() -> list[dict[str, Any]] | None:
     """(异步) 获取今天的日程安排的便捷函数"""
     return await ScheduleAPI.get_today_schedule()
 
 
-async def get_current_activity() -> Optional[str]:
+async def get_current_activity() -> str | None:
     """(异步) 获取当前正在进行的活动的便捷函数"""
     return await ScheduleAPI.get_current_activity()
 
@@ -165,16 +165,16 @@ async def regenerate_schedule() -> bool:
     return await ScheduleAPI.regenerate_schedule()
 
 
-async def get_monthly_plans(target_month: Optional[str] = None) -> List[MonthlyPlan]:
+async def get_monthly_plans(target_month: str | None = None) -> list[MonthlyPlan]:
     """(异步) 获取指定月份的有效月度计划的便捷函数"""
     return await ScheduleAPI.get_monthly_plans(target_month)
 
 
-async def ensure_monthly_plans(target_month: Optional[str] = None) -> bool:
+async def ensure_monthly_plans(target_month: str | None = None) -> bool:
     """(异步) 确保指定月份存在月度计划的便捷函数"""
     return await ScheduleAPI.ensure_monthly_plans(target_month)
 
 
-async def archive_monthly_plans(target_month: Optional[str] = None) -> bool:
+async def archive_monthly_plans(target_month: str | None = None) -> bool:
     """(异步) 归档指定月份的月度计划的便捷函数"""
     return await ScheduleAPI.archive_monthly_plans(target_month)

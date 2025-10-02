@@ -1,22 +1,20 @@
-from typing import Dict, Optional
-
-from src.common.logger import get_logger
 from src.chat.message_receive.chat_stream import ChatStream, get_chat_manager
 from src.chat.replyer.default_generator import DefaultReplyer
+from src.common.logger import get_logger
 
 logger = get_logger("ReplyerManager")
 
 
 class ReplyerManager:
     def __init__(self):
-        self._repliers: Dict[str, DefaultReplyer] = {}
+        self._repliers: dict[str, DefaultReplyer] = {}
 
     def get_replyer(
         self,
-        chat_stream: Optional[ChatStream] = None,
-        chat_id: Optional[str] = None,
+        chat_stream: ChatStream | None = None,
+        chat_id: str | None = None,
         request_type: str = "replyer",
-    ) -> Optional[DefaultReplyer]:
+    ) -> DefaultReplyer | None:
         """
         获取或创建回复器实例。
 

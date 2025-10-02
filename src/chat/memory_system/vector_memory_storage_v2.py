@@ -1,4 +1,3 @@
-# -*- coding: utf-8 -*-
 """
 基于Vector DB的统一记忆存储系统 V2
 使用ChromaDB作为底层存储，替代JSON存储方式
@@ -11,20 +10,21 @@
 - 自动清理过期记忆
 """
 
-import time
-import orjson
 import asyncio
 import threading
-from typing import Dict, List, Optional, Tuple, Any
+import time
 from dataclasses import dataclass
 from datetime import datetime
+from typing import Any
 
-from src.common.logger import get_logger
-from src.common.vector_db import vector_db_service
-from src.chat.utils.utils import get_embedding
-from src.chat.memory_system.memory_chunk import MemoryChunk, ConfidenceLevel, ImportanceLevel
+import orjson
+
+from src.chat.memory_system.memory_chunk import ConfidenceLevel, ImportanceLevel, MemoryChunk
 from src.chat.memory_system.memory_forgetting_engine import MemoryForgettingEngine
 from src.chat.memory_system.memory_metadata_index import MemoryMetadataIndex, MemoryMetadataIndexEntry
+from src.chat.utils.utils import get_embedding
+from src.common.logger import get_logger
+from src.common.vector_db import vector_db_service
 
 logger = get_logger(__name__)
 
@@ -32,7 +32,7 @@ logger = get_logger(__name__)
 _ENUM_MAPPINGS_CACHE = {}
 
 
-def _build_enum_mapping(enum_class: type) -> Dict[str, Any]:
+def _build_enum_mapping(enum_class: type) -> dict[str, Any]:
     """构建枚举类的完整映射表
 
     Args:
@@ -145,7 +145,7 @@ class VectorMemoryStorage:
 
     """基于Vector DB的记忆存储系统"""
 
-    def __init__(self, config: Optional[VectorStorageConfig] = None):
+    def __init__(self, config: VectorStorageConfig | None = None):
         # 默认从全局配置读取，如果没有传入config
         if config is None:
             try:
@@ -163,15 +163,15 @@ class VectorMemoryStorage:
         self.vector_db_service = vector_db_service
 
         # 内存缓存
-        self.memory_cache: Dict[str, MemoryChunk] = {}
-        self.cache_timestamps: Dict[str, float] = {}
+        self.memory_cache: dict[str, MemoryChunk] = {}
+        self.cache_timestamps: dict[str, float] = {}
         self._cache = self.memory_cache  # 别名，兼容旧代码
 
         # 元数据索引管理器（JSON文件索引）
         self.metadata_index = MemoryMetadataIndex()
 
         # 遗忘引擎
-        self.forgetting_engine: Optional[MemoryForgettingEngine] = None
+        self.forgetting_engine: MemoryForgettingEngine | None = None
         if self.config.enable_forgetting:
             self.forgetting_engine = MemoryForgettingEngine()
 
@@ -267,7 +267,7 @@ class VectorMemoryStorage:
         except Exception as e:
             logger.error(f"自动清理失败: {e}")
 
-    def _memory_to_vector_format(self, memory: MemoryChunk) -> Dict[str, Any]:
+    def _memory_to_vector_format(self, memory: MemoryChunk) -> dict[str, Any]:
         """将MemoryChunk转换为向量存储格式"""
         try:
             # 获取memory_id
@@ -323,7 +323,7 @@ class VectorMemoryStorage:
             logger.error(f"转换记忆 {memory_id} 到向量格式失败: {e}", exc_info=True)
             raise
 
-    def _vector_result_to_memory(self, document: str, metadata: Dict[str, Any]) -> Optional[MemoryChunk]:
+    def _vector_result_to_memory(self, document: str, metadata: dict[str, Any]) -> MemoryChunk | None:
         """将Vector DB结果转换为MemoryChunk"""
         try:
             # 从元数据中恢复完整记忆
@@ -440,7 +440,7 @@ class VectorMemoryStorage:
         logger.warning(f"不支持的{enum_class.__name__}值类型: {type(value)}，使用默认值")
         return default
 
-    def _get_from_cache(self, memory_id: str) -> Optional[MemoryChunk]:
+    def _get_from_cache(self, memory_id: str) -> MemoryChunk | None:
         """从缓存获取记忆"""
         if not self.config.enable_caching:
             return None
@@ -472,7 +472,7 @@ class VectorMemoryStorage:
                 self.memory_cache[memory_id] = memory
                 self.cache_timestamps[memory_id] = time.time()
 
-    async def store_memories(self, memories: List[MemoryChunk]) -> int:
+    async def store_memories(self, memories: list[MemoryChunk]) -> int:
         """批量存储记忆"""
         if not memories:
             return 0
@@ -603,11 +603,11 @@ class VectorMemoryStorage:
         self,
         query_text: str,
         limit: int = 10,
-        similarity_threshold: Optional[float] = None,
-        filters: Optional[Dict[str, Any]] = None,
+        similarity_threshold: float | None = None,
+        filters: dict[str, Any] | None = None,
         # 新增：元数据过滤参数（用于JSON索引粗筛）
-        metadata_filters: Optional[Dict[str, Any]] = None,
-    ) -> List[Tuple[MemoryChunk, float]]:
+        metadata_filters: dict[str, Any] | None = None,
+    ) -> list[tuple[MemoryChunk, float]]:
         """
         搜索相似记忆（混合索引模式）
 
@@ -632,7 +632,7 @@ class VectorMemoryStorage:
 
         try:
             # === 阶段一：JSON元数据粗筛（可选） ===
-            candidate_ids: Optional[List[str]] = None
+            candidate_ids: list[str] | None = None
             if metadata_filters:
                 logger.debug(f"[JSON元数据粗筛] 开始，过滤条件: {metadata_filters}")
                 candidate_ids = self.metadata_index.search(
@@ -746,7 +746,7 @@ class VectorMemoryStorage:
             logger.error(f"搜索相似记忆失败: {e}")
             return []
 
-    async def get_memory_by_id(self, memory_id: str) -> Optional[MemoryChunk]:
+    async def get_memory_by_id(self, memory_id: str) -> MemoryChunk | None:
         """根据ID获取记忆"""
         # 首先尝试从缓存获取
         memory = self._get_from_cache(memory_id)
@@ -772,7 +772,7 @@ class VectorMemoryStorage:
 
         return None
 
-    async def get_memories_by_filters(self, filters: Dict[str, Any], limit: int = 100) -> List[MemoryChunk]:
+    async def get_memories_by_filters(self, filters: dict[str, Any], limit: int = 100) -> list[MemoryChunk]:
         """根据过滤条件获取记忆"""
         try:
             results = vector_db_service.get(collection_name=self.config.memory_collection, where=filters, limit=limit)
@@ -848,7 +848,7 @@ class VectorMemoryStorage:
             logger.error(f"删除记忆 {memory_id} 失败: {e}")
             return False
 
-    async def delete_memories_by_filters(self, filters: Dict[str, Any]) -> int:
+    async def delete_memories_by_filters(self, filters: dict[str, Any]) -> int:
         """根据过滤条件批量删除记忆"""
         try:
             # 先获取要删除的记忆ID
@@ -880,7 +880,7 @@ class VectorMemoryStorage:
             logger.error(f"批量删除记忆失败: {e}")
             return 0
 
-    async def perform_forgetting_check(self) -> Dict[str, Any]:
+    async def perform_forgetting_check(self) -> dict[str, Any]:
         """执行遗忘检查"""
         if not self.forgetting_engine:
             return {"error": "遗忘引擎未启用"}
@@ -925,7 +925,7 @@ class VectorMemoryStorage:
             logger.error(f"执行遗忘检查失败: {e}")
             return {"error": str(e)}
 
-    def get_storage_stats(self) -> Dict[str, Any]:
+    def get_storage_stats(self) -> dict[str, Any]:
         """获取存储统计信息"""
         try:
             current_total = vector_db_service.count(self.config.memory_collection)
@@ -960,7 +960,7 @@ class VectorMemoryStorage:
 _global_vector_storage = None
 
 
-def get_vector_memory_storage(config: Optional[VectorStorageConfig] = None) -> VectorMemoryStorage:
+def get_vector_memory_storage(config: VectorStorageConfig | None = None) -> VectorMemoryStorage:
     """获取全局Vector记忆存储实例"""
     global _global_vector_storage
 
@@ -974,15 +974,15 @@ def get_vector_memory_storage(config: Optional[VectorStorageConfig] = None) -> V
 class VectorMemoryStorageAdapter:
     """适配器类，提供与原UnifiedMemoryStorage兼容的接口"""
 
-    def __init__(self, config: Optional[VectorStorageConfig] = None):
+    def __init__(self, config: VectorStorageConfig | None = None):
         self.storage = VectorMemoryStorage(config)
 
-    async def store_memories(self, memories: List[MemoryChunk]) -> int:
+    async def store_memories(self, memories: list[MemoryChunk]) -> int:
         return await self.storage.store_memories(memories)
 
     async def search_similar_memories(
-        self, query_text: str, limit: int = 10, scope_id: Optional[str] = None, filters: Optional[Dict[str, Any]] = None
-    ) -> List[Tuple[str, float]]:
+        self, query_text: str, limit: int = 10, scope_id: str | None = None, filters: dict[str, Any] | None = None
+    ) -> list[tuple[str, float]]:
         results = await self.storage.search_similar_memories(query_text, limit, filters=filters)
         # 转换为原格式：(memory_id, similarity)
         return [
@@ -990,7 +990,7 @@ class VectorMemoryStorageAdapter:
             for memory, similarity in results
         ]
 
-    def get_stats(self) -> Dict[str, Any]:
+    def get_stats(self) -> dict[str, Any]:
         return self.storage.get_storage_stats()
 
 

@@ -1,10 +1,9 @@
-import time
-import sys
 import os
-from typing import Dict, List
+import sys
+import time
 
 # Add project root to Python path
-from src.common.database.database_model import Expression, ChatStreams
+from src.common.database.database_model import ChatStreams, Expression
 
 project_root = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 sys.path.insert(0, project_root)
@@ -30,7 +29,7 @@ def get_chat_name(chat_id: str) -> str:
         return f"查询失败 ({chat_id})"
 
 
-def calculate_time_distribution(expressions) -> Dict[str, int]:
+def calculate_time_distribution(expressions) -> dict[str, int]:
     """Calculate distribution of last active time in days"""
     now = time.time()
     distribution = {
@@ -64,7 +63,7 @@ def calculate_time_distribution(expressions) -> Dict[str, int]:
     return distribution
 
 
-def calculate_count_distribution(expressions) -> Dict[str, int]:
+def calculate_count_distribution(expressions) -> dict[str, int]:
     """Calculate distribution of count values"""
     distribution = {"0-1": 0, "1-2": 0, "2-3": 0, "3-4": 0, "4-5": 0, "5-10": 0, "10+": 0}
     for expr in expressions:
@@ -86,7 +85,7 @@ def calculate_count_distribution(expressions) -> Dict[str, int]:
     return distribution
 
 
-def get_top_expressions_by_chat(chat_id: str, top_n: int = 5) -> List[Expression]:
+def get_top_expressions_by_chat(chat_id: str, top_n: int = 5) -> list[Expression]:
     """Get top N most used expressions for a specific chat_id"""
     return Expression.select().where(Expression.chat_id == chat_id).order_by(Expression.count.desc()).limit(top_n)
 

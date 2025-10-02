@@ -1,9 +1,7 @@
-# -*- coding: utf-8 -*-
 """
 表情包发送历史记录模块
 """
 
-from typing import List, Dict
 from collections import deque
 from typing import List, Dict
 
@@ -15,7 +13,7 @@ MAX_HISTORY_SIZE = 5  # 每个聊天会话最多保留最近5条表情历史
 
 # 使用一个全局字典在内存中存储历史记录
 # 键是 chat_id，值是一个 deque 对象
-_history_cache: Dict[str, deque] = {}
+_history_cache: dict[str, deque] = {}
 
 
 def add_emoji_to_history(chat_id: str, emoji_description: str):
@@ -39,7 +37,7 @@ def add_emoji_to_history(chat_id: str, emoji_description: str):
     logger.debug(f"已将表情 '{emoji_description}' 添加到聊天 {chat_id} 的内存历史中")
 
 
-def get_recent_emojis(chat_id: str, limit: int = 5) -> List[str]:
+def get_recent_emojis(chat_id: str, limit: int = 5) -> list[str]:
     """
     从内存中获取最近发送的表情包描述列表。
 

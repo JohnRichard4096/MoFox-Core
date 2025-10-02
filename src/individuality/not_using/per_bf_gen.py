@@ -1,10 +1,10 @@
-from typing import Dict, List
-import orjson
 import os
-from dotenv import load_dotenv
-import sys
-import toml
 import random
+import sys
+
+import orjson
+import toml
+from dotenv import load_dotenv
 from tqdm import tqdm
 
 # 添加项目根目录到 Python 路径
@@ -13,13 +13,13 @@ sys.path.append(root_path)
 
 # 加载配置文件
 config_path = os.path.join(root_path, "config", "bot_config.toml")
-with open(config_path, "r", encoding="utf-8") as f:
+with open(config_path, encoding="utf-8") as f:
     config = toml.load(f)
 
 # 现在可以导入src模块
 from individuality.not_using.scene import get_scene_by_factor, PERSONALITY_SCENES  # noqa E402
-from individuality.not_using.questionnaire import FACTOR_DESCRIPTIONS  # noqa E402
-from individuality.not_using.offline_llm import LLMRequestOff  # noqa E402
+from individuality.not_using.questionnaire import FACTOR_DESCRIPTIONS
+from individuality.not_using.offline_llm import LLMRequestOff
 
 # 加载环境变量
 env_path = os.path.join(root_path, ".env")
@@ -75,7 +75,7 @@ def adapt_scene(scene: str) -> str:
 
         return adapted_scene
     except Exception as e:
-        print(f"场景改编过程出错：{str(e)}，将使用原始场景")
+        print(f"场景改编过程出错：{e!s}，将使用原始场景")
         return scene
 
 
@@ -83,8 +83,8 @@ class PersonalityEvaluatorDirect:
     def __init__(self):
         self.personality_traits = {"开放性": 0, "严谨性": 0, "外向性": 0, "宜人性": 0, "神经质": 0}
         self.scenarios = []
-        self.final_scores: Dict[str, float] = {"开放性": 0, "严谨性": 0, "外向性": 0, "宜人性": 0, "神经质": 0}
-        self.dimension_counts = {trait: 0 for trait in self.final_scores}
+        self.final_scores: dict[str, float] = {"开放性": 0, "严谨性": 0, "外向性": 0, "宜人性": 0, "神经质": 0}
+        self.dimension_counts = dict.fromkeys(self.final_scores, 0)
 
         # 为每个人格特质获取对应的场景
         for trait in PERSONALITY_SCENES:
@@ -112,7 +112,7 @@ class PersonalityEvaluatorDirect:
 
         self.llm = LLMRequestOff()
 
-    def evaluate_response(self, scenario: str, response: str, dimensions: List[str]) -> Dict[str, float]:
+    def evaluate_response(self, scenario: str, response: str, dimensions: list[str]) -> dict[str, float]:
         """
         使用 DeepSeek AI 评估用户对特定场景的反应
         """
@@ -163,10 +163,10 @@ class PersonalityEvaluatorDirect:
                 return {k: max(1, min(6, float(v))) for k, v in scores.items()}
             else:
                 print("AI响应格式不正确，使用默认评分")
-                return {dim: 3.5 for dim in dimensions}
+                return dict.fromkeys(dimensions, 3.5)
         except Exception as e:
-            print(f"评估过程出错：{str(e)}")
-            return {dim: 3.5 for dim in dimensions}
+            print(f"评估过程出错：{e!s}")
+            return dict.fromkeys(dimensions, 3.5)
 
     def run_evaluation(self):
         """

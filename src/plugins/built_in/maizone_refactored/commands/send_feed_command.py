@@ -1,15 +1,13 @@
-# -*- coding: utf-8 -*-
 """
 发送说说命令        await self.send_text(f"收到！正在为你生成关于"{topic or '随机'}"的说说，请稍候...【热重载测试成功】")件
 """
 
-from typing import Tuple
-
 from src.common.logger import get_logger
-from src.plugin_system.base.plus_command import PlusCommand
 from src.plugin_system.base.command_args import CommandArgs
+from src.plugin_system.base.plus_command import PlusCommand
 from src.plugin_system.utils.permission_decorators import require_permission
-from ..services.manager import get_qzone_service, get_config_getter
+
+from ..services.manager import get_config_getter, get_qzone_service
 
 logger = get_logger("MaiZone.SendFeedCommand")
 
@@ -28,7 +26,7 @@ class SendFeedCommand(PlusCommand):
         super().__init__(*args, **kwargs)
 
     @require_permission("plugin.maizone.send_feed")
-    async def execute(self, args: CommandArgs) -> Tuple[bool, str, bool]:
+    async def execute(self, args: CommandArgs) -> tuple[bool, str, bool]:
         """
         执行命令的核心逻辑。
         """

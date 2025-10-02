@@ -1,4 +1,3 @@
-# -*- coding: utf-8 -*-
 """
 反注入系统数据类型定义模块
 
@@ -10,7 +9,6 @@
 """
 
 import time
-from typing import List, Optional
 from dataclasses import dataclass, field
 from enum import Enum
 
@@ -31,8 +29,8 @@ class DetectionResult:
 
     is_injection: bool = False
     confidence: float = 0.0
-    matched_patterns: List[str] = field(default_factory=list)
-    llm_analysis: Optional[str] = None
+    matched_patterns: list[str] = field(default_factory=list)
+    llm_analysis: str | None = None
     processing_time: float = 0.0
     detection_method: str = "unknown"
     reason: str = ""

@@ -1,18 +1,18 @@
-# -*- coding: utf-8 -*-
 """
 增强记忆系统集成层
 现在只管理新的增强记忆系统，旧系统已被完全移除
 """
 
-import time
 import asyncio
-from typing import Dict, List, Optional, Any
+import time
 from dataclasses import dataclass
 from enum import Enum
+from typing import Any
 
-from src.common.logger import get_logger
 from src.chat.memory_system.enhanced_memory_core import EnhancedMemorySystem
+
 from src.chat.memory_system.memory_chunk import MemoryChunk
+from src.common.logger import get_logger
 from src.llm_models.utils_model import LLMRequest
 
 logger = get_logger(__name__)
@@ -40,12 +40,12 @@ class IntegrationConfig:
 class MemoryIntegrationLayer:
     """记忆系统集成层 - 现在只管理增强记忆系统"""
 
-    def __init__(self, llm_model: LLMRequest, config: Optional[IntegrationConfig] = None):
+    def __init__(self, llm_model: LLMRequest, config: IntegrationConfig | None = None):
         self.llm_model = llm_model
         self.config = config or IntegrationConfig()
 
         # 只初始化增强记忆系统
-        self.enhanced_memory: Optional[EnhancedMemorySystem] = None
+        self.enhanced_memory: EnhancedMemorySystem | None = None
 
         # 集成统计
         self.integration_stats = {
@@ -113,7 +113,7 @@ class MemoryIntegrationLayer:
             logger.error(f"❌ 增强记忆系统初始化失败: {e}", exc_info=True)
             raise
 
-    async def process_conversation(self, context: Dict[str, Any]) -> Dict[str, Any]:
+    async def process_conversation(self, context: dict[str, Any]) -> dict[str, Any]:
         """处理对话记忆，仅使用上下文信息"""
         if not self._initialized or not self.enhanced_memory:
             return {"success": False, "error": "Memory system not available"}
@@ -150,10 +150,10 @@ class MemoryIntegrationLayer:
     async def retrieve_relevant_memories(
         self,
         query: str,
-        user_id: Optional[str] = None,
-        context: Optional[Dict[str, Any]] = None,
-        limit: Optional[int] = None,
-    ) -> List[MemoryChunk]:
+        user_id: str | None = None,
+        context: dict[str, Any] | None = None,
+        limit: int | None = None,
+    ) -> list[MemoryChunk]:
         """检索相关记忆"""
         if not self._initialized or not self.enhanced_memory:
             return []
@@ -172,7 +172,7 @@ class MemoryIntegrationLayer:
             logger.error(f"检索相关记忆失败: {e}", exc_info=True)
             return []
 
-    async def get_system_status(self) -> Dict[str, Any]:
+    async def get_system_status(self) -> dict[str, Any]:
         """获取系统状态"""
         if not self._initialized:
             return {"status": "not_initialized"}
@@ -193,7 +193,7 @@ class MemoryIntegrationLayer:
             logger.error(f"获取系统状态失败: {e}", exc_info=True)
             return {"status": "error", "error": str(e)}
 
-    def get_integration_stats(self) -> Dict[str, Any]:
+    def get_integration_stats(self) -> dict[str, Any]:
         """获取集成统计信息"""
         return self.integration_stats.copy()
 

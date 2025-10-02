@@ -2,13 +2,13 @@
 PlanFilter: 接收 Plan 对象，根据不同模式的逻辑进行筛选，决定最终要执行的动作。
 """
 
-import orjson
+import re
 import time
 import traceback
-import re
 from datetime import datetime
-from typing import Any, Dict, List, Optional
+from typing import Any
 
+import orjson
 from json_repair import repair_json
 
 # 旧的Hippocampus系统已被移除，现在使用增强记忆系统
@@ -39,7 +39,7 @@ class ChatterPlanFilter:
     根据 Plan 中的模式和信息，筛选并决定最终的动作。
     """
 
-    def __init__(self, chat_id: str, available_actions: List[str]):
+    def __init__(self, chat_id: str, available_actions: list[str]):
         """
         初始化动作计划筛选器。
 
@@ -316,8 +316,8 @@ class ChatterPlanFilter:
         """构建已读/未读历史消息块"""
         try:
             # 从message_manager获取真实的已读/未读消息
-            from src.chat.utils.utils import assign_message_ids
             from src.chat.utils.chat_message_builder import get_raw_msg_before_timestamp_with_chat
+            from src.chat.utils.utils import assign_message_ids
 
             # 获取聊天流的上下文
             from src.plugin_system.apis.chat_api import get_chat_manager
@@ -392,13 +392,14 @@ class ChatterPlanFilter:
             logger.error(f"构建已读/未读历史消息块时出错: {e}")
             return "构建已读历史消息时出错", "构建未读历史消息时出错", []
 
-    async def _get_interest_scores_for_messages(self, messages: List[dict]) -> dict[str, float]:
+    async def _get_interest_scores_for_messages(self, messages: list[dict]) -> dict[str, float]:
         """为消息获取兴趣度评分"""
         interest_scores = {}
 
         try:
-            from .interest_scoring import chatter_interest_scoring_system
             from src.common.data_models.database_data_model import DatabaseMessages
+
+            from .interest_scoring import chatter_interest_scoring_system
 
             # 使用插件内部的兴趣度评分系统计算评分
             for msg_dict in messages:
@@ -450,7 +451,7 @@ class ChatterPlanFilter:
 
     async def _parse_single_action(
         self, action_json: dict, message_id_list: list, plan: Plan
-    ) -> List[ActionPlannerInfo]:
+    ) -> list[ActionPlannerInfo]:
         parsed_actions = []
         try:
             # 从新的actions结构中获取动作信息
@@ -599,7 +600,7 @@ class ChatterPlanFilter:
             )
         return parsed_actions
 
-    def _filter_no_actions(self, action_list: List[ActionPlannerInfo]) -> List[ActionPlannerInfo]:
+    def _filter_no_actions(self, action_list: list[ActionPlannerInfo]) -> list[ActionPlannerInfo]:
         non_no_actions = [a for a in action_list if a.action_type not in ["no_action", "no_reply"]]
         if non_no_actions:
             return non_no_actions
@@ -653,8 +654,7 @@ class ChatterPlanFilter:
             logger.error(f"获取长期记忆时出错: {e}")
             return "回忆时出现了一些问题。"
 
-    @staticmethod
-    async def _build_action_options(current_available_actions: Dict[str, ActionInfo]) -> str:
+    async def _build_action_options(self, current_available_actions: dict[str, ActionInfo]) -> str:
         action_options_block = ""
         for action_name, action_info in current_available_actions.items():
             # 构建参数的JSON示例
@@ -725,7 +725,7 @@ class ChatterPlanFilter:
             )
         return action_options_block
 
-    def _find_message_by_id(self, message_id: str, message_id_list: list) -> Optional[Dict[str, Any]]:
+    def _find_message_by_id(self, message_id: str, message_id_list: list) -> dict[str, Any] | None:
         """
         增强的消息查找函数，支持多种格式和模糊匹配
         兼容大模型可能返回的各种格式变体
@@ -830,13 +830,12 @@ class ChatterPlanFilter:
         logger.warning(f"未找到任何匹配的消息: {original_id} (候选: {candidate_ids})")
         return None
 
-    @staticmethod
-    def _get_latest_message(message_id_list: list) -> Optional[Dict[str, Any]]:
+    def _get_latest_message(self, message_id_list: list) -> dict[str, Any] | None:
         if not message_id_list:
             return None
         return message_id_list[-1].get("message")
 
-    def _find_poke_notice(self, message_id_list: list) -> Optional[Dict[str, Any]]:
+    def _find_poke_notice(self, message_id_list: list) -> dict[str, Any] | None:
         """在消息列表中寻找戳一戳的通知消息"""
         for item in reversed(message_id_list):
             message = item.get("message")

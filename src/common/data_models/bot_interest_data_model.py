@@ -4,8 +4,8 @@
 """
 
 from dataclasses import dataclass, field
-from typing import List, Dict, Optional, Any
 from datetime import datetime
+from typing import Any
 
 from . import BaseDataModel
 
@@ -16,12 +16,12 @@ class BotInterestTag(BaseDataModel):
 
     tag_name: str
     weight: float = 1.0  # 权重，表示对这个兴趣的喜好程度 (0.0-1.0)
-    embedding: Optional[List[float]] = None  # 标签的embedding向量
+    embedding: list[float] | None = None  # 标签的embedding向量
     created_at: datetime = field(default_factory=datetime.now)
     updated_at: datetime = field(default_factory=datetime.now)
     is_active: bool = True
 
-    def to_dict(self) -> Dict[str, Any]:
+    def to_dict(self) -> dict[str, Any]:
         """转换为字典格式"""
         return {
             "tag_name": self.tag_name,
@@ -33,7 +33,7 @@ class BotInterestTag(BaseDataModel):
         }
 
     @classmethod
-    def from_dict(cls, data: Dict[str, Any]) -> "BotInterestTag":
+    def from_dict(cls, data: dict[str, Any]) -> "BotInterestTag":
         """从字典创建对象"""
         return cls(
             tag_name=data["tag_name"],
@@ -51,16 +51,16 @@ class BotPersonalityInterests(BaseDataModel):
 
     personality_id: str
     personality_description: str  # 人设描述文本
-    interest_tags: List[BotInterestTag] = field(default_factory=list)
+    interest_tags: list[BotInterestTag] = field(default_factory=list)
     embedding_model: str = "text-embedding-ada-002"  # 使用的embedding模型
     last_updated: datetime = field(default_factory=datetime.now)
     version: int = 1  # 版本号，用于追踪更新
 
-    def get_active_tags(self) -> List[BotInterestTag]:
+    def get_active_tags(self) -> list[BotInterestTag]:
         """获取活跃的兴趣标签"""
         return [tag for tag in self.interest_tags if tag.is_active]
 
-    def to_dict(self) -> Dict[str, Any]:
+    def to_dict(self) -> dict[str, Any]:
         """转换为字典格式"""
         return {
             "personality_id": self.personality_id,
@@ -72,7 +72,7 @@ class BotPersonalityInterests(BaseDataModel):
         }
 
     @classmethod
-    def from_dict(cls, data: Dict[str, Any]) -> "BotPersonalityInterests":
+    def from_dict(cls, data: dict[str, Any]) -> "BotPersonalityInterests":
         """从字典创建对象"""
         return cls(
             personality_id=data["personality_id"],
@@ -89,14 +89,14 @@ class InterestMatchResult(BaseDataModel):
     """兴趣匹配结果"""
 
     message_id: str
-    matched_tags: List[str] = field(default_factory=list)
-    match_scores: Dict[str, float] = field(default_factory=dict)  # tag_name -> score
+    matched_tags: list[str] = field(default_factory=list)
+    match_scores: dict[str, float] = field(default_factory=dict)  # tag_name -> score
     overall_score: float = 0.0
-    top_tag: Optional[str] = None
+    top_tag: str | None = None
     confidence: float = 0.0  # 匹配置信度 (0.0-1.0)
-    matched_keywords: List[str] = field(default_factory=list)
+    matched_keywords: list[str] = field(default_factory=list)
 
-    def add_match(self, tag_name: str, score: float, keywords: List[str] = None):
+    def add_match(self, tag_name: str, score: float, keywords: list[str] = None):
         """添加匹配结果"""
         self.matched_tags.append(tag_name)
         self.match_scores[tag_name] = score
@@ -131,7 +131,7 @@ class InterestMatchResult(BaseDataModel):
         else:
             self.confidence = 0.0
 
-    def get_top_matches(self, top_n: int = 3) -> List[tuple]:
+    def get_top_matches(self, top_n: int = 3) -> list[tuple]:
         """获取前N个最佳匹配"""
         sorted_matches = sorted(self.match_scores.items(), key=lambda x: x[1], reverse=True)
         return sorted_matches[:top_n]

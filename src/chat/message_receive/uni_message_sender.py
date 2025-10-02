@@ -3,12 +3,11 @@ import traceback
 
 from rich.traceback import install
 
-from src.common.message.api import get_global_api
-from src.common.logger import get_logger
 from src.chat.message_receive.message import MessageSending
 from src.chat.message_receive.storage import MessageStorage
-from src.chat.utils.utils import truncate_message
-from src.chat.utils.utils import calculate_typing_time
+from src.chat.utils.utils import calculate_typing_time, truncate_message
+from src.common.logger import get_logger
+from src.common.message.api import get_global_api
 
 install(extra_lines=3)
 
@@ -27,7 +26,7 @@ async def send_message(message: MessageSending, show_log=True) -> bool:
         return True
 
     except Exception as e:
-        logger.error(f"发送消息   '{message_preview}'   发往平台'{message.message_info.platform}' 失败: {str(e)}")
+        logger.error(f"发送消息   '{message_preview}'   发往平台'{message.message_info.platform}' 失败: {e!s}")
         traceback.print_exc()
         raise e  # 重新抛出其他异常
 

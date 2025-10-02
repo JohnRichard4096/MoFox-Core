@@ -1,15 +1,16 @@
 import re
 import json
 import traceback
-from typing import Union
 
 import orjson
-from sqlalchemy import select, desc, update
+from sqlalchemy import desc, select, update
 
-from src.common.database.sqlalchemy_models import Messages, Images, get_db_session
+from src.common.database.sqlalchemy_database_api import get_db_session
+from src.common.database.sqlalchemy_models import Images, Messages
 from src.common.logger import get_logger
+
 from .chat_stream import ChatStream
-from .message import MessageSending, MessageRecv
+from .message import MessageRecv, MessageSending
 
 logger = get_logger("message_storage")
 
@@ -33,7 +34,7 @@ class MessageStorage:
             return []
 
     @staticmethod
-    async def store_message(message: Union[MessageSending, MessageRecv], chat_stream: ChatStream) -> None:
+    async def store_message(message: MessageSending | MessageRecv, chat_stream: ChatStream) -> None:
         """存储消息到数据库"""
         try:
             # 过滤敏感信息的正则模式
@@ -292,6 +293,7 @@ class MessageStorage:
         try:
             async with get_db_session() as session:
                 from sqlalchemy import select, update
+
                 from src.common.database.sqlalchemy_models import Messages
 
                 # 查找需要修复的记录：interest_value为0、null或很小的值

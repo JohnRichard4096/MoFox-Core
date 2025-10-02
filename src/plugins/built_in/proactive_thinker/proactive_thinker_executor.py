@@ -1,20 +1,21 @@
-import orjson
-from typing import Optional, Dict, Any
 from datetime import datetime
+from typing import Any
+
+import orjson
 
 from src.common.logger import get_logger
+from src.config.config import global_config, model_config
+from src.person_info.person_info import get_person_info_manager
 from src.plugin_system.apis import (
     chat_api,
+    database_api,
+    generator_api,
+    llm_api,
+    message_api,
     person_api,
     schedule_api,
     send_api,
-    llm_api,
-    message_api,
-    generator_api,
-    database_api,
 )
-from src.config.config import global_config, model_config
-from src.person_info.person_info import get_person_info_manager
 
 logger = get_logger(__name__)
 
@@ -101,7 +102,7 @@ class ProactiveThinkerExecutor:
             logger.error(f"解析 stream_id ({stream_id}) 或获取 stream 失败: {e}")
         return None
 
-    async def _gather_context(self, stream_id: str) -> Optional[Dict[str, Any]]:
+    async def _gather_context(self, stream_id: str) -> dict[str, Any] | None:
         """
         收集构建提示词所需的所有上下文信息
         """
@@ -165,7 +166,7 @@ class ProactiveThinkerExecutor:
             "current_time": datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
         }
 
-    async def _make_decision(self, context: Dict[str, Any], start_mode: str) -> Optional[Dict[str, Any]]:
+    async def _make_decision(self, context: dict[str, Any], start_mode: str) -> dict[str, Any] | None:
         """
         决策模块：判断是否应该主动发起对话，以及聊什么话题
         """
@@ -234,7 +235,7 @@ class ProactiveThinkerExecutor:
             logger.error(f"决策LLM返回的JSON格式无效: {response}")
             return {"should_reply": False, "reason": "决策模型返回格式错误"}
 
-    def _build_plan_prompt(self, context: Dict[str, Any], start_mode: str, topic: str, reason: str) -> str:
+    def _build_plan_prompt(self, context: dict[str, Any], start_mode: str, topic: str, reason: str) -> str:
         """
         根据启动模式和决策话题，构建最终的规划提示词
         """

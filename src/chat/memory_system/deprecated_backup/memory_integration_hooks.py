@@ -1,19 +1,19 @@
-# -*- coding: utf-8 -*-
 """
 记忆系统集成钩子
 提供与现有MoFox Bot系统的无缝集成点
 """
 
 import time
-from typing import Dict, Optional, Any
 from dataclasses import dataclass
+from typing import Any
 
-from src.common.logger import get_logger
 from src.chat.memory_system.enhanced_memory_adapter import (
+    get_memory_context_for_prompt,
     process_conversation_with_enhanced_memory,
     retrieve_memories_with_enhanced_system,
-    get_memory_context_for_prompt,
 )
+
+from src.common.logger import get_logger
 
 logger = get_logger(__name__)
 
@@ -24,7 +24,7 @@ class HookResult:
 
     success: bool
     data: Any = None
-    error: Optional[str] = None
+    error: str | None = None
     processing_time: float = 0.0
 
 
@@ -125,8 +125,8 @@ class MemoryIntegrationHooks:
 
             # 尝试注册到事件系统
             try:
-                from src.plugin_system.core.event_manager import event_manager
                 from src.plugin_system.base.component_types import EventType
+                from src.plugin_system.core.event_manager import event_manager
 
                 # 注册消息后处理事件
                 event_manager.subscribe(EventType.MESSAGE_PROCESSED, self._on_message_processed_handler)
@@ -238,11 +238,11 @@ class MemoryIntegrationHooks:
 
     # 钩子处理器方法
 
-    async def _on_message_processed_handler(self, event_data: Dict[str, Any]) -> HookResult:
+    async def _on_message_processed_handler(self, event_data: dict[str, Any]) -> HookResult:
         """事件系统的消息处理处理器"""
         return await self._on_message_processed_hook(event_data)
 
-    async def _on_message_processed_hook(self, message_data: Dict[str, Any]) -> HookResult:
+    async def _on_message_processed_hook(self, message_data: dict[str, Any]) -> HookResult:
         """消息后处理钩子"""
         start_time = time.time()
 
@@ -289,7 +289,7 @@ class MemoryIntegrationHooks:
             logger.error(f"消息处理钩子执行异常: {e}", exc_info=True)
             return HookResult(success=False, error=str(e), processing_time=processing_time)
 
-    async def _on_chat_stream_save_hook(self, chat_stream_data: Dict[str, Any]) -> HookResult:
+    async def _on_chat_stream_save_hook(self, chat_stream_data: dict[str, Any]) -> HookResult:
         """聊天流保存钩子"""
         start_time = time.time()
 
@@ -345,7 +345,7 @@ class MemoryIntegrationHooks:
             logger.error(f"聊天流保存钩子执行异常: {e}", exc_info=True)
             return HookResult(success=False, error=str(e), processing_time=processing_time)
 
-    async def _on_pre_response_hook(self, response_data: Dict[str, Any]) -> HookResult:
+    async def _on_pre_response_hook(self, response_data: dict[str, Any]) -> HookResult:
         """回复前钩子"""
         start_time = time.time()
 
@@ -380,7 +380,7 @@ class MemoryIntegrationHooks:
             logger.error(f"回复前钩子执行异常: {e}", exc_info=True)
             return HookResult(success=False, error=str(e), processing_time=processing_time)
 
-    async def _on_knowledge_query_hook(self, query_data: Dict[str, Any]) -> HookResult:
+    async def _on_knowledge_query_hook(self, query_data: dict[str, Any]) -> HookResult:
         """知识库查询钩子"""
         start_time = time.time()
 
@@ -411,7 +411,7 @@ class MemoryIntegrationHooks:
             logger.error(f"知识库查询钩子执行异常: {e}", exc_info=True)
             return HookResult(success=False, error=str(e), processing_time=processing_time)
 
-    async def _on_prompt_building_hook(self, prompt_data: Dict[str, Any]) -> HookResult:
+    async def _on_prompt_building_hook(self, prompt_data: dict[str, Any]) -> HookResult:
         """提示词构建钩子"""
         start_time = time.time()
 
@@ -459,7 +459,7 @@ class MemoryIntegrationHooks:
             new_avg = (current_avg * (total_executions - 1) + processing_time) / total_executions
             self.hook_stats["average_hook_time"] = new_avg
 
-    def get_hook_stats(self) -> Dict[str, Any]:
+    def get_hook_stats(self) -> dict[str, Any]:
         """获取钩子统计信息"""
         return self.hook_stats.copy()
 
@@ -501,7 +501,7 @@ class MemoryMaintenanceTask:
 
 
 # 全局钩子实例
-_memory_hooks: Optional[MemoryIntegrationHooks] = None
+_memory_hooks: MemoryIntegrationHooks | None = None
 
 
 async def get_memory_integration_hooks() -> MemoryIntegrationHooks:

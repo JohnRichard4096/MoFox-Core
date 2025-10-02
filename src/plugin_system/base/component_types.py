@@ -1,10 +1,11 @@
-from enum import Enum
-from typing import Dict, Any, List, Optional, Tuple
 from dataclasses import dataclass, field
+from enum import Enum
+from typing import Any
+
 from maim_message import Seg
 
-from src.llm_models.payload_content.tool_option import ToolParamType as ToolParamType
 from src.llm_models.payload_content.tool_option import ToolCall as ToolCall
+from src.llm_models.payload_content.tool_option import ToolParamType as ToolParamType
 
 
 # 组件类型枚举
@@ -114,7 +115,7 @@ class ComponentInfo:
     enabled: bool = True  # 是否启用
     plugin_name: str = ""  # 所属插件名称
     is_built_in: bool = False  # 是否为内置组件
-    metadata: Dict[str, Any] = field(default_factory=dict)  # 额外元数据
+    metadata: dict[str, Any] = field(default_factory=dict)  # 额外元数据
 
     def __post_init__(self):
         if self.metadata is None:
@@ -125,18 +126,18 @@ class ComponentInfo:
 class ActionInfo(ComponentInfo):
     """动作组件信息"""
 
-    action_parameters: Dict[str, str] = field(
+    action_parameters: dict[str, str] = field(
         default_factory=dict
     )  # 动作参数与描述，例如 {"param1": "描述1", "param2": "描述2"}
-    action_require: List[str] = field(default_factory=list)  # 动作需求说明
-    associated_types: List[str] = field(default_factory=list)  # 关联的消息类型
+    action_require: list[str] = field(default_factory=list)  # 动作需求说明
+    associated_types: list[str] = field(default_factory=list)  # 关联的消息类型
     # 激活类型相关
     focus_activation_type: ActionActivationType = ActionActivationType.ALWAYS
     normal_activation_type: ActionActivationType = ActionActivationType.ALWAYS
     activation_type: ActionActivationType = ActionActivationType.ALWAYS
     random_activation_probability: float = 0.0
     llm_judge_prompt: str = ""
-    activation_keywords: List[str] = field(default_factory=list)  # 激活关键词列表
+    activation_keywords: list[str] = field(default_factory=list)  # 激活关键词列表
     keyword_case_sensitive: bool = False
     # 模式和并行设置
     mode_enable: ChatMode = ChatMode.ALL
@@ -145,7 +146,7 @@ class ActionInfo(ComponentInfo):
     # 二步Action相关属性
     is_two_step_action: bool = False  # 是否为二步Action
     step_one_description: str = ""  # 第一步的描述
-    sub_actions: List[Tuple[str, str, Dict[str, str]]] = field(default_factory=list)  # 子Action列表
+    sub_actions: list[tuple[str, str, dict[str, str]]] = field(default_factory=list)  # 子Action列表
 
     def __post_init__(self):
         super().__post_init__()
@@ -178,7 +179,7 @@ class CommandInfo(ComponentInfo):
 class PlusCommandInfo(ComponentInfo):
     """增强命令组件信息"""
 
-    command_aliases: List[str] = field(default_factory=list)  # 命令别名列表
+    command_aliases: list[str] = field(default_factory=list)  # 命令别名列表
     priority: int = 0  # 命令优先级
     chat_type_allow: ChatType = ChatType.ALL  # 允许的聊天类型
     intercept_message: bool = False  # 是否拦截消息
@@ -194,7 +195,7 @@ class PlusCommandInfo(ComponentInfo):
 class ToolInfo(ComponentInfo):
     """工具组件信息"""
 
-    tool_parameters: List[Tuple[str, ToolParamType, str, bool, List[str] | None]] = field(
+    tool_parameters: list[tuple[str, ToolParamType, str, bool, list[str] | None]] = field(
         default_factory=list
     )  # 工具参数定义
     tool_description: str = ""  # 工具描述
@@ -248,18 +249,18 @@ class PluginInfo:
     author: str = ""  # 插件作者
     enabled: bool = True  # 是否启用
     is_built_in: bool = False  # 是否为内置插件
-    components: List[ComponentInfo] = field(default_factory=list)  # 包含的组件列表
-    dependencies: List[str] = field(default_factory=list)  # 依赖的其他插件
-    python_dependencies: List[PythonDependency] = field(default_factory=list)  # Python包依赖
+    components: list[ComponentInfo] = field(default_factory=list)  # 包含的组件列表
+    dependencies: list[str] = field(default_factory=list)  # 依赖的其他插件
+    python_dependencies: list[PythonDependency] = field(default_factory=list)  # Python包依赖
     config_file: str = ""  # 配置文件路径
-    metadata: Dict[str, Any] = field(default_factory=dict)  # 额外元数据
+    metadata: dict[str, Any] = field(default_factory=dict)  # 额外元数据
     # 新增：manifest相关信息
-    manifest_data: Dict[str, Any] = field(default_factory=dict)  # manifest文件数据
+    manifest_data: dict[str, Any] = field(default_factory=dict)  # manifest文件数据
     license: str = ""  # 插件许可证
     homepage_url: str = ""  # 插件主页
     repository_url: str = ""  # 插件仓库地址
-    keywords: List[str] = field(default_factory=list)  # 插件关键词
-    categories: List[str] = field(default_factory=list)  # 插件分类
+    keywords: list[str] = field(default_factory=list)  # 插件关键词
+    categories: list[str] = field(default_factory=list)  # 插件分类
     min_host_version: str = ""  # 最低主机版本要求
     max_host_version: str = ""  # 最高主机版本要求
 
@@ -279,7 +280,7 @@ class PluginInfo:
         if self.categories is None:
             self.categories = []
 
-    def get_missing_packages(self) -> List[PythonDependency]:
+    def get_missing_packages(self) -> list[PythonDependency]:
         """检查缺失的Python包"""
         missing = []
         for dep in self.python_dependencies:
@@ -290,7 +291,7 @@ class PluginInfo:
                     missing.append(dep)
         return missing
 
-    def get_pip_requirements(self) -> List[str]:
+    def get_pip_requirements(self) -> list[str]:
         """获取所有pip安装格式的依赖"""
         return [dep.get_pip_requirement() for dep in self.python_dependencies]
 
@@ -299,16 +300,16 @@ class PluginInfo:
 class MaiMessages:
     """MaiM插件消息"""
 
-    message_segments: List[Seg] = field(default_factory=list)
+    message_segments: list[Seg] = field(default_factory=list)
     """消息段列表，支持多段消息"""
 
-    message_base_info: Dict[str, Any] = field(default_factory=dict)
+    message_base_info: dict[str, Any] = field(default_factory=dict)
     """消息基本信息，包含平台，用户信息等数据"""
 
     plain_text: str = ""
     """纯文本消息内容"""
 
-    raw_message: Optional[str] = None
+    raw_message: str | None = None
     """原始消息内容"""
 
     is_group_message: bool = False
@@ -317,28 +318,28 @@ class MaiMessages:
     is_private_message: bool = False
     """是否为私聊消息"""
 
-    stream_id: Optional[str] = None
+    stream_id: str | None = None
     """流ID，用于标识消息流"""
 
-    llm_prompt: Optional[str] = None
+    llm_prompt: str | None = None
     """LLM提示词"""
 
-    llm_response_content: Optional[str] = None
+    llm_response_content: str | None = None
     """LLM响应内容"""
 
-    llm_response_reasoning: Optional[str] = None
+    llm_response_reasoning: str | None = None
     """LLM响应推理内容"""
 
-    llm_response_model: Optional[str] = None
+    llm_response_model: str | None = None
     """LLM响应模型名称"""
 
-    llm_response_tool_call: Optional[List[ToolCall]] = None
+    llm_response_tool_call: list[ToolCall] | None = None
     """LLM使用的工具调用"""
 
-    action_usage: Optional[List[str]] = None
+    action_usage: list[str] | None = None
     """使用的Action"""
 
-    additional_data: Dict[Any, Any] = field(default_factory=dict)
+    additional_data: dict[Any, Any] = field(default_factory=dict)
     """附加数据，可以存储额外信息"""
 
     def __post_init__(self):

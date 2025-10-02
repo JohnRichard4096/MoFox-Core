@@ -1,19 +1,18 @@
 import asyncio
 
-from typing import List, Tuple, Type
 from src.plugin_system import (
     BasePlugin,
-    ConfigField,
-    register_plugin,
-    plugin_manage_api,
-    component_manage_api,
     ComponentInfo,
     ComponentType,
+    ConfigField,
+    component_manage_api,
+    plugin_manage_api,
+    register_plugin,
 )
-from src.plugin_system.base.plus_command import PlusCommand
-from src.plugin_system.base.command_args import CommandArgs
-from src.plugin_system.base.component_types import PlusCommandInfo, ChatType
 from src.plugin_system.apis.permission_api import permission_api
+from src.plugin_system.base.command_args import CommandArgs
+from src.plugin_system.base.component_types import ChatType, PlusCommandInfo
+from src.plugin_system.base.plus_command import PlusCommand
 from src.plugin_system.utils.permission_decorators import require_permission
 
 
@@ -31,7 +30,7 @@ class ManagementCommand(PlusCommand):
         super().__init__(*args, **kwargs)
 
     @require_permission("plugin.management.admin", "❌ 你没有插件管理的权限")
-    async def execute(self, args: CommandArgs) -> Tuple[bool, str, bool]:
+    async def execute(self, args: CommandArgs) -> tuple[bool, str, bool]:
         """执行插件管理命令"""
         if args.is_empty:
             await self._show_help("all")
@@ -51,7 +50,7 @@ class ManagementCommand(PlusCommand):
             await self.send_text(f"❌ 未知的子命令: {subcommand}\n使用 /pm help 查看帮助")
             return True, "未知子命令", True
 
-    async def _handle_plugin_commands(self, args: List[str]) -> Tuple[bool, str, bool]:
+    async def _handle_plugin_commands(self, args: list[str]) -> tuple[bool, str, bool]:
         """处理插件相关命令"""
         if not args:
             await self._show_help("plugin")
@@ -83,7 +82,7 @@ class ManagementCommand(PlusCommand):
 
         return True, "插件命令执行完成", True
 
-    async def _handle_component_commands(self, args: List[str]) -> Tuple[bool, str, bool]:
+    async def _handle_component_commands(self, args: list[str]) -> tuple[bool, str, bool]:
         """处理组件相关命令"""
         if not args:
             await self._show_help("component")
@@ -258,7 +257,7 @@ class ManagementCommand(PlusCommand):
             else:
                 await self.send_text(f"❌ 插件强制重载失败: `{plugin_name}`")
         except Exception as e:
-            await self.send_text(f"❌ 强制重载过程中发生错误: {str(e)}")
+            await self.send_text(f"❌ 强制重载过程中发生错误: {e!s}")
 
     async def _add_dir(self, dir_path: str):
         """添加插件目录"""
@@ -271,17 +270,17 @@ class ManagementCommand(PlusCommand):
             await self.send_text(f"❌ 插件目录添加失败: `{dir_path}`")
 
     @staticmethod
-    def _fetch_all_registered_components() -> List[ComponentInfo]:
+    def _fetch_all_registered_components() -> list[ComponentInfo]:
         all_plugin_info = component_manage_api.get_all_plugin_info()
         if not all_plugin_info:
             return []
 
-        components_info: List[ComponentInfo] = []
+        components_info: list[ComponentInfo] = []
         for plugin_info in all_plugin_info.values():
             components_info.extend(plugin_info.components)
         return components_info
 
-    def _fetch_locally_disabled_components(self) -> List[str]:
+    def _fetch_locally_disabled_components(self) -> list[str]:
         """获取本地禁用的组件列表"""
         stream_id = self.message.chat_stream.stream_id
         locally_disabled_components_actions = component_manage_api.get_locally_disabled_components(
@@ -509,7 +508,7 @@ class PluginManagementPlugin(BasePlugin):
             False,
         )
 
-    def get_plugin_components(self) -> List[Tuple[PlusCommandInfo, Type[PlusCommand]]]:
+    def get_plugin_components(self) -> list[tuple[PlusCommandInfo, type[PlusCommand]]]:
         """返回插件的PlusCommand组件"""
         components = []
         if self.get_config("plugin.enabled", True):

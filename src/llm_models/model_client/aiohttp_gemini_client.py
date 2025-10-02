@@ -1,21 +1,24 @@
 import asyncio
-import orjson
 import io
-from typing import Callable, Any, Coroutine, Optional
-import aiohttp
+from collections.abc import Callable, Coroutine
+from typing import Any
 
-from src.config.api_ada_configs import ModelInfo, APIProvider
+import aiohttp
+import orjson
+
 from src.common.logger import get_logger
-from .base_client import APIResponse, UsageRecord, BaseClient, client_registry
+from src.config.api_ada_configs import APIProvider, ModelInfo
+
 from ..exceptions import (
-    RespParseException,
     NetworkConnectionError,
-    RespNotOkException,
     ReqAbortException,
+    RespNotOkException,
+    RespParseException,
 )
 from ..payload_content.message import Message, RoleType
 from ..payload_content.resp_format import RespFormat, RespFormatType
-from ..payload_content.tool_option import ToolOption, ToolParam, ToolCall
+from ..payload_content.tool_option import ToolCall, ToolOption, ToolParam
+from .base_client import APIResponse, BaseClient, UsageRecord, client_registry
 
 logger = get_logger("AioHTTP-Gemini客户端")
 
@@ -210,7 +213,7 @@ class AiohttpGeminiStreamParser:
             chunk_data = orjson.loads(chunk_text)
 
             # 解析候选项
-            if "candidates" in chunk_data and chunk_data["candidates"]:
+            if chunk_data.get("candidates"):
                 candidate = chunk_data["candidates"][0]
 
                 # 解析内容
@@ -266,7 +269,7 @@ class AiohttpGeminiStreamParser:
 async def _default_stream_response_handler(
     response: aiohttp.ClientResponse,
     interrupt_flag: asyncio.Event | None,
-) -> tuple[APIResponse, Optional[tuple[int, int, int]]]:
+) -> tuple[APIResponse, tuple[int, int, int] | None]:
     """默认流式响应处理器"""
     parser = AiohttpGeminiStreamParser()
 
@@ -290,13 +293,13 @@ async def _default_stream_response_handler(
 
 def _default_normal_response_parser(
     response_data: dict,
-) -> tuple[APIResponse, Optional[tuple[int, int, int]]]:
+) -> tuple[APIResponse, tuple[int, int, int] | None]:
     """默认普通响应解析器"""
     api_response = APIResponse()
 
     try:
         # 解析候选项
-        if "candidates" in response_data and response_data["candidates"]:
+        if response_data.get("candidates"):
             candidate = response_data["candidates"][0]
 
             # 解析文本内容
@@ -418,13 +421,12 @@ class AiohttpGeminiClient(BaseClient):
         max_tokens: int = 1024,
         temperature: float = 0.7,
         response_format: RespFormat | None = None,
-        stream_response_handler: Optional[
-            Callable[
-                [aiohttp.ClientResponse, asyncio.Event | None],
-                Coroutine[Any, Any, tuple[APIResponse, Optional[tuple[int, int, int]]]],
-            ]
-        ] = None,
-        async_response_parser: Optional[Callable[[dict], tuple[APIResponse, Optional[tuple[int, int, int]]]]] = None,
+        stream_response_handler: Callable[
+            [aiohttp.ClientResponse, asyncio.Event | None],
+            Coroutine[Any, Any, tuple[APIResponse, tuple[int, int, int] | None]],
+        ]
+        | None = None,
+        async_response_parser: Callable[[dict], tuple[APIResponse, tuple[int, int, int] | None]] | None = None,
         interrupt_flag: asyncio.Event | None = None,
         extra_params: dict[str, Any] | None = None,
     ) -> APIResponse:

@@ -1,25 +1,24 @@
-# -*- coding: utf-8 -*-
 """
 记忆激活器
 记忆系统的激活器组件
 """
 
 import difflib
-import orjson
-from typing import List, Dict, Optional
 from datetime import datetime
 
+import orjson
 from json_repair import repair_json
-from src.llm_models.utils_model import LLMRequest
-from src.config.config import global_config, model_config
-from src.common.logger import get_logger
-from src.chat.utils.prompt import Prompt, global_prompt_manager
+
 from src.chat.memory_system.memory_manager import MemoryResult
+from src.chat.utils.prompt import Prompt, global_prompt_manager
+from src.common.logger import get_logger
+from src.config.config import global_config, model_config
+from src.llm_models.utils_model import LLMRequest
 
 logger = get_logger("memory_activator")
 
 
-def get_keywords_from_json(json_str) -> List:
+def get_keywords_from_json(json_str) -> list:
     """
     从JSON字符串中提取关键词列表
 
@@ -81,7 +80,7 @@ class MemoryActivator:
         self.cached_keywords = set()  # 用于缓存历史关键词
         self.last_memory_query_time = 0  # 上次查询记忆的时间
 
-    async def activate_memory_with_chat_history(self, target_message, chat_history_prompt) -> List[Dict]:
+    async def activate_memory_with_chat_history(self, target_message, chat_history_prompt) -> list[dict]:
         """
         激活记忆
         """
@@ -155,7 +154,7 @@ class MemoryActivator:
 
         return self.running_memory
 
-    async def _query_unified_memory(self, keywords: List[str], query_text: str) -> List[MemoryResult]:
+    async def _query_unified_memory(self, keywords: list[str], query_text: str) -> list[MemoryResult]:
         """查询统一记忆系统"""
         try:
             # 使用记忆系统
@@ -198,7 +197,7 @@ class MemoryActivator:
             logger.error(f"查询统一记忆失败: {e}")
             return []
 
-    async def get_instant_memory(self, target_message: str, chat_id: str) -> Optional[str]:
+    async def get_instant_memory(self, target_message: str, chat_id: str) -> str | None:
         """
         获取即时记忆 - 兼容原有接口（使用统一存储）
         """

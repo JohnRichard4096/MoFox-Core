@@ -1,7 +1,4 @@
-from typing import Tuple, List
-
-
-def list_loaded_plugins() -> List[str]:
+def list_loaded_plugins() -> list[str]:
     """
     列出所有当前加载的插件。
 
@@ -13,7 +10,7 @@ def list_loaded_plugins() -> List[str]:
     return plugin_manager.list_loaded_plugins()
 
 
-def list_registered_plugins() -> List[str]:
+def list_registered_plugins() -> list[str]:
     """
     列出所有已注册的插件。
 
@@ -80,7 +77,7 @@ async def reload_plugin(plugin_name: str) -> bool:
     return await plugin_manager.reload_registered_plugin(plugin_name)
 
 
-def load_plugin(plugin_name: str) -> Tuple[bool, int]:
+def load_plugin(plugin_name: str) -> tuple[bool, int]:
     """
     加载指定的插件。
 
@@ -109,7 +106,7 @@ def add_plugin_directory(plugin_directory: str) -> bool:
     return plugin_manager.add_plugin_directory(plugin_directory)
 
 
-def rescan_plugin_directory() -> Tuple[int, int]:
+def rescan_plugin_directory() -> tuple[int, int]:
     """
     重新扫描插件目录，加载新插件。
     Returns:

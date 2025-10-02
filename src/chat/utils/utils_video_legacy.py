@@ -1,25 +1,25 @@
 #!/usr/bin/env python3
-# -*- coding: utf-8 -*-
 """
 视频分析器模块 - 旧版本兼容模块
 支持多种分析模式：批处理、逐帧、自动选择
 包含Python原生的抽帧功能，作为Rust模块的降级方案
 """
 
-import os
-import cv2
 import asyncio
 import base64
+import io
+import os
+from concurrent.futures import ThreadPoolExecutor
+from pathlib import Path
+from typing import Any
+
+import cv2
 import numpy as np
 from PIL import Image
-from pathlib import Path
-from typing import List, Tuple, Optional, Any
-import io
-from concurrent.futures import ThreadPoolExecutor
 
-from src.llm_models.utils_model import LLMRequest
-from src.config.config import global_config, model_config
 from src.common.logger import get_logger
+from src.config.config import global_config, model_config
+from src.llm_models.utils_model import LLMRequest
 
 logger = get_logger("utils_video_legacy")
 
@@ -30,7 +30,7 @@ def _extract_frames_worker(
     frame_quality: int,
     max_image_size: int,
     frame_extraction_mode: str,
-    frame_interval_seconds: Optional[float],
+    frame_interval_seconds: float | None,
 ) -> list[Any] | list[tuple[str, str]]:
     """线程池中提取视频帧的工作函数"""
     frames = []
@@ -221,7 +221,7 @@ class LegacyVideoAnalyzer:
             f"✅ 旧版本视频分析器初始化完成，分析模式: {self.analysis_mode}, 线程池: {self.use_multiprocessing}"
         )
 
-    async def extract_frames(self, video_path: str) -> List[Tuple[str, float]]:
+    async def extract_frames(self, video_path: str) -> list[tuple[str, float]]:
         """提取视频帧 - 支持多进程和单线程模式"""
         # 先获取视频信息
         cap = cv2.VideoCapture(video_path)
@@ -247,7 +247,7 @@ class LegacyVideoAnalyzer:
         else:
             return await self._extract_frames_fallback(video_path)
 
-    async def _extract_frames_multiprocess(self, video_path: str) -> List[Tuple[str, float]]:
+    async def _extract_frames_multiprocess(self, video_path: str) -> list[tuple[str, float]]:
         """线程池版本的帧提取"""
         loop = asyncio.get_event_loop()
 
@@ -282,7 +282,7 @@ class LegacyVideoAnalyzer:
             logger.info("🔄 降级到单线程模式...")
             return await self._extract_frames_fallback(video_path)
 
-    async def _extract_frames_fallback(self, video_path: str) -> List[Tuple[str, float]]:
+    async def _extract_frames_fallback(self, video_path: str) -> list[tuple[str, float]]:
         """帧提取的降级方法 - 原始异步版本"""
         frames = []
         extracted_count = 0
@@ -389,7 +389,7 @@ class LegacyVideoAnalyzer:
         logger.info(f"✅ 成功提取{len(frames)}帧")
         return frames
 
-    async def analyze_frames_batch(self, frames: List[Tuple[str, float]], user_question: str = None) -> str:
+    async def analyze_frames_batch(self, frames: list[tuple[str, float]], user_question: str = None) -> str:
         """批量分析所有帧"""
         logger.info(f"开始批量分析{len(frames)}帧")
 
@@ -441,7 +441,7 @@ class LegacyVideoAnalyzer:
                 logger.error(f"❌ 降级分析也失败: {fallback_e}")
                 raise
 
-    async def _analyze_multiple_frames(self, frames: List[Tuple[str, float]], prompt: str) -> str:
+    async def _analyze_multiple_frames(self, frames: list[tuple[str, float]], prompt: str) -> str:
         """使用多图片分析方法"""
         logger.info(f"开始构建包含{len(frames)}帧的分析请求")
 
@@ -481,7 +481,7 @@ class LegacyVideoAnalyzer:
         logger.info(f"视频识别完成，响应长度: {len(api_response.content or '')} ")
         return api_response.content or "❌ 未获得响应内容"
 
-    async def analyze_frames_sequential(self, frames: List[Tuple[str, float]], user_question: str = None) -> str:
+    async def analyze_frames_sequential(self, frames: list[tuple[str, float]], user_question: str = None) -> str:
         """逐帧分析并汇总"""
         logger.info(f"开始逐帧分析{len(frames)}帧")
 
@@ -567,7 +567,7 @@ class LegacyVideoAnalyzer:
             return result
 
         except Exception as e:
-            error_msg = f"❌ 视频分析失败: {str(e)}"
+            error_msg = f"❌ 视频分析失败: {e!s}"
             logger.error(error_msg)
             return error_msg
 

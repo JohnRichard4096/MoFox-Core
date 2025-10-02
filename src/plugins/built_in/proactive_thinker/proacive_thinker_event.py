@@ -2,17 +2,17 @@ import asyncio
 import random
 import time
 from datetime import datetime
-from typing import List, Union
 
 from maim_message import UserInfo
 
 from src.chat.message_receive.chat_stream import get_chat_manager
 from src.common.logger import get_logger
 from src.config.config import global_config
-from src.manager.async_task_manager import async_task_manager, AsyncTask
-from src.plugin_system import EventType, BaseEventHandler
+from src.manager.async_task_manager import AsyncTask, async_task_manager
+from src.plugin_system import BaseEventHandler, EventType
 from src.plugin_system.apis import chat_api, person_api
 from src.plugin_system.base.base_event import HandlerResult
+
 from .proactive_thinker_executor import ProactiveThinkerExecutor
 
 logger = get_logger(__name__)
@@ -199,7 +199,7 @@ class ProactiveThinkerEventHandler(BaseEventHandler):
 
     handler_name: str = "proactive_thinker_on_start"
     handler_description: str = "主动思考插件的启动事件处理器"
-    init_subscribe: List[Union[EventType, str]] = [EventType.ON_START]
+    init_subscribe: list[EventType | str] = [EventType.ON_START]
 
     async def execute(self, kwargs: dict | None) -> "HandlerResult":
         """在机器人启动时执行，根据配置决定是否启动后台任务。"""

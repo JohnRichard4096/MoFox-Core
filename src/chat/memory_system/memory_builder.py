@@ -1,4 +1,3 @@
-# -*- coding: utf-8 -*-
 """
 记忆构建模块
 从对话流中提取高质量、结构化记忆单元
@@ -33,19 +32,19 @@ import time
 from dataclasses import dataclass
 from datetime import datetime
 from enum import Enum
-from typing import Any, Dict, List, Optional, Union, Type
+from typing import Any
 
 import orjson
 
-from src.common.logger import get_logger
-from src.llm_models.utils_model import LLMRequest
 from src.chat.memory_system.memory_chunk import (
-    MemoryChunk,
-    MemoryType,
     ConfidenceLevel,
     ImportanceLevel,
+    MemoryChunk,
+    MemoryType,
     create_memory_chunk,
 )
+from src.common.logger import get_logger
+from src.llm_models.utils_model import LLMRequest
 
 logger = get_logger(__name__)
 
@@ -62,8 +61,8 @@ class ExtractionStrategy(Enum):
 class ExtractionResult:
     """提取结果"""
 
-    memories: List[MemoryChunk]
-    confidence_scores: List[float]
+    memories: list[MemoryChunk]
+    confidence_scores: list[float]
     extraction_time: float
     strategy_used: ExtractionStrategy
 
@@ -85,8 +84,8 @@ class MemoryBuilder:
         }
 
     async def build_memories(
-        self, conversation_text: str, context: Dict[str, Any], user_id: str, timestamp: float
-    ) -> List[MemoryChunk]:
+        self, conversation_text: str, context: dict[str, Any], user_id: str, timestamp: float
+    ) -> list[MemoryChunk]:
         """从对话中构建记忆"""
         start_time = time.time()
 
@@ -116,8 +115,8 @@ class MemoryBuilder:
             raise
 
     async def _extract_with_llm(
-        self, text: str, context: Dict[str, Any], user_id: str, timestamp: float
-    ) -> List[MemoryChunk]:
+        self, text: str, context: dict[str, Any], user_id: str, timestamp: float
+    ) -> list[MemoryChunk]:
         """使用LLM提取记忆"""
         try:
             prompt = self._build_llm_extraction_prompt(text, context)
@@ -135,7 +134,7 @@ class MemoryBuilder:
             logger.error(f"LLM提取失败: {e}")
             raise MemoryExtractionError(str(e)) from e
 
-    def _build_llm_extraction_prompt(self, text: str, context: Dict[str, Any]) -> str:
+    def _build_llm_extraction_prompt(self, text: str, context: dict[str, Any]) -> str:
         """构建LLM提取提示"""
         current_date = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
         message_type = context.get("message_type", "normal")
@@ -315,7 +314,7 @@ class MemoryBuilder:
 
         return prompt
 
-    def _extract_json_payload(self, response: str) -> Optional[str]:
+    def _extract_json_payload(self, response: str) -> str | None:
         """从模型响应中提取JSON部分，兼容Markdown代码块等格式"""
         if not response:
             return None
@@ -338,8 +337,8 @@ class MemoryBuilder:
         return stripped if stripped.startswith("{") and stripped.endswith("}") else None
 
     def _parse_llm_response(
-        self, response: str, user_id: str, timestamp: float, context: Dict[str, Any]
-    ) -> List[MemoryChunk]:
+        self, response: str, user_id: str, timestamp: float, context: dict[str, Any]
+    ) -> list[MemoryChunk]:
         """解析LLM响应"""
         if not response:
             raise MemoryExtractionError("LLM未返回任何响应")
@@ -385,7 +384,7 @@ class MemoryBuilder:
 
         bot_display = self._clean_subject_text(bot_display)
 
-        memories: List[MemoryChunk] = []
+        memories: list[MemoryChunk] = []
 
         for mem_data in memory_list:
             try:
@@ -460,7 +459,7 @@ class MemoryBuilder:
 
         return memories
 
-    def _parse_enum_value(self, enum_cls: Type[Enum], raw_value: Any, default: Enum, field_name: str) -> Enum:
+    def _parse_enum_value(self, enum_cls: type[Enum], raw_value: Any, default: Enum, field_name: str) -> Enum:
         """解析枚举值，兼容数字/字符串表示"""
         if isinstance(raw_value, enum_cls):
             return raw_value
@@ -514,7 +513,7 @@ class MemoryBuilder:
             )
             return default
 
-    def _collect_bot_identifiers(self, context: Optional[Dict[str, Any]]) -> set[str]:
+    def _collect_bot_identifiers(self, context: dict[str, Any] | None) -> set[str]:
         identifiers: set[str] = {"bot", "机器人", "ai助手"}
         if not context:
             return identifiers
@@ -540,7 +539,7 @@ class MemoryBuilder:
 
         return identifiers
 
-    def _collect_system_identifiers(self, context: Optional[Dict[str, Any]]) -> set[str]:
+    def _collect_system_identifiers(self, context: dict[str, Any] | None) -> set[str]:
         identifiers: set[str] = set()
         if not context:
             return identifiers
@@ -568,8 +567,8 @@ class MemoryBuilder:
 
         return identifiers
 
-    def _resolve_conversation_participants(self, context: Optional[Dict[str, Any]], user_id: str) -> List[str]:
-        participants: List[str] = []
+    def _resolve_conversation_participants(self, context: dict[str, Any] | None, user_id: str) -> list[str]:
+        participants: list[str] = []
 
         if context:
             candidate_keys = [
@@ -609,7 +608,7 @@ class MemoryBuilder:
         if not participants:
             participants = ["对话参与者"]
 
-        deduplicated: List[str] = []
+        deduplicated: list[str] = []
         seen = set()
         for name in participants:
             key = name.lower()
@@ -620,7 +619,7 @@ class MemoryBuilder:
 
         return deduplicated
 
-    def _resolve_user_display(self, context: Optional[Dict[str, Any]], user_id: str) -> str:
+    def _resolve_user_display(self, context: dict[str, Any] | None, user_id: str) -> str:
         candidate_keys = [
             "user_display_name",
             "user_name",
@@ -683,7 +682,7 @@ class MemoryBuilder:
 
         return False
 
-    def _split_subject_string(self, value: str) -> List[str]:
+    def _split_subject_string(self, value: str) -> list[str]:
         if not value:
             return []
 
@@ -699,12 +698,12 @@ class MemoryBuilder:
         subject: Any,
         bot_identifiers: set[str],
         system_identifiers: set[str],
-        default_subjects: List[str],
-        bot_display: Optional[str] = None,
-    ) -> List[str]:
+        default_subjects: list[str],
+        bot_display: str | None = None,
+    ) -> list[str]:
         defaults = default_subjects or ["对话参与者"]
 
-        raw_candidates: List[str] = []
+        raw_candidates: list[str] = []
         if isinstance(subject, list):
             for item in subject:
                 if isinstance(item, str):
@@ -716,7 +715,7 @@ class MemoryBuilder:
         elif subject is not None:
             raw_candidates.extend(self._split_subject_string(str(subject)))
 
-        normalized: List[str] = []
+        normalized: list[str] = []
         bot_primary = self._clean_subject_text(bot_display or "")
 
         for candidate in raw_candidates:
@@ -741,7 +740,7 @@ class MemoryBuilder:
         if not normalized:
             normalized = list(defaults)
 
-        deduplicated: List[str] = []
+        deduplicated: list[str] = []
         seen = set()
         for name in normalized:
             key = name.lower()
@@ -752,7 +751,7 @@ class MemoryBuilder:
 
         return deduplicated
 
-    def _extract_value_from_object(self, obj: Union[str, Dict[str, Any], List[Any]], keys: List[str]) -> Optional[str]:
+    def _extract_value_from_object(self, obj: str | dict[str, Any] | list[Any], keys: list[str]) -> str | None:
         if isinstance(obj, dict):
             for key in keys:
                 value = obj.get(key)
@@ -773,9 +772,7 @@ class MemoryBuilder:
             return obj.strip() or None
         return None
 
-    def _compose_display_text(
-        self, subjects: List[str], predicate: str, obj: Union[str, Dict[str, Any], List[Any]]
-    ) -> str:
+    def _compose_display_text(self, subjects: list[str], predicate: str, obj: str | dict[str, Any] | list[Any]) -> str:
         subject_phrase = "、".join(subjects) if subjects else "对话参与者"
         predicate = (predicate or "").strip()
 
@@ -841,7 +838,7 @@ class MemoryBuilder:
             return f"{subject_phrase}{predicate}".strip()
         return subject_phrase
 
-    def _validate_and_enhance_memories(self, memories: List[MemoryChunk], context: Dict[str, Any]) -> List[MemoryChunk]:
+    def _validate_and_enhance_memories(self, memories: list[MemoryChunk], context: dict[str, Any]) -> list[MemoryChunk]:
         """验证和增强记忆"""
         validated_memories = []
 
@@ -876,7 +873,7 @@ class MemoryBuilder:
 
         return True
 
-    def _enhance_memory(self, memory: MemoryChunk, context: Dict[str, Any]) -> MemoryChunk:
+    def _enhance_memory(self, memory: MemoryChunk, context: dict[str, Any]) -> MemoryChunk:
         """增强记忆块"""
         # 时间规范化处理
         self._normalize_time_in_memory(memory)
@@ -985,7 +982,7 @@ class MemoryBuilder:
                 total_confidence / self.extraction_stats["successful_extractions"]
             )
 
-    def get_extraction_stats(self) -> Dict[str, Any]:
+    def get_extraction_stats(self) -> dict[str, Any]:
         """获取提取统计信息"""
         return self.extraction_stats.copy()
 

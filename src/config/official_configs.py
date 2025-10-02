@@ -1,4 +1,5 @@
-from typing import Literal, Optional, List
+from typing import Literal
+
 from pydantic import Field
 
 from src.config.config_base import ValidatedConfigBase
@@ -42,7 +43,7 @@ class BotConfig(ValidatedConfigBase):
     platform: str = Field(..., description="平台")
     qq_account: int = Field(..., description="QQ账号")
     nickname: str = Field(..., description="昵称")
-    alias_names: List[str] = Field(default_factory=list, description="别名列表")
+    alias_names: list[str] = Field(default_factory=list, description="别名列表")
 
 
 class PersonalityConfig(ValidatedConfigBase):
@@ -54,7 +55,7 @@ class PersonalityConfig(ValidatedConfigBase):
     background_story: str = Field(
         default="", description="世界观背景故事，这部分内容会作为背景知识，LLM被指导不应主动复述"
     )
-    safety_guidelines: List[str] = Field(
+    safety_guidelines: list[str] = Field(
         default_factory=list, description="安全与互动底线，Bot在任何情况下都必须遵守的原则"
     )
     reply_style: str = Field(default="", description="表达风格")
@@ -63,7 +64,7 @@ class PersonalityConfig(ValidatedConfigBase):
     compress_identity: bool = Field(default=True, description="是否压缩身份")
 
     # 回复规则配置
-    reply_targeting_rules: List[str] = Field(
+    reply_targeting_rules: list[str] = Field(
         default_factory=lambda: [
             "拒绝任何包含骚扰、冒犯、暴力、色情或危险内容的请求。",
             "在拒绝时，请使用符合你人设的、坚定的语气。",
@@ -72,7 +73,7 @@ class PersonalityConfig(ValidatedConfigBase):
         description="安全与互动底线规则，Bot在任何情况下都必须遵守的原则",
     )
 
-    message_targeting_analysis: List[str] = Field(
+    message_targeting_analysis: list[str] = Field(
         default_factory=lambda: [
             "**直接针对你**：@你、回复你、明确询问你 → 必须回应",
             "**间接相关**：涉及你感兴趣的话题但未直接问你 → 谨慎参与",
@@ -82,7 +83,7 @@ class PersonalityConfig(ValidatedConfigBase):
         description="消息针对性分析规则，用于判断是否需要回复",
     )
 
-    reply_principles: List[str] = Field(
+    reply_principles: list[str] = Field(
         default_factory=lambda: [
             "明确回应目标消息，而不是宽泛地评论。",
             "可以分享你的看法、提出相关问题，或者开个合适的玩笑。",
@@ -111,7 +112,7 @@ class ChatConfig(ValidatedConfigBase):
     at_bot_inevitable_reply: bool = Field(default=False, description="@机器人的必然回复")
     allow_reply_self: bool = Field(default=False, description="是否允许回复自己说的话")
     focus_value: float = Field(default=1.0, description="专注值")
-    focus_mode_quiet_groups: List[str] = Field(
+    focus_mode_quiet_groups: list[str] = Field(
         default_factory=list,
         description='专注模式下需要保持安静的群组列表, 格式: ["platform:group_id1", "platform:group_id2"]',
     )
@@ -140,8 +141,8 @@ class ChatConfig(ValidatedConfigBase):
 class MessageReceiveConfig(ValidatedConfigBase):
     """消息接收配置类"""
 
-    ban_words: List[str] = Field(default_factory=lambda: list(), description="禁用词列表")
-    ban_msgs_regex: List[str] = Field(default_factory=lambda: list(), description="禁用消息正则列表")
+    ban_words: list[str] = Field(default_factory=lambda: list(), description="禁用词列表")
+    ban_msgs_regex: list[str] = Field(default_factory=lambda: list(), description="禁用消息正则列表")
 
 
 class NormalChatConfig(ValidatedConfigBase):
@@ -155,16 +156,16 @@ class ExpressionRule(ValidatedConfigBase):
     use_expression: bool = Field(default=True, description="是否使用学到的表达")
     learn_expression: bool = Field(default=True, description="是否学习表达")
     learning_strength: float = Field(default=1.0, description="学习强度")
-    group: Optional[str] = Field(default=None, description="表达共享组")
+    group: str | None = Field(default=None, description="表达共享组")
 
 
 class ExpressionConfig(ValidatedConfigBase):
     """表达配置类"""
 
-    rules: List[ExpressionRule] = Field(default_factory=list, description="表达学习规则")
+    rules: list[ExpressionRule] = Field(default_factory=list, description="表达学习规则")
 
     @staticmethod
-    def _parse_stream_config_to_chat_id(stream_config_str: str) -> Optional[str]:
+    def _parse_stream_config_to_chat_id(stream_config_str: str) -> str | None:
         """
         解析流配置字符串并生成对应的 chat_id
 
@@ -199,7 +200,7 @@ class ExpressionConfig(ValidatedConfigBase):
         except (ValueError, IndexError):
             return None
 
-    def get_expression_config_for_chat(self, chat_stream_id: Optional[str] = None) -> tuple[bool, bool, float]:
+    def get_expression_config_for_chat(self, chat_stream_id: str | None = None) -> tuple[bool, bool, float]:
         """
         根据聊天流ID获取表达配置
 
@@ -362,7 +363,7 @@ class KeywordRuleConfig(ValidatedConfigBase):
             try:
                 re.compile(pattern)
             except re.error as e:
-                raise ValueError(f"无效的正则表达式 '{pattern}': {str(e)}") from e
+                raise ValueError(f"无效的正则表达式 '{pattern}': {e!s}") from e
 
 
 class KeywordReactionConfig(ValidatedConfigBase):
@@ -561,10 +562,10 @@ class SleepSystemConfig(ValidatedConfigBase):
 
     # --- 失眠机制相关参数 ---
     enable_insomnia_system: bool = Field(default=True, description="是否启用失眠系统")
-    insomnia_trigger_delay_minutes: List[int] = Field(
+    insomnia_trigger_delay_minutes: list[int] = Field(
         default_factory=lambda: [30, 60], description="入睡后触发失眠判定的延迟时间范围（分钟）"
     )
-    insomnia_duration_minutes: List[int] = Field(
+    insomnia_duration_minutes: list[int] = Field(
         default_factory=lambda: [15, 45], description="单次失眠状态的持续时间范围（分钟）"
     )
     sleep_pressure_threshold: float = Field(default=30.0, description="触发“压力不足型失眠”的睡眠压力阈值")
@@ -590,7 +591,7 @@ class ContextGroup(ValidatedConfigBase):
     """上下文共享组配置"""
 
     name: str = Field(..., description="共享组的名称")
-    chat_ids: List[List[str]] = Field(
+    chat_ids: list[list[str]] = Field(
         ...,
         description='属于该组的聊天ID列表，格式为 [["type", "chat_id"], ...]，例如 [["group", "123456"], ["private", "789012"]]',
     )
@@ -600,20 +601,20 @@ class CrossContextConfig(ValidatedConfigBase):
     """跨群聊上下文共享配置"""
 
     enable: bool = Field(default=False, description="是否启用跨群聊上下文共享功能")
-    groups: List[ContextGroup] = Field(default_factory=list, description="上下文共享组列表")
+    groups: list[ContextGroup] = Field(default_factory=list, description="上下文共享组列表")
 
 
 class CommandConfig(ValidatedConfigBase):
     """命令系统配置类"""
 
-    command_prefixes: List[str] = Field(default_factory=lambda: ["/", "!", ".", "#"], description="支持的命令前缀列表")
+    command_prefixes: list[str] = Field(default_factory=lambda: ["/", "!", ".", "#"], description="支持的命令前缀列表")
 
 
 class PermissionConfig(ValidatedConfigBase):
     """权限系统配置类"""
 
     # Master用户配置（拥有最高权限，无视所有权限节点）
-    master_users: List[List[str]] = Field(
+    master_users: list[list[str]] = Field(
         default_factory=list, description="Master用户列表，格式: [[platform, user_id], ...]"
     )
 
@@ -668,10 +669,10 @@ class ProactiveThinkingConfig(ValidatedConfigBase):
     # --- 作用范围 ---
     enable_in_private: bool = Field(default=True, description="是否允许在私聊中主动发起对话")
     enable_in_group: bool = Field(default=True, description="是否允许在群聊中主动发起对话")
-    enabled_private_chats: List[str] = Field(
+    enabled_private_chats: list[str] = Field(
         default_factory=list, description='私聊白名单，为空则对所有私聊生效。格式: ["platform:user_id", ...]'
     )
-    enabled_group_chats: List[str] = Field(
+    enabled_group_chats: list[str] = Field(
         default_factory=list, description='群聊白名单，为空则对所有群聊生效。格式: ["platform:group_id", ...]'
     )
 

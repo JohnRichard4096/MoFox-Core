@@ -4,13 +4,15 @@ Tavily search engine implementation
 
 import asyncio
 import functools
-from typing import Dict, List, Any
+from typing import Any
+
 from tavily import TavilyClient
 
 from src.common.logger import get_logger
 from src.plugin_system.apis import config_api
-from .base import BaseSearchEngine
+
 from ..utils.api_key_manager import create_api_key_manager_from_config
+from .base import BaseSearchEngine
 
 logger = get_logger("tavily_engine")
 
@@ -37,7 +39,7 @@ class TavilySearchEngine(BaseSearchEngine):
         """检查Tavily搜索引擎是否可用"""
         return self.api_manager.is_available()
 
-    async def search(self, args: Dict[str, Any]) -> List[Dict[str, Any]]:
+    async def search(self, args: dict[str, Any]) -> list[dict[str, Any]]:
         """执行Tavily搜索"""
         if not self.is_available():
             return []

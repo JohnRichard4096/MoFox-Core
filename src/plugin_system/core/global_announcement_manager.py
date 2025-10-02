@@ -1,5 +1,3 @@
-from typing import List, Dict
-
 from src.common.logger import get_logger
 
 logger = get_logger("global_announcement_manager")
@@ -8,13 +6,13 @@ logger = get_logger("global_announcement_manager")
 class GlobalAnnouncementManager:
     def __init__(self) -> None:
         # 用户禁用的动作，chat_id -> [action_name]
-        self._user_disabled_actions: Dict[str, List[str]] = {}
+        self._user_disabled_actions: dict[str, list[str]] = {}
         # 用户禁用的命令，chat_id -> [command_name]
-        self._user_disabled_commands: Dict[str, List[str]] = {}
+        self._user_disabled_commands: dict[str, list[str]] = {}
         # 用户禁用的事件处理器，chat_id -> [handler_name]
-        self._user_disabled_event_handlers: Dict[str, List[str]] = {}
+        self._user_disabled_event_handlers: dict[str, list[str]] = {}
         # 用户禁用的工具，chat_id -> [tool_name]
-        self._user_disabled_tools: Dict[str, List[str]] = {}
+        self._user_disabled_tools: dict[str, list[str]] = {}
 
     def disable_specific_chat_action(self, chat_id: str, action_name: str) -> bool:
         """禁用特定聊天的某个动作"""
@@ -100,19 +98,19 @@ class GlobalAnnouncementManager:
                 return False
         return False
 
-    def get_disabled_chat_actions(self, chat_id: str) -> List[str]:
+    def get_disabled_chat_actions(self, chat_id: str) -> list[str]:
         """获取特定聊天禁用的所有动作"""
         return self._user_disabled_actions.get(chat_id, []).copy()
 
-    def get_disabled_chat_commands(self, chat_id: str) -> List[str]:
+    def get_disabled_chat_commands(self, chat_id: str) -> list[str]:
         """获取特定聊天禁用的所有命令"""
         return self._user_disabled_commands.get(chat_id, []).copy()
 
-    def get_disabled_chat_event_handlers(self, chat_id: str) -> List[str]:
+    def get_disabled_chat_event_handlers(self, chat_id: str) -> list[str]:
         """获取特定聊天禁用的所有事件处理器"""
         return self._user_disabled_event_handlers.get(chat_id, []).copy()
 
-    def get_disabled_chat_tools(self, chat_id: str) -> List[str]:
+    def get_disabled_chat_tools(self, chat_id: str) -> list[str]:
         """获取特定聊天禁用的所有工具"""
         return self._user_disabled_tools.get(chat_id, []).copy()
 

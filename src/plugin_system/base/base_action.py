@@ -1,13 +1,12 @@
-import time
 import asyncio
-
+import time
 from abc import ABC, abstractmethod
-from typing import Tuple, Optional, List, Dict
 
-from src.common.logger import get_logger
 from src.chat.message_receive.chat_stream import ChatStream
-from src.plugin_system.base.component_types import ActionActivationType, ChatMode, ActionInfo, ComponentType, ChatType
-from src.plugin_system.apis import send_api, database_api, message_api
+from src.common.logger import get_logger
+from src.plugin_system.apis import database_api, message_api, send_api
+from src.plugin_system.base.component_types import ActionActivationType, ActionInfo, ChatMode, ChatType, ComponentType
+
 logger = get_logger("base_action")
 
 
@@ -37,7 +36,7 @@ class BaseAction(ABC):
     """是否为二步Action。如果为True，Action将分两步执行：第一步选择操作，第二步执行具体操作"""
     step_one_description: str = ""
     """第一步的描述，用于向LLM展示Action的基本功能"""
-    sub_actions: List[Tuple[str, str, Dict[str, str]]] = []
+    sub_actions: list[tuple[str, str, dict[str, str]]] = []
     """子Action列表，格式为[(子Action名, 子Action描述, 子Action参数)]。仅在二步Action中使用"""
 
     def __init__(
@@ -48,8 +47,8 @@ class BaseAction(ABC):
         thinking_id: str,
         chat_stream: ChatStream,
         log_prefix: str = "",
-        plugin_config: Optional[dict] = None,
-        action_message: Optional[dict] = None,
+        plugin_config: dict | None = None,
+        action_message: dict | None = None,
         **kwargs,
     ):
         # sourcery skip: hoist-similar-statement-from-if, merge-else-if-into-elif, move-assign-in-block, swap-if-else-branches, swap-nested-ifs
@@ -107,8 +106,8 @@ class BaseAction(ABC):
         # 二步Action相关实例属性
         self.is_two_step_action: bool = getattr(self.__class__, "is_two_step_action", False)
         self.step_one_description: str = getattr(self.__class__, "step_one_description", "")
-        self.sub_actions: List[Tuple[str, str, Dict[str, str]]] = getattr(self.__class__, "sub_actions", []).copy()
-        self._selected_sub_action: Optional[str] = None
+        self.sub_actions: list[tuple[str, str, dict[str, str]]] = getattr(self.__class__, "sub_actions", []).copy()
+        self._selected_sub_action: str | None = None
         """当前选择的子Action名称，用于二步Action的状态管理"""
 
         # =============================================================================
@@ -198,7 +197,7 @@ class BaseAction(ABC):
         """
         return self._validate_chat_type()
 
-    async def wait_for_new_message(self, timeout: int = 1200) -> Tuple[bool, str]:
+    async def wait_for_new_message(self, timeout: int = 1200) -> tuple[bool, str]:
         """等待新消息或超时
 
         在loop_start_time之后等待新消息，如果没有新消息且没有超时，就一直等待。
@@ -230,7 +229,7 @@ class BaseAction(ABC):
 
                 # 检查新消息
                 current_time = time.time()
-                new_message_count = message_api.count_new_messages(
+                new_message_count = await message_api.count_new_messages(
                     chat_id=self.chat_id, start_time=loop_start_time, end_time=current_time
                 )
 
@@ -256,7 +255,7 @@ class BaseAction(ABC):
             return False, ""
         except Exception as e:
             logger.error(f"{self.log_prefix} 等待新消息时发生错误: {e}")
-            return False, f"等待新消息失败: {str(e)}"
+            return False, f"等待新消息失败: {e!s}"
 
     async def send_text(self, content: str, reply_to: str = "", typing: bool = False) -> bool:
         """发送文本消息
@@ -359,7 +358,7 @@ class BaseAction(ABC):
         )
 
     async def send_command(
-        self, command_name: str, args: Optional[dict] = None, display_message: str = "", storage_message: bool = True,set_reply: bool = False,reply_message: Optional[Dict[str, Any]] = None
+        self, command_name: str, args: dict | None = None, display_message: str = "", storage_message: bool = True
     ) -> bool:
         """发送命令消息
 
@@ -400,7 +399,7 @@ class BaseAction(ABC):
             logger.error(f"{self.log_prefix} 发送命令时出错: {e}")
             return False
 
-    async def call_action(self, action_name: str, action_data: Optional[dict] = None) -> Tuple[bool, str]:
+    async def call_action(self, action_name: str, action_data: dict | None = None) -> tuple[bool, str]:
         """
         在当前Action中调用另一个Action。
 
@@ -515,7 +514,7 @@ class BaseAction(ABC):
             sub_actions=getattr(cls, "sub_actions", []).copy(),
         )
 
-    async def handle_step_one(self) -> Tuple[bool, str]:
+    async def handle_step_one(self) -> tuple[bool, str]:
         """处理二步Action的第一步
 
         Returns:
@@ -547,7 +546,7 @@ class BaseAction(ABC):
             # 调用第二步执行
             return await self.execute_step_two(selected_action)
 
-    async def execute_step_two(self, sub_action_name: str) -> Tuple[bool, str]:
+    async def execute_step_two(self, sub_action_name: str) -> tuple[bool, str]:
         """执行二步Action的第二步
 
         Args:
@@ -563,7 +562,7 @@ class BaseAction(ABC):
         return False, f"二步Action必须实现execute_step_two方法来处理操作: {sub_action_name}"
 
     @abstractmethod
-    async def execute(self) -> Tuple[bool, str]:
+    async def execute(self) -> tuple[bool, str]:
         """执行Action的抽象方法，子类必须实现
 
         对于二步Action，会自动处理第一步逻辑
@@ -578,7 +577,7 @@ class BaseAction(ABC):
         # 普通Action由子类实现
         pass
 
-    async def handle_action(self) -> Tuple[bool, str]:
+    async def handle_action(self) -> tuple[bool, str]:
         """兼容旧系统的handle_action接口，委托给execute方法
 
         为了保持向后兼容性，旧系统的代码可能会调用handle_action方法。

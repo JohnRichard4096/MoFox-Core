@@ -3,42 +3,41 @@
 使用重构后的统一Prompt系统替换原有的复杂提示词构建逻辑
 """
 
-import traceback
-import time
 import asyncio
 import random
 import re
-
-from typing import List, Optional, Dict, Any, Tuple
+import time
+import traceback
 from datetime import datetime
-from src.mais4u.mai_think import mai_thinking_manager
-from src.common.logger import get_logger
-from src.config.config import global_config, model_config
-from src.individuality.individuality import get_individuality
-from src.llm_models.utils_model import LLMRequest
-from src.chat.message_receive.message import UserInfo, Seg, MessageRecv, MessageSending
+from typing import Any
+
+from src.chat.express.expression_selector import expression_selector
 from src.chat.message_receive.chat_stream import ChatStream
-from src.chat.utils.memory_mappings import get_memory_type_chinese_label
+from src.chat.message_receive.message import MessageRecv, MessageSending, Seg, UserInfo
 from src.chat.message_receive.uni_message_sender import HeartFCSender
-from src.chat.utils.timer_calculator import Timer
-from src.chat.utils.utils import get_chat_type_and_target_info
-from src.chat.utils.prompt import Prompt, global_prompt_manager
 from src.chat.utils.chat_message_builder import (
     build_readable_messages,
     get_raw_msg_before_timestamp_with_chat,
     replace_user_references_sync,
 )
-from src.chat.express.expression_selector import expression_selector
+from src.chat.utils.memory_mappings import get_memory_type_chinese_label
+
+# 导入新的统一Prompt系统
+from src.chat.utils.prompt import Prompt, PromptParameters, global_prompt_manager
+from src.chat.utils.timer_calculator import Timer
+from src.chat.utils.utils import get_chat_type_and_target_info
+from src.common.logger import get_logger
+from src.config.config import global_config, model_config
+from src.individuality.individuality import get_individuality
+from src.llm_models.utils_model import LLMRequest
+from src.mais4u.mai_think import mai_thinking_manager
 
 # 旧记忆系统已被移除
 # 旧记忆系统已被移除
 from src.mood.mood_manager import mood_manager
 from src.person_info.person_info import get_person_info_manager
-from src.plugin_system.base.component_types import ActionInfo, EventType
 from src.plugin_system.apis import llm_api
-
-# 导入新的统一Prompt系统
-from src.chat.utils.prompt import PromptParameters
+from src.plugin_system.base.component_types import ActionInfo, EventType
 
 logger = get_logger("replyer")
 
@@ -259,15 +258,12 @@ class DefaultReplyer:
     async def generate_reply_with_context(
         self,
         extra_info: str = "",
-        reply_reason: str = "",
-        available_actions: Optional[Dict[str, ActionInfo]] = None,
-        choosen_actions: Optional[List[Dict[str, Any]]] = None,
+        available_actions: dict[str, ActionInfo] | None = None,
         enable_tool: bool = True,
         from_plugin: bool = True,
-        stream_id: Optional[str] = None,
-        reply_message: Optional[Dict[str, Any]] = None,
-        read_mark: float = 0.0,
-    ) -> Tuple[bool, Optional[Dict[str, Any]], Optional[str]]:
+        stream_id: str | None = None,
+        reply_message: dict[str, Any] | None = None,
+    ) -> tuple[bool, dict[str, Any] | None, str | None]:
         # sourcery skip: merge-nested-ifs
         """
         回复器 (Replier): 负责生成回复文本的核心逻辑。
@@ -376,7 +372,7 @@ class DefaultReplyer:
         reason: str = "",
         reply_to: str = "",
         return_prompt: bool = False,
-    ) -> Tuple[bool, Optional[str], Optional[str]]:
+    ) -> tuple[bool, str | None, str | None]:
         """
         表达器 (Expressor): 负责重写和优化回复文本。
 
@@ -740,8 +736,7 @@ class DefaultReplyer:
             logger.error(f"工具信息获取失败: {e}")
             return ""
 
-    @staticmethod
-    def _parse_reply_target(target_message: str) -> Tuple[str, str]:
+    def _parse_reply_target(self, target_message: str) -> tuple[str, str]:
         """解析回复目标消息 - 使用共享工具"""
         from src.chat.utils.prompt import Prompt
 
@@ -750,8 +745,7 @@ class DefaultReplyer:
             return "未知用户", "(无消息内容)"
         return Prompt.parse_reply_target(target_message)
 
-    @staticmethod
-    async def build_keywords_reaction_prompt(target: Optional[str]) -> str:
+    async def build_keywords_reaction_prompt(self, target: str | None) -> str:
         """构建关键词反应提示
 
         Args:
@@ -786,15 +780,14 @@ class DefaultReplyer:
                             keywords_reaction_prompt += f"{reaction}，"
                             break
                     except re.error as e:
-                        logger.error(f"正则表达式编译错误: {pattern_str}, 错误信息: {str(e)}")
+                        logger.error(f"正则表达式编译错误: {pattern_str}, 错误信息: {e!s}")
                         continue
         except Exception as e:
-            logger.error(f"关键词检测与反应时发生异常: {str(e)}", exc_info=True)
+            logger.error(f"关键词检测与反应时发生异常: {e!s}", exc_info=True)
 
         return keywords_reaction_prompt
 
-    @staticmethod
-    async def _time_and_run_task(coroutine, name: str) -> Tuple[str, Any, float]:
+    async def _time_and_run_task(self, coroutine, name: str) -> tuple[str, Any, float]:
         """计时并运行异步任务的辅助函数
 
         Args:
@@ -811,8 +804,8 @@ class DefaultReplyer:
         return name, result, duration
 
     async def build_s4u_chat_history_prompts(
-        self, message_list_before_now: List[Dict[str, Any]], target_user_id: str, sender: str, chat_id: str
-    ) -> Tuple[str, str]:
+        self, message_list_before_now: list[dict[str, Any]], target_user_id: str, sender: str, chat_id: str
+    ) -> tuple[str, str]:
         """
         构建 s4u 风格的已读/未读历史消息 prompt
 
@@ -928,8 +921,8 @@ class DefaultReplyer:
             return await self._fallback_build_chat_history_prompts(message_list_before_now, target_user_id, sender)
 
     async def _fallback_build_chat_history_prompts(
-        self, message_list_before_now: List[Dict[str, Any]], target_user_id: str, sender: str
-    ) -> Tuple[str, str]:
+        self, message_list_before_now: list[dict[str, Any]], target_user_id: str, sender: str
+    ) -> tuple[str, str]:
         """
         回退的已读/未读历史消息构建方法
         """
@@ -1021,15 +1014,15 @@ class DefaultReplyer:
 
         return read_history_prompt, unread_history_prompt
 
-    async def _get_interest_scores_for_messages(self, messages: List[dict]) -> dict[str, float]:
+    async def _get_interest_scores_for_messages(self, messages: list[dict]) -> dict[str, float]:
         """为消息获取兴趣度评分"""
         interest_scores = {}
 
         try:
+            from src.common.data_models.database_data_model import DatabaseMessages
             from src.plugins.built_in.affinity_flow_chatter.interest_scoring import (
                 chatter_interest_scoring_system as interest_scoring_system,
             )
-            from src.common.data_models.database_data_model import DatabaseMessages
 
             # 转换消息格式
             db_messages = []
@@ -1148,12 +1141,9 @@ class DefaultReplyer:
     async def build_prompt_reply_context(
         self,
         extra_info: str = "",
-        reply_reason: str = "",
-        available_actions: Optional[Dict[str, ActionInfo]] = None,
-        choosen_actions: Optional[List[Dict[str, Any]]] = None,
+        available_actions: dict[str, ActionInfo] | None = None,
         enable_tool: bool = True,
-        reply_message: Optional[Dict[str, Any]] = None,
-        read_mark: float = 0.0,
+        reply_message: dict[str, Any] | None = None,
     ) -> str:
         """
         构建回复器上下文
@@ -1521,7 +1511,7 @@ class DefaultReplyer:
         raw_reply: str,
         reason: str,
         reply_to: str,
-        reply_message: Optional[Dict[str, Any]] = None,
+        reply_message: dict[str, Any] | None = None,
     ) -> str:  # sourcery skip: merge-else-if-into-elif, remove-redundant-if
         await self._async_init()
         chat_stream = self.chat_stream
@@ -1659,7 +1649,7 @@ class DefaultReplyer:
         is_emoji: bool,
         thinking_start_time: float,
         display_message: str,
-        anchor_message: Optional[MessageRecv] = None,
+        anchor_message: MessageRecv | None = None,
     ) -> MessageSending:
         """构建单个发送消息"""
 
@@ -1750,7 +1740,7 @@ class DefaultReplyer:
                 logger.debug("从LPMM知识库获取知识失败，可能是从未导入过知识，返回空知识...")
                 return ""
         except Exception as e:
-            logger.error(f"获取知识库内容时发生异常: {str(e)}")
+            logger.error(f"获取知识库内容时发生异常: {e!s}")
             return ""
 
     async def build_relation_info(self, sender: str, target: str):
@@ -1766,10 +1756,9 @@ class DefaultReplyer:
 
         # 使用AFC关系追踪器获取关系信息
         try:
-            from src.plugins.built_in.affinity_flow_chatter.relationship_tracker import ChatterRelationshipTracker
-
             # 创建关系追踪器实例
             from src.plugins.built_in.affinity_flow_chatter.interest_scoring import chatter_interest_scoring_system
+            from src.plugins.built_in.affinity_flow_chatter.relationship_tracker import ChatterRelationshipTracker
 
             relationship_tracker = ChatterRelationshipTracker(chatter_interest_scoring_system)
             if relationship_tracker:
@@ -1810,7 +1799,7 @@ class DefaultReplyer:
             logger.error(f"获取AFC关系信息失败: {e}")
             return f"你与{sender}是普通朋友关系。"
 
-    async def _store_chat_memory_async(self, reply_to: str, reply_message: Optional[Dict[str, Any]] = None):
+    async def _store_chat_memory_async(self, reply_to: str, reply_message: dict[str, Any] | None = None):
         """
         异步存储聊天记忆（从build_memory_block迁移而来）
 

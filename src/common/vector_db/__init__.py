@@ -18,4 +18,4 @@ def get_vector_db_service() -> VectorDBBase:
 # 全局向量数据库服务实例
 vector_db_service: VectorDBBase = get_vector_db_service()
 
-__all__ = ["vector_db_service", "VectorDBBase"]
+__all__ = ["VectorDBBase", "vector_db_service"]

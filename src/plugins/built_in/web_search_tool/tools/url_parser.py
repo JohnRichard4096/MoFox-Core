@@ -4,19 +4,20 @@ URL parser tool implementation
 
 import asyncio
 import functools
-from typing import Any, Dict
-from exa_py import Exa
+from typing import Any
+
 import httpx
 from bs4 import BeautifulSoup
+from exa_py import Exa
 
+from src.common.cache_manager import tool_cache
 from src.common.logger import get_logger
 from src.plugin_system import BaseTool, ToolParamType, llm_api
 from src.plugin_system.apis import config_api
-from src.common.cache_manager import tool_cache
 
+from ..utils.api_key_manager import create_api_key_manager_from_config
 from ..utils.formatters import format_url_parse_results
 from ..utils.url_utils import parse_urls_from_input, validate_urls
-from ..utils.api_key_manager import create_api_key_manager_from_config
 
 logger = get_logger("url_parser_tool")
 
@@ -50,7 +51,7 @@ class URLParserTool(BaseTool):
             exa_api_keys, lambda key: Exa(api_key=key), "Exa URL Parser"
         )
 
-    async def _local_parse_and_summarize(self, url: str) -> Dict[str, Any]:
+    async def _local_parse_and_summarize(self, url: str) -> dict[str, Any]:
         """
         使用本地库(httpx, BeautifulSoup)解析URL，并调用LLM进行总结。
         """
@@ -124,9 +125,9 @@ class URLParserTool(BaseTool):
             return {"error": f"请求失败，状态码: {e.response.status_code}"}
         except Exception as e:
             logger.error(f"本地解析或总结URL '{url}' 时发生未知异常: {e}", exc_info=True)
-            return {"error": f"发生未知错误: {str(e)}"}
+            return {"error": f"发生未知错误: {e!s}"}
 
-    async def execute(self, function_args: Dict[str, Any]) -> Dict[str, Any]:
+    async def execute(self, function_args: dict[str, Any]) -> dict[str, Any]:
         """
         执行URL内容提取和总结。优先使用Exa，失败后尝试本地解析。
         """

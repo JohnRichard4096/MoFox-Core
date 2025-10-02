@@ -1,13 +1,14 @@
-import tkinter as tk
-from tkinter import ttk, messagebox, filedialog, colorchooser
-import orjson
-from pathlib import Path
-import threading
-import toml
-from datetime import datetime
-from collections import defaultdict
 import os
+import threading
 import time
+import tkinter as tk
+from collections import defaultdict
+from datetime import datetime
+from pathlib import Path
+from tkinter import colorchooser, filedialog, messagebox, ttk
+
+import orjson
+import toml
 
 
 class LogIndex:
@@ -409,7 +410,7 @@ class AsyncLogLoader:
                 file_size = os.path.getsize(file_path)
                 processed_size = 0
 
-                with open(file_path, "r", encoding="utf-8") as f:
+                with open(file_path, encoding="utf-8") as f:
                     line_count = 0
                     batch_size = 1000  # 批量处理
 
@@ -561,7 +562,7 @@ class LogViewer:
 
         try:
             if config_path.exists():
-                with open(config_path, "r", encoding="utf-8") as f:
+                with open(config_path, encoding="utf-8") as f:
                     bot_config = toml.load(f)
                     if "log" in bot_config:
                         self.log_config.update(bot_config["log"])
@@ -575,7 +576,7 @@ class LogViewer:
 
         try:
             if viewer_config_path.exists():
-                with open(viewer_config_path, "r", encoding="utf-8") as f:
+                with open(viewer_config_path, encoding="utf-8") as f:
                     viewer_config = toml.load(f)
                     if "viewer" in viewer_config:
                         self.viewer_config.update(viewer_config["viewer"])
@@ -843,7 +844,7 @@ class LogViewer:
         mapping_file = Path("config/module_mapping.json")
         if mapping_file.exists():
             try:
-                with open(mapping_file, "r", encoding="utf-8") as f:
+                with open(mapping_file, encoding="utf-8") as f:
                     custom_mapping = orjson.loads(f.read())
                     self.module_name_mapping.update(custom_mapping)
             except Exception as e:
@@ -1172,7 +1173,7 @@ class LogViewer:
         """读取新的日志条目并返回它们"""
         new_entries = []
         new_modules = set()  # 收集新发现的模块
-        with open(self.current_log_file, "r", encoding="utf-8") as f:
+        with open(self.current_log_file, encoding="utf-8") as f:
             f.seek(from_position)
             line_count = self.log_index.total_entries
             for line in f:

@@ -1,12 +1,14 @@
-import orjson
-import os
 import hashlib
+import os
 import time
+
+import orjson
+from rich.traceback import install
 
 from src.common.logger import get_logger
 from src.config.config import global_config, model_config
 from src.llm_models.utils_model import LLMRequest
-from rich.traceback import install
+from src.person_info.person_info import get_person_info_manager
 
 install(extra_lines=3)
 
@@ -177,9 +179,9 @@ class Individuality:
         """从JSON文件中加载元信息"""
         if os.path.exists(self.meta_info_file_path):
             try:
-                with open(self.meta_info_file_path, "r", encoding="utf-8") as f:
+                with open(self.meta_info_file_path, encoding="utf-8") as f:
                     return orjson.loads(f.read())
-            except (orjson.JSONDecodeError, IOError) as e:
+            except (OSError, orjson.JSONDecodeError) as e:
                 logger.error(f"读取meta_info文件失败: {e}, 将创建新文件。")
                 return {}
         return {}
@@ -190,16 +192,16 @@ class Individuality:
             os.makedirs(os.path.dirname(self.meta_info_file_path), exist_ok=True)
             with open(self.meta_info_file_path, "w", encoding="utf-8") as f:
                 f.write(orjson.dumps(meta_info, option=orjson.OPT_INDENT_2).decode("utf-8"))
-        except IOError as e:
+        except OSError as e:
             logger.error(f"保存meta_info文件失败: {e}")
 
     def _load_personality_data(self) -> dict:
         """从JSON文件中加载personality数据"""
         if os.path.exists(self.personality_data_file_path):
             try:
-                with open(self.personality_data_file_path, "r", encoding="utf-8") as f:
+                with open(self.personality_data_file_path, encoding="utf-8") as f:
                     return orjson.loads(f.read())
-            except (orjson.JSONDecodeError, IOError) as e:
+            except (OSError, orjson.JSONDecodeError) as e:
                 logger.error(f"读取personality_data文件失败: {e}, 将创建新文件。")
                 return {}
         return {}
@@ -211,7 +213,7 @@ class Individuality:
             with open(self.personality_data_file_path, "w", encoding="utf-8") as f:
                 f.write(orjson.dumps(personality_data, option=orjson.OPT_INDENT_2).decode("utf-8"))
             logger.debug(f"已保存personality数据到文件: {self.personality_data_file_path}")
-        except IOError as e:
+        except OSError as e:
             logger.error(f"保存personality_data文件失败: {e}")
 
     def _get_personality_from_file(self) -> tuple[str, str]:

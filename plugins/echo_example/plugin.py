@@ -4,14 +4,15 @@ Echo 示例插件
 展示增强命令系统的使用方法
 """
 
-from typing import List, Tuple, Type, Optional, Union
+from typing import Union
+
 from src.plugin_system import (
     BasePlugin,
-    PlusCommand,
-    CommandArgs,
-    PlusCommandInfo,
-    ConfigField,
     ChatType,
+    CommandArgs,
+    ConfigField,
+    PlusCommand,
+    PlusCommandInfo,
     register_plugin,
 )
 from src.plugin_system.base.component_types import PythonDependency
@@ -27,7 +28,7 @@ class EchoCommand(PlusCommand):
     chat_type_allow = ChatType.ALL
     intercept_message = True
 
-    async def execute(self, args: CommandArgs) -> Tuple[bool, Optional[str], bool]:
+    async def execute(self, args: CommandArgs) -> tuple[bool, str | None, bool]:
         """执行echo命令"""
         if args.is_empty():
             await self.send_text("❓ 请提供要回显的内容\n用法: /echo <内容>")
@@ -56,7 +57,7 @@ class HelloCommand(PlusCommand):
     chat_type_allow = ChatType.ALL
     intercept_message = True
 
-    async def execute(self, args: CommandArgs) -> Tuple[bool, Optional[str], bool]:
+    async def execute(self, args: CommandArgs) -> tuple[bool, str | None, bool]:
         """执行hello命令"""
         if args.is_empty():
             await self.send_text("👋 Hello! 很高兴见到你！")
@@ -77,7 +78,7 @@ class InfoCommand(PlusCommand):
     chat_type_allow = ChatType.ALL
     intercept_message = True
 
-    async def execute(self, args: CommandArgs) -> Tuple[bool, Optional[str], bool]:
+    async def execute(self, args: CommandArgs) -> tuple[bool, str | None, bool]:
         """执行info命令"""
         info_text = (
             "📋 Echo 示例插件信息\n"
@@ -105,7 +106,7 @@ class TestCommand(PlusCommand):
     chat_type_allow = ChatType.ALL
     intercept_message = True
 
-    async def execute(self, args: CommandArgs) -> Tuple[bool, Optional[str], bool]:
+    async def execute(self, args: CommandArgs) -> tuple[bool, str | None, bool]:
         """执行test命令"""
         if args.is_empty():
             help_text = (
@@ -166,8 +167,8 @@ class EchoExamplePlugin(BasePlugin):
 
     plugin_name: str = "echo_example_plugin"
     enable_plugin: bool = True
-    dependencies: List[str] = []
-    python_dependencies: List[Union[str, "PythonDependency"]] = []
+    dependencies: list[str] = []
+    python_dependencies: list[Union[str, "PythonDependency"]] = []
     config_file_name: str = "config.toml"
 
     config_schema = {
@@ -187,7 +188,7 @@ class EchoExamplePlugin(BasePlugin):
         "commands": "命令相关配置",
     }
 
-    def get_plugin_components(self) -> List[Tuple[PlusCommandInfo, Type]]:
+    def get_plugin_components(self) -> list[tuple[PlusCommandInfo, type]]:
         """获取插件组件"""
         components = []
 

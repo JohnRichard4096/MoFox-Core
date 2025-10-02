@@ -5,15 +5,15 @@
 """
 
 import time
-from typing import Dict, List, Optional
 
-from src.common.logger import get_logger
-from src.config.config import model_config, global_config
-from src.llm_models.utils_model import LLMRequest
-from src.common.database.sqlalchemy_database_api import get_db_session
-from src.common.database.sqlalchemy_models import UserRelationships, Messages
-from sqlalchemy import select, desc
+from sqlalchemy import desc, select
+
 from src.common.data_models.database_data_model import DatabaseMessages
+from src.common.database.sqlalchemy_database_api import get_db_session
+from src.common.database.sqlalchemy_models import Messages, UserRelationships
+from src.common.logger import get_logger
+from src.config.config import global_config, model_config
+from src.llm_models.utils_model import LLMRequest
 
 logger = get_logger("chatter_relationship_tracker")
 
@@ -22,15 +22,15 @@ class ChatterRelationshipTracker:
     """用户关系追踪器"""
 
     def __init__(self, interest_scoring_system=None):
-        self.tracking_users: Dict[str, Dict] = {}  # user_id -> interaction_data
+        self.tracking_users: dict[str, dict] = {}  # user_id -> interaction_data
         self.max_tracking_users = 3
         self.update_interval_minutes = 30
         self.last_update_time = time.time()
-        self.relationship_history: List[Dict] = []
+        self.relationship_history: list[dict] = []
         self.interest_scoring_system = interest_scoring_system
 
         # 用户关系缓存 (user_id -> {"relationship_text": str, "relationship_score": float, "last_tracked": float})
-        self.user_relationship_cache: Dict[str, Dict] = {}
+        self.user_relationship_cache: dict[str, dict] = {}
         self.cache_expiry_hours = 1  # 缓存过期时间(小时)
 
         # 关系更新LLM
@@ -91,7 +91,7 @@ class ChatterRelationshipTracker:
 
         logger.debug(f"添加用户交互追踪: {user_id}")
 
-    async def check_and_update_relationships(self) -> List[Dict]:
+    async def check_and_update_relationships(self) -> list[dict]:
         """检查并更新用户关系"""
         current_time = time.time()
         if current_time - self.last_update_time < self.update_interval_minutes * 60:
@@ -108,7 +108,7 @@ class ChatterRelationshipTracker:
         self.last_update_time = current_time
         return updates
 
-    async def _update_user_relationship(self, interaction: Dict) -> Optional[Dict]:
+    async def _update_user_relationship(self, interaction: dict) -> dict | None:
         """更新单个用户的关系"""
         try:
             # 获取bot人设信息
@@ -201,11 +201,11 @@ class ChatterRelationshipTracker:
 
         return None
 
-    def get_tracking_users(self) -> Dict[str, Dict]:
+    def get_tracking_users(self) -> dict[str, dict]:
         """获取正在追踪的用户"""
         return self.tracking_users.copy()
 
-    def get_user_interaction(self, user_id: str) -> Optional[Dict]:
+    def get_user_interaction(self, user_id: str) -> dict | None:
         """获取特定用户的交互记录"""
         return self.tracking_users.get(user_id)
 
@@ -220,11 +220,11 @@ class ChatterRelationshipTracker:
         self.tracking_users.clear()
         logger.info("清空所有用户追踪")
 
-    def get_relationship_history(self) -> List[Dict]:
+    def get_relationship_history(self) -> list[dict]:
         """获取关系历史记录"""
         return self.relationship_history.copy()
 
-    def add_to_history(self, relationship_update: Dict):
+    def add_to_history(self, relationship_update: dict):
         """添加到关系历史"""
         self.relationship_history.append({**relationship_update, "update_time": time.time()})
 
@@ -232,7 +232,7 @@ class ChatterRelationshipTracker:
         if len(self.relationship_history) > 100:
             self.relationship_history = self.relationship_history[-100:]
 
-    def get_tracker_stats(self) -> Dict:
+    def get_tracker_stats(self) -> dict:
         """获取追踪器统计"""
         return {
             "tracking_users": len(self.tracking_users),
@@ -268,7 +268,7 @@ class ChatterRelationshipTracker:
             self.add_to_history(update_info)
             logger.info(f"强制更新用户关系: {user_id} -> {new_score:.2f}")
 
-    def get_user_summary(self, user_id: str) -> Dict:
+    def get_user_summary(self, user_id: str) -> dict:
         """获取用户交互总结"""
         if user_id not in self.tracking_users:
             return {}
@@ -313,7 +313,7 @@ class ChatterRelationshipTracker:
         # 数据库中也没有，返回默认值
         return global_config.affinity_flow.base_relationship_score
 
-    async def _get_user_relationship_from_db(self, user_id: str) -> Optional[Dict]:
+    async def _get_user_relationship_from_db(self, user_id: str) -> dict | None:
         """从数据库获取用户关系数据"""
         try:
             async with get_db_session() as session:
@@ -431,7 +431,7 @@ class ChatterRelationshipTracker:
 
         return 0
 
-    async def _get_last_bot_reply_to_user(self, user_id: str) -> Optional[DatabaseMessages]:
+    async def _get_last_bot_reply_to_user(self, user_id: str) -> DatabaseMessages | None:
         """获取上次bot回复该用户的消息"""
         try:
             async with get_db_session() as session:
@@ -455,7 +455,7 @@ class ChatterRelationshipTracker:
 
         return None
 
-    async def _get_user_reactions_after_reply(self, user_id: str, reply_time: float) -> List[DatabaseMessages]:
+    async def _get_user_reactions_after_reply(self, user_id: str, reply_time: float) -> list[DatabaseMessages]:
         """获取用户在bot回复后的反应消息"""
         try:
             async with get_db_session() as session:
@@ -511,7 +511,7 @@ class ChatterRelationshipTracker:
         user_id: str,
         user_name: str,
         last_bot_reply: DatabaseMessages,
-        user_reactions: List[DatabaseMessages],
+        user_reactions: list[DatabaseMessages],
         current_text: str,
         current_score: float,
         current_reply: str,

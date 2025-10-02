@@ -1,12 +1,13 @@
 import asyncio
 import random
 from datetime import datetime, timedelta
-from typing import Optional, TYPE_CHECKING
+from typing import TYPE_CHECKING, Optional
 
 from src.common.logger import get_logger
 from src.config.config import global_config
+
 from .notification_sender import NotificationSender
-from .sleep_state import SleepState, SleepContext
+from .sleep_state import SleepContext, SleepState
 from .time_checker import TimeChecker
 
 if TYPE_CHECKING:
@@ -92,7 +93,7 @@ class SleepManager:
         elif current_state == SleepState.WOKEN_UP:
             self._handle_woken_up(now, is_in_theoretical_sleep, wakeup_manager)
 
-    def _handle_awake_to_sleep(self, now: datetime, activity: Optional[str], wakeup_manager: Optional["WakeUpManager"]):
+    def _handle_awake_to_sleep(self, now: datetime, activity: str | None, wakeup_manager: Optional["WakeUpManager"]):
         """处理从“清醒”到“准备入睡”的状态转换。"""
         if activity:
             logger.info(f"进入理论休眠时间 '{activity}'，开始进行睡眠决策...")
@@ -181,7 +182,7 @@ class SleepManager:
         self,
         now: datetime,
         is_in_theoretical_sleep: bool,
-        activity: Optional[str],
+        activity: str | None,
         wakeup_manager: Optional["WakeUpManager"],
     ):
         """处理“正在睡觉”状态下的逻辑。"""

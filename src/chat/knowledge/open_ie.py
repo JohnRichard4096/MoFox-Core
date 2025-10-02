@@ -1,14 +1,15 @@
-import orjson
-import os
 import glob
-from typing import Any, Dict, List
+import os
+from typing import Any
 
+import orjson
 
-from .knowledge_lib import INVALID_ENTITY, ROOT_PATH, DATA_PATH
+from .knowledge_lib import DATA_PATH, INVALID_ENTITY, ROOT_PATH
+
 # from src.manager.local_store_manager import local_storage
 
 
-def _filter_invalid_entities(entities: List[str]) -> List[str]:
+def _filter_invalid_entities(entities: list[str]) -> list[str]:
     """过滤无效的实体"""
     valid_entities = set()
     for entity in entities:
@@ -20,7 +21,7 @@ def _filter_invalid_entities(entities: List[str]) -> List[str]:
     return list(valid_entities)
 
 
-def _filter_invalid_triples(triples: List[List[str]]) -> List[List[str]]:
+def _filter_invalid_triples(triples: list[list[str]]) -> list[list[str]]:
     """过滤无效的三元组"""
     unique_triples = set()
     valid_triples = []
@@ -62,7 +63,7 @@ class OpenIE:
 
     def __init__(
         self,
-        docs: List[Dict[str, Any]],
+        docs: list[dict[str, Any]],
         avg_ent_chars,
         avg_ent_words,
     ):
@@ -112,7 +113,7 @@ class OpenIE:
         json_files = sorted(glob.glob(os.path.join(openie_dir, "*.json")))
         data_list = []
         for file in json_files:
-            with open(file, "r", encoding="utf-8") as f:
+            with open(file, encoding="utf-8") as f:
                 data = orjson.loads(f.read())
                 data_list.append(data)
         if not data_list:

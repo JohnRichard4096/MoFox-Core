@@ -1,13 +1,13 @@
 import asyncio
 import os
 import time
-from typing import Tuple, Union
 
 import aiohttp
 import requests
+from rich.traceback import install
+
 from src.common.logger import get_logger
 from src.common.tcp_connector import get_tcp_connector
-from rich.traceback import install
 
 install(extra_lines=3)
 
@@ -26,7 +26,7 @@ class LLMRequestOff:
 
         # logger.info(f"API URL: {self.base_url}")  # 使用 logger 记录 base_url
 
-    def generate_response(self, prompt: str) -> Union[str, Tuple[str, str]]:
+    def generate_response(self, prompt: str) -> str | tuple[str, str]:
         """根据输入的提示生成模型的响应"""
         headers = {"Authorization": f"Bearer {self.api_key}", "Content-Type": "application/json"}
 
@@ -67,16 +67,16 @@ class LLMRequestOff:
             except Exception as e:
                 if retry < max_retries - 1:  # 如果还有重试机会
                     wait_time = base_wait_time * (2**retry)
-                    logger.error(f"[回复]请求失败，等待{wait_time}秒后重试... 错误: {str(e)}")
+                    logger.error(f"[回复]请求失败，等待{wait_time}秒后重试... 错误: {e!s}")
                     time.sleep(wait_time)
                 else:
-                    logger.error(f"请求失败: {str(e)}")
-                    return f"请求失败: {str(e)}", ""
+                    logger.error(f"请求失败: {e!s}")
+                    return f"请求失败: {e!s}", ""
 
         logger.error("达到最大重试次数，请求仍然失败")
         return "达到最大重试次数，请求仍然失败", ""
 
-    async def generate_response_async(self, prompt: str) -> Union[str, Tuple[str, str]]:
+    async def generate_response_async(self, prompt: str) -> str | tuple[str, str]:
         """异步方式根据输入的提示生成模型的响应"""
         headers = {"Authorization": f"Bearer {self.api_key}", "Content-Type": "application/json"}
 
@@ -117,11 +117,11 @@ class LLMRequestOff:
                 except Exception as e:
                     if retry < max_retries - 1:  # 如果还有重试机会
                         wait_time = base_wait_time * (2**retry)
-                        logger.error(f"[回复]请求失败，等待{wait_time}秒后重试... 错误: {str(e)}")
+                        logger.error(f"[回复]请求失败，等待{wait_time}秒后重试... 错误: {e!s}")
                         await asyncio.sleep(wait_time)
                     else:
-                        logger.error(f"请求失败: {str(e)}")
-                        return f"请求失败: {str(e)}", ""
+                        logger.error(f"请求失败: {e!s}")
+                        return f"请求失败: {e!s}", ""
 
             logger.error("达到最大重试次数，请求仍然失败")
             return "达到最大重试次数，请求仍然失败", ""

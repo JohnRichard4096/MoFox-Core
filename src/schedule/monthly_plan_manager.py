@@ -1,9 +1,9 @@
 import asyncio
 from datetime import datetime, timedelta
-from typing import Optional
 
 from src.common.logger import get_logger
 from src.manager.async_task_manager import AsyncTask, async_task_manager
+
 from .plan_manager import PlanManager
 
 logger = get_logger("monthly_plan_manager")
@@ -31,7 +31,7 @@ class MonthlyPlanManager:
         else:
             logger.info(" 每月月度计划生成任务已在运行中。")
 
-    async def ensure_and_generate_plans_if_needed(self, target_month: Optional[str] = None) -> bool:
+    async def ensure_and_generate_plans_if_needed(self, target_month: str | None = None) -> bool:
         return await self.plan_manager.ensure_and_generate_plans_if_needed(target_month)
 
 

@@ -1,19 +1,17 @@
 import asyncio
-import traceback
 import time
-from typing import Dict, Optional, Type, Any, Tuple
+import traceback
+from typing import Any
 
-
-from src.chat.utils.timer_calculator import Timer
-from src.person_info.person_info import get_person_info_manager
 from src.chat.message_receive.chat_stream import ChatStream, get_chat_manager
+from src.chat.utils.timer_calculator import Timer
 from src.common.logger import get_logger
 from src.config.config import global_config
-from src.plugin_system.core.component_registry import component_registry
-from src.plugin_system.base.component_types import ComponentType, ActionInfo
+from src.person_info.person_info import get_person_info_manager
+from src.plugin_system.apis import database_api, generator_api, message_api, send_api
 from src.plugin_system.base.base_action import BaseAction
-from src.plugin_system.apis import generator_api, database_api, send_api, message_api
-
+from src.plugin_system.base.component_types import ActionInfo, ComponentType
+from src.plugin_system.core.component_registry import component_registry
 
 logger = get_logger("action_manager")
 
@@ -29,7 +27,7 @@ class ChatterActionManager:
         """初始化动作管理器"""
 
         # 当前正在使用的动作集合，默认加载默认动作
-        self._using_actions: Dict[str, ActionInfo] = {}
+        self._using_actions: dict[str, ActionInfo] = {}
 
         # 初始化时将默认动作加载到使用中的动作
         self._using_actions = component_registry.get_default_actions()
@@ -48,8 +46,8 @@ class ChatterActionManager:
         chat_stream: ChatStream,
         log_prefix: str,
         shutting_down: bool = False,
-        action_message: Optional[dict] = None,
-    ) -> Optional[BaseAction]:
+        action_message: dict | None = None,
+    ) -> BaseAction | None:
         """
         创建动作处理器实例
 
@@ -68,7 +66,7 @@ class ChatterActionManager:
         """
         try:
             # 获取组件类 - 明确指定查询Action类型
-            component_class: Type[BaseAction] = component_registry.get_component_class(
+            component_class: type[BaseAction] = component_registry.get_component_class(
                 action_name, ComponentType.ACTION
             )  # type: ignore
             if not component_class:
@@ -107,7 +105,7 @@ class ChatterActionManager:
             logger.error(traceback.format_exc())
             return None
 
-    def get_using_actions(self) -> Dict[str, ActionInfo]:
+    def get_using_actions(self) -> dict[str, ActionInfo]:
         """获取当前正在使用的动作集合"""
         return self._using_actions.copy()
 
@@ -140,10 +138,10 @@ class ChatterActionManager:
         self,
         action_name: str,
         chat_id: str,
-        target_message: Optional[dict] = None,
+        target_message: dict | None = None,
         reasoning: str = "",
-        action_data: Optional[dict] = None,
-        thinking_id: Optional[str] = None,
+        action_data: dict | None = None,
+        thinking_id: str | None = None,
         log_prefix: str = "",
         clear_unread_messages: bool = True,
     ) -> Any:
@@ -437,10 +435,10 @@ class ChatterActionManager:
         response_set,
         loop_start_time,
         action_message,
-        cycle_timers: Dict[str, float],
+        cycle_timers: dict[str, float],
         thinking_id,
         actions,
-    ) -> Tuple[Dict[str, Any], str, Dict[str, float]]:
+    ) -> tuple[dict[str, Any], str, dict[str, float]]:
         """
         发送并存储回复信息
 
@@ -488,7 +486,7 @@ class ChatterActionManager:
         )
 
         # 构建循环信息
-        loop_info: Dict[str, Any] = {
+        loop_info: dict[str, Any] = {
             "loop_plan_info": {
                 "action_result": actions,
             },

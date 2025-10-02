@@ -1,4 +1,3 @@
-# -*- coding: utf-8 -*-
 """
 反注入系统核心检测模块
 
@@ -10,4 +9,4 @@
 from .detector import PromptInjectionDetector
 from .shield import MessageShield
 
-__all__ = ["PromptInjectionDetector", "MessageShield"]
+__all__ = ["MessageShield", "PromptInjectionDetector"]

@@ -1,11 +1,12 @@
-from abc import ABC, abstractmethod
-from typing import Dict, List, Any, Union
-import os
-import toml
-import orjson
-import shutil
 import datetime
+import os
+import shutil
+from abc import ABC, abstractmethod
 from pathlib import Path
+from typing import Any
+
+import orjson
+import toml
 
 from src.common.logger import get_logger
 from src.config.config import CONFIG_DIR
@@ -38,12 +39,12 @@ class PluginBase(ABC):
 
     @property
     @abstractmethod
-    def dependencies(self) -> List[str]:
+    def dependencies(self) -> list[str]:
         return []  # 依赖的其他插件
 
     @property
     @abstractmethod
-    def python_dependencies(self) -> List[Union[str, PythonDependency]]:
+    def python_dependencies(self) -> list[str | PythonDependency]:
         return []  # Python包依赖，支持字符串列表或PythonDependency对象列表
 
     @property
@@ -53,15 +54,15 @@ class PluginBase(ABC):
 
     # manifest文件相关
     manifest_file_name: str = "_manifest.json"  # manifest文件名
-    manifest_data: Dict[str, Any] = {}  # manifest数据
+    manifest_data: dict[str, Any] = {}  # manifest数据
 
     # 配置定义
     @property
     @abstractmethod
-    def config_schema(self) -> Dict[str, Union[Dict[str, ConfigField], str]]:
+    def config_schema(self) -> dict[str, dict[str, ConfigField] | str]:
         return {}
 
-    config_section_descriptions: Dict[str, str] = {}
+    config_section_descriptions: dict[str, str] = {}
 
     def __init__(self, plugin_dir: str):
         """初始化插件
@@ -69,7 +70,7 @@ class PluginBase(ABC):
         Args:
             plugin_dir: 插件目录路径，由插件管理器传递
         """
-        self.config: Dict[str, Any] = {}  # 插件配置
+        self.config: dict[str, Any] = {}  # 插件配置
         self.plugin_dir = plugin_dir  # 插件目录路径
         self.log_prefix = f"[Plugin:{self.plugin_name}]"
         self._is_enabled = self.enable_plugin  # 从插件定义中获取默认启用状态
@@ -144,7 +145,7 @@ class PluginBase(ABC):
             raise FileNotFoundError(error_msg)
 
         try:
-            with open(manifest_path, "r", encoding="utf-8") as f:
+            with open(manifest_path, encoding="utf-8") as f:
                 self.manifest_data = orjson.loads(f.read())
 
             logger.debug(f"{self.log_prefix} 成功加载manifest文件: {manifest_path}")
@@ -155,8 +156,8 @@ class PluginBase(ABC):
         except orjson.JSONDecodeError as e:
             error_msg = f"{self.log_prefix} manifest文件格式错误: {e}"
             logger.error(error_msg)
-            raise ValueError(error_msg)  # noqa
-        except IOError as e:
+            raise ValueError(error_msg)
+        except OSError as e:
             error_msg = f"{self.log_prefix} 读取manifest文件失败: {e}"
             logger.error(error_msg)
             raise IOError(error_msg)  # noqa
@@ -266,7 +267,7 @@ class PluginBase(ABC):
             with open(config_file_path, "w", encoding="utf-8") as f:
                 f.write(toml_str)
             logger.info(f"{self.log_prefix} 已生成默认配置文件: {config_file_path}")
-        except IOError as e:
+        except OSError as e:
             logger.error(f"{self.log_prefix} 保存默认配置文件失败: {e}", exc_info=True)
 
     def _backup_config_file(self, config_file_path: str) -> str:
@@ -288,13 +289,13 @@ class PluginBase(ABC):
             return ""
 
     def _synchronize_config(
-        self, schema_config: Dict[str, Any], user_config: Dict[str, Any]
-    ) -> tuple[Dict[str, Any], bool]:
+        self, schema_config: dict[str, Any], user_config: dict[str, Any]
+    ) -> tuple[dict[str, Any], bool]:
         """递归地将用户配置与 schema 同步，返回同步后的配置和是否发生变化的标志"""
         changed = False
 
         # 内部递归函数
-        def _sync_dicts(schema_dict: Dict[str, Any], user_dict: Dict[str, Any], parent_key: str = "") -> Dict[str, Any]:
+        def _sync_dicts(schema_dict: dict[str, Any], user_dict: dict[str, Any], parent_key: str = "") -> dict[str, Any]:
             nonlocal changed
             synced_dict = schema_dict.copy()
 
@@ -326,7 +327,7 @@ class PluginBase(ABC):
         final_config = _sync_dicts(schema_config, user_config)
         return final_config, changed
 
-    def _generate_config_from_schema(self) -> Dict[str, Any]:
+    def _generate_config_from_schema(self) -> dict[str, Any]:
         # sourcery skip: dict-comprehension
         """根据schema生成配置数据结构（不写入文件）"""
         if not self.config_schema:
@@ -348,7 +349,7 @@ class PluginBase(ABC):
 
         return config_data
 
-    def _save_config_to_file(self, config_data: Dict[str, Any], config_file_path: str):
+    def _save_config_to_file(self, config_data: dict[str, Any], config_file_path: str):
         """将配置数据保存为TOML文件（包含注释）"""
         if not self.config_schema:
             logger.debug(f"{self.log_prefix} 插件未定义config_schema，不生成配置文件")
@@ -410,7 +411,7 @@ class PluginBase(ABC):
             with open(config_file_path, "w", encoding="utf-8") as f:
                 f.write(toml_str)
             logger.info(f"{self.log_prefix} 配置文件已保存: {config_file_path}")
-        except IOError as e:
+        except OSError as e:
             logger.error(f"{self.log_prefix} 保存配置文件失败: {e}", exc_info=True)
 
     def _load_plugin_config(self):  # sourcery skip: extract-method
@@ -456,7 +457,7 @@ class PluginBase(ABC):
             return
 
         try:
-            with open(user_config_path, "r", encoding="utf-8") as f:
+            with open(user_config_path, encoding="utf-8") as f:
                 user_config = toml.load(f) or {}
         except Exception as e:
             logger.error(f"{self.log_prefix} 加载用户配置文件 {user_config_path} 失败: {e}", exc_info=True)
@@ -520,7 +521,7 @@ class PluginBase(ABC):
 
         return current
 
-    def _normalize_python_dependencies(self, dependencies: Any) -> List[PythonDependency]:
+    def _normalize_python_dependencies(self, dependencies: Any) -> list[PythonDependency]:
         """将依赖列表标准化为PythonDependency对象"""
         from packaging.requirements import Requirement
 
@@ -549,7 +550,7 @@ class PluginBase(ABC):
 
         return normalized
 
-    def _check_python_dependencies(self, dependencies: List[PythonDependency]) -> bool:
+    def _check_python_dependencies(self, dependencies: list[PythonDependency]) -> bool:
         """检查Python依赖并尝试自动安装"""
         if not dependencies:
             logger.info(f"{self.log_prefix} 无Python依赖需要检查")

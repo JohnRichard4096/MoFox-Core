@@ -4,11 +4,13 @@
 提供插件manifest文件的创建、验证和管理功能
 """
 
+import argparse
 import os
 import sys
-import argparse
-import orjson
 from pathlib import Path
+
+import orjson
+
 from src.common.logger import get_logger
 from src.plugin_system.utils.manifest_utils import (
     ManifestValidator,
@@ -124,7 +126,7 @@ def validate_manifest_file(plugin_dir: str) -> bool:
         return False
 
     try:
-        with open(manifest_path, "r", encoding="utf-8") as f:
+        with open(manifest_path, encoding="utf-8") as f:
             manifest_data = orjson.loads(f.read())
 
         validator = ManifestValidator()

@@ -1,18 +1,19 @@
-import time  # 导入 time 模块以获取当前时间
 import random
 import re
+import time  # 导入 time 模块以获取当前时间
+from collections.abc import Callable
+from typing import Any
 
-from typing import List, Dict, Any, Tuple, Optional, Callable
 from rich.traceback import install
+from sqlalchemy import and_, select
 
-from src.config.config import global_config
-from src.common.message_repository import find_messages, count_messages
-from src.common.database.sqlalchemy_models import ActionRecords, Images
-from src.person_info.person_info import PersonInfoManager, get_person_info_manager
-from src.chat.utils.utils import translate_timestamp_to_human_readable, assign_message_ids
+from src.chat.utils.utils import assign_message_ids, translate_timestamp_to_human_readable
 from src.common.database.sqlalchemy_database_api import get_db_session
-from sqlalchemy import select, and_
+from src.common.database.sqlalchemy_models import ActionRecords, Images
 from src.common.logger import get_logger
+from src.common.message_repository import count_messages, find_messages
+from src.config.config import global_config
+from src.person_info.person_info import PersonInfoManager, get_person_info_manager
 
 logger = get_logger("chat_message_builder")
 
@@ -22,7 +23,7 @@ install(extra_lines=3)
 def replace_user_references_sync(
     content: str,
     platform: str,
-    name_resolver: Optional[Callable[[str, str], str]] = None,
+    name_resolver: Callable[[str, str], str] | None = None,
     replace_bot_name: bool = True,
 ) -> str:
     """
@@ -98,7 +99,7 @@ def replace_user_references_sync(
 async def replace_user_references_async(
     content: str,
     platform: str,
-    name_resolver: Optional[Callable[[str, str], Any]] = None,
+    name_resolver: Callable[[str, str], Any] | None = None,
     replace_bot_name: bool = True,
 ) -> str:
     """
@@ -171,7 +172,7 @@ async def replace_user_references_async(
 
 async def get_raw_msg_by_timestamp(
     timestamp_start: float, timestamp_end: float, limit: int = 0, limit_mode: str = "latest"
-) -> List[Dict[str, Any]]:
+) -> list[dict[str, Any]]:
     """
     获取从指定时间戳到指定时间戳的消息，按时间升序排序，返回消息列表
     limit: 限制返回的消息数量，0为不限制
@@ -191,7 +192,7 @@ async def get_raw_msg_by_timestamp_with_chat(
     limit_mode: str = "latest",
     filter_bot=False,
     filter_command=False,
-) -> List[Dict[str, Any]]:
+) -> list[dict[str, Any]]:
     """获取在特定聊天从指定时间戳到指定时间戳的消息，按时间升序排序，返回消息列表
     limit: 限制返回的消息数量，0为不限制
     limit_mode: 当 limit > 0 时生效。 'earliest' 表示获取最早的记录， 'latest' 表示获取最新的记录。默认为 'latest'。
@@ -217,7 +218,7 @@ async def get_raw_msg_by_timestamp_with_chat_inclusive(
     limit: int = 0,
     limit_mode: str = "latest",
     filter_bot=False,
-) -> List[Dict[str, Any]]:
+) -> list[dict[str, Any]]:
     """获取在特定聊天从指定时间戳到指定时间戳的消息（包含边界），按时间升序排序，返回消息列表
     limit: 限制返回的消息数量，0为不限制
     limit_mode: 当 limit > 0 时生效。 'earliest' 表示获取最早的记录， 'latest' 表示获取最新的记录。默认为 'latest'。
@@ -236,10 +237,10 @@ async def get_raw_msg_by_timestamp_with_chat_users(
     chat_id: str,
     timestamp_start: float,
     timestamp_end: float,
-    person_ids: List[str],
+    person_ids: list[str],
     limit: int = 0,
     limit_mode: str = "latest",
-) -> List[Dict[str, Any]]:
+) -> list[dict[str, Any]]:
     """获取某些特定用户在特定聊天从指定时间戳到指定时间戳的消息，按时间升序排序，返回消息列表
     limit: 限制返回的消息数量，0为不限制
     limit_mode: 当 limit > 0 时生效。 'earliest' 表示获取最早的记录， 'latest' 表示获取最新的记录。默认为 'latest'。
@@ -260,7 +261,7 @@ async def get_actions_by_timestamp_with_chat(
     timestamp_end: float = time.time(),
     limit: int = 0,
     limit_mode: str = "latest",
-) -> List[Dict[str, Any]]:
+) -> list[dict[str, Any]]:
     """获取在特定聊天从指定时间戳到指定时间戳的动作记录，按时间升序排序，返回动作记录列表"""
     from src.common.logger import get_logger
 
@@ -369,7 +370,7 @@ async def get_actions_by_timestamp_with_chat(
 
 async def get_actions_by_timestamp_with_chat_inclusive(
     chat_id: str, timestamp_start: float, timestamp_end: float, limit: int = 0, limit_mode: str = "latest"
-) -> List[Dict[str, Any]]:
+) -> list[dict[str, Any]]:
     """获取在特定聊天从指定时间戳到指定时间戳的动作记录（包含边界），按时间升序排序，返回动作记录列表"""
     async with get_db_session() as session:
         if limit > 0:
@@ -420,7 +421,7 @@ async def get_actions_by_timestamp_with_chat_inclusive(
 
 async def get_raw_msg_by_timestamp_random(
     timestamp_start: float, timestamp_end: float, limit: int = 0, limit_mode: str = "latest"
-) -> List[Dict[str, Any]]:
+) -> list[dict[str, Any]]:
     """
     先在范围时间戳内随机选择一条消息，取得消息的chat_id，然后根据chat_id获取该聊天在指定时间戳范围内的消息
     """
@@ -438,7 +439,7 @@ async def get_raw_msg_by_timestamp_random(
 
 async def get_raw_msg_by_timestamp_with_users(
     timestamp_start: float, timestamp_end: float, person_ids: list, limit: int = 0, limit_mode: str = "latest"
-) -> List[Dict[str, Any]]:
+) -> list[dict[str, Any]]:
     """获取某些特定用户在 *所有聊天* 中从指定时间戳到指定时间戳的消息，按时间升序排序，返回消息列表
     limit: 限制返回的消息数量，0为不限制
     limit_mode: 当 limit > 0 时生效。 'earliest' 表示获取最早的记录， 'latest' 表示获取最新的记录。默认为 'latest'。
@@ -449,7 +450,7 @@ async def get_raw_msg_by_timestamp_with_users(
     return await find_messages(message_filter=filter_query, sort=sort_order, limit=limit, limit_mode=limit_mode)
 
 
-async def get_raw_msg_before_timestamp(timestamp: float, limit: int = 0) -> List[Dict[str, Any]]:
+async def get_raw_msg_before_timestamp(timestamp: float, limit: int = 0) -> list[dict[str, Any]]:
     """获取指定时间戳之前的消息，按时间升序排序，返回消息列表
     limit: 限制返回的消息数量，0为不限制
     """
@@ -460,7 +461,7 @@ async def get_raw_msg_before_timestamp(timestamp: float, limit: int = 0) -> List
 
 async def get_raw_msg_before_timestamp_with_chat(
     chat_id: str, timestamp: float, limit: int = 0
-) -> List[Dict[str, Any]]:
+) -> list[dict[str, Any]]:
     """获取指定时间戳之前的消息，按时间升序排序，返回消息列表
     limit: 限制返回的消息数量，0为不限制
     """
@@ -471,7 +472,7 @@ async def get_raw_msg_before_timestamp_with_chat(
 
 async def get_raw_msg_before_timestamp_with_users(
     timestamp: float, person_ids: list, limit: int = 0
-) -> List[Dict[str, Any]]:
+) -> list[dict[str, Any]]:
     """获取指定时间戳之前的消息，按时间升序排序，返回消息列表
     limit: 限制返回的消息数量，0为不限制
     """
@@ -480,9 +481,7 @@ async def get_raw_msg_before_timestamp_with_users(
     return await find_messages(message_filter=filter_query, sort=sort_order, limit=limit)
 
 
-async def num_new_messages_since(
-    chat_id: str, timestamp_start: float = 0.0, timestamp_end: Optional[float] = None
-) -> int:
+async def num_new_messages_since(chat_id: str, timestamp_start: float = 0.0, timestamp_end: float | None = None) -> int:
     """
     检查特定聊天从 timestamp_start (不含) 到 timestamp_end (不含) 之间有多少新消息。
     如果 timestamp_end 为 None，则检查从 timestamp_start (不含) 到当前时间的消息。
@@ -514,17 +513,16 @@ async def num_new_messages_since_with_users(
 
 
 async def _build_readable_messages_internal(
-    messages: List[Dict[str, Any]],
+    messages: list[dict[str, Any]],
     replace_bot_name: bool = True,
     merge_messages: bool = False,
     timestamp_mode: str = "relative",
     truncate: bool = False,
-    pic_id_mapping: Optional[Dict[str, str]] = None,
+    pic_id_mapping: dict[str, str] | None = None,
     pic_counter: int = 1,
     show_pic: bool = True,
-    message_id_list: Optional[List[Dict[str, Any]]] = None,
-    read_mark: float = 0.0,
-) -> Tuple[str, List[Tuple[float, str, str]], Dict[str, str], int]:
+    message_id_list: list[dict[str, Any]] | None = None,
+) -> tuple[str, list[tuple[float, str, str]], dict[str, str], int]:
     """
     内部辅助函数，构建可读消息字符串和原始消息详情列表。
 
@@ -543,7 +541,7 @@ async def _build_readable_messages_internal(
     if not messages:
         return "", [], pic_id_mapping or {}, pic_counter
 
-    message_details_raw: List[Tuple[float, str, str, bool]] = []
+    message_details_raw: list[tuple[float, str, str, bool]] = []
 
     # 使用传入的映射字典，如果没有则创建新的
     if pic_id_mapping is None:
@@ -669,7 +667,7 @@ async def _build_readable_messages_internal(
         message_details_with_flags.append((timestamp, name, content, is_action))
 
     # 应用截断逻辑 (如果 truncate 为 True)
-    message_details: List[Tuple[float, str, str, bool]] = []
+    message_details: list[tuple[float, str, str, bool]] = []
     n_messages = len(message_details_with_flags)
     if truncate and n_messages > 0:
         for i, (timestamp, name, content, is_action) in enumerate(message_details_with_flags):
@@ -811,7 +809,7 @@ async def _build_readable_messages_internal(
     )
 
 
-async def build_pic_mapping_info(pic_id_mapping: Dict[str, str]) -> str:
+async def build_pic_mapping_info(pic_id_mapping: dict[str, str]) -> str:
     # sourcery skip: use-contextlib-suppress
     """
     构建图片映射信息字符串，显示图片的具体描述内容
@@ -849,7 +847,7 @@ async def build_pic_mapping_info(pic_id_mapping: Dict[str, str]) -> str:
     return "\n".join(mapping_lines)
 
 
-def build_readable_actions(actions: List[Dict[str, Any]]) -> str:
+def build_readable_actions(actions: list[dict[str, Any]]) -> str:
     """
     将动作列表转换为可读的文本格式。
     格式: 在（）分钟前，你使用了(action_name)，具体内容是：（action_prompt_display）
@@ -924,12 +922,12 @@ def build_readable_actions(actions: List[Dict[str, Any]]) -> str:
 
 
 async def build_readable_messages_with_list(
-    messages: List[Dict[str, Any]],
+    messages: list[dict[str, Any]],
     replace_bot_name: bool = True,
     merge_messages: bool = False,
     timestamp_mode: str = "relative",
     truncate: bool = False,
-) -> Tuple[str, List[Tuple[float, str, str]]]:
+) -> tuple[str, list[tuple[float, str, str]]]:
     """
     将消息列表转换为可读的文本格式，并返回原始(时间戳, 昵称, 内容)列表。
     允许通过参数控制格式化行为。
@@ -945,7 +943,7 @@ async def build_readable_messages_with_list(
 
 
 async def build_readable_messages_with_id(
-    messages: List[Dict[str, Any]],
+    messages: list[dict[str, Any]],
     replace_bot_name: bool = True,
     merge_messages: bool = False,
     timestamp_mode: str = "relative",
@@ -953,7 +951,7 @@ async def build_readable_messages_with_id(
     truncate: bool = False,
     show_actions: bool = False,
     show_pic: bool = True,
-) -> Tuple[str, List[Dict[str, Any]]]:
+) -> tuple[str, list[dict[str, Any]]]:
     """
     将消息列表转换为可读的文本格式，并返回原始(时间戳, 昵称, 内容)列表。
     允许通过参数控制格式化行为。
@@ -982,7 +980,7 @@ async def build_readable_messages_with_id(
 
 
 async def build_readable_messages(
-    messages: List[Dict[str, Any]],
+    messages: list[dict[str, Any]],
     replace_bot_name: bool = True,
     merge_messages: bool = False,
     timestamp_mode: str = "relative",
@@ -990,7 +988,7 @@ async def build_readable_messages(
     truncate: bool = False,
     show_actions: bool = True,
     show_pic: bool = True,
-    message_id_list: Optional[List[Dict[str, Any]]] = None,
+    message_id_list: list[dict[str, Any]] | None = None,
 ) -> str:  # sourcery skip: extract-method
     """
     将消息列表转换为可读的文本格式。
@@ -1150,7 +1148,7 @@ async def build_readable_messages(
         return "".join(result_parts)
 
 
-async def build_anonymous_messages(messages: List[Dict[str, Any]]) -> str:
+async def build_anonymous_messages(messages: list[dict[str, Any]]) -> str:
     """
     构建匿名可读消息，将不同人的名称转为唯一占位符（A、B、C...），bot自己用SELF。
     处理 回复<aaa:bbb> 和 @<aaa:bbb> 字段，将bbb映射为匿名占位符。
@@ -1263,7 +1261,7 @@ async def build_anonymous_messages(messages: List[Dict[str, Any]]) -> str:
     return formatted_string
 
 
-async def get_person_id_list(messages: List[Dict[str, Any]]) -> List[str]:
+async def get_person_id_list(messages: list[dict[str, Any]]) -> list[str]:
     """
     从消息列表中提取不重复的 person_id 列表 (忽略机器人自身)。
 

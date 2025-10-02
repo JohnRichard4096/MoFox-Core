@@ -1,4 +1,3 @@
-# -*- coding: utf-8 -*-
 """
 增强重排序器
 实现文档设计的多维度评分模型
@@ -6,12 +5,12 @@
 
 import math
 import time
-from typing import Dict, List, Optional, Any, Tuple
 from dataclasses import dataclass
 from enum import Enum
+from typing import Any
 
-from src.common.logger import get_logger
 from src.chat.memory_system.memory_chunk import MemoryChunk, MemoryType
+from src.common.logger import get_logger
 
 logger = get_logger(__name__)
 
@@ -44,7 +43,7 @@ class ReRankingConfig:
     freq_max_score: float = 5.0  # 最大频率得分
 
     # 类型匹配权重映射
-    type_match_weights: Dict[str, Dict[str, float]] = None
+    type_match_weights: dict[str, dict[str, float]] = None
 
     def __post_init__(self):
         """初始化类型匹配权重"""
@@ -157,7 +156,7 @@ class IntentClassifier:
             ],
         }
 
-    def classify_intent(self, query: str, context: Dict[str, Any]) -> IntentType:
+    def classify_intent(self, query: str, context: dict[str, Any]) -> IntentType:
         """识别对话意图"""
         if not query:
             return IntentType.UNKNOWN
@@ -165,7 +164,7 @@ class IntentClassifier:
         query_lower = query.lower()
 
         # 统计各意图的匹配分数
-        intent_scores = {intent: 0 for intent in IntentType}
+        intent_scores = dict.fromkeys(IntentType, 0)
 
         for intent, patterns in self.patterns.items():
             for pattern in patterns:
@@ -187,7 +186,7 @@ class IntentClassifier:
 class EnhancedReRanker:
     """增强重排序器 - 实现文档设计的多维度评分模型"""
 
-    def __init__(self, config: Optional[ReRankingConfig] = None):
+    def __init__(self, config: ReRankingConfig | None = None):
         self.config = config or ReRankingConfig()
         self.intent_classifier = IntentClassifier()
 
@@ -210,10 +209,10 @@ class EnhancedReRanker:
     def rerank_memories(
         self,
         query: str,
-        candidate_memories: List[Tuple[str, MemoryChunk, float]],  # (memory_id, memory, vector_similarity)
-        context: Dict[str, Any],
+        candidate_memories: list[tuple[str, MemoryChunk, float]],  # (memory_id, memory, vector_similarity)
+        context: dict[str, Any],
         limit: int = 10,
-    ) -> List[Tuple[str, MemoryChunk, float]]:
+    ) -> list[tuple[str, MemoryChunk, float]]:
         """
         对候选记忆进行重排序
 
@@ -341,11 +340,11 @@ default_reranker = EnhancedReRanker()
 
 def rerank_candidate_memories(
     query: str,
-    candidate_memories: List[Tuple[str, MemoryChunk, float]],
-    context: Dict[str, Any],
+    candidate_memories: list[tuple[str, MemoryChunk, float]],
+    context: dict[str, Any],
     limit: int = 10,
-    config: Optional[ReRankingConfig] = None,
-) -> List[Tuple[str, MemoryChunk, float]]:
+    config: ReRankingConfig | None = None,
+) -> list[tuple[str, MemoryChunk, float]]:
     """
     便捷函数：对候选记忆进行重排序
     """

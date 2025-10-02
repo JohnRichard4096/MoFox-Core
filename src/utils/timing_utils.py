@@ -10,9 +10,9 @@
 - 快速筛选：使用NumPy布尔索引进行高效过滤
 """
 
-import numpy as np
-from typing import Optional
 from functools import lru_cache
+
+import numpy as np
 
 
 @lru_cache(maxsize=128)
@@ -35,8 +35,8 @@ def _calculate_sigma_bounds(base_interval: int, sigma_percentage: float, use_3si
 def get_normal_distributed_interval(
     base_interval: int,
     sigma_percentage: float = 0.1,
-    min_interval: Optional[int] = None,
-    max_interval: Optional[int] = None,
+    min_interval: int | None = None,
+    max_interval: int | None = None,
     use_3sigma_rule: bool = True,
 ) -> int:
     """
@@ -120,8 +120,8 @@ def get_normal_distributed_interval(
 
 def _generate_pure_random_interval(
     sigma_percentage: float,
-    min_interval: Optional[int] = None,
-    max_interval: Optional[int] = None,
+    min_interval: int | None = None,
+    max_interval: int | None = None,
     use_3sigma_rule: bool = True,
 ) -> int:
     """

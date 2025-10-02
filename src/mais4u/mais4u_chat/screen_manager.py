@@ -1,6 +1,6 @@
 class ScreenManager:
     def __init__(self):
-        self.now_screen = str()
+        self.now_screen = ""
 
     def set_screen(self, screen_str: str):
         self.now_screen = screen_str

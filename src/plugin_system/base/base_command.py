@@ -1,9 +1,9 @@
 from abc import ABC, abstractmethod
-from typing import Dict, Tuple, Optional, Any
-from src.common.logger import get_logger
-from src.plugin_system.base.component_types import CommandInfo, ComponentType, ChatType
+
 from src.chat.message_receive.message import MessageRecv
+from src.common.logger import get_logger
 from src.plugin_system.apis import send_api
+from src.plugin_system.base.component_types import ChatType, CommandInfo, ComponentType
 
 logger = get_logger("base_command")
 
@@ -29,7 +29,7 @@ class BaseCommand(ABC):
     chat_type_allow: ChatType = ChatType.ALL
     """允许的聊天类型，默认为所有类型"""
 
-    def __init__(self, message: MessageRecv, plugin_config: Optional[dict] = None):
+    def __init__(self, message: MessageRecv, plugin_config: dict | None = None):
         """初始化Command组件
 
         Args:
@@ -37,7 +37,7 @@ class BaseCommand(ABC):
             plugin_config: 插件配置字典
         """
         self.message = message
-        self.matched_groups: Dict[str, str] = {}  # 存储正则表达式匹配的命名组
+        self.matched_groups: dict[str, str] = {}  # 存储正则表达式匹配的命名组
         self.plugin_config = plugin_config or {}  # 直接存储插件配置字典
 
         self.log_prefix = "[Command]"
@@ -55,7 +55,7 @@ class BaseCommand(ABC):
                 f"{'群聊' if is_group else '私聊'}, 允许类型: {self.chat_type_allow.value}"
             )
 
-    def set_matched_groups(self, groups: Dict[str, str]) -> None:
+    def set_matched_groups(self, groups: dict[str, str]) -> None:
         """设置正则表达式匹配的命名组
 
         Args:
@@ -93,7 +93,7 @@ class BaseCommand(ABC):
         return self._validate_chat_type()
 
     @abstractmethod
-    async def execute(self) -> Tuple[bool, Optional[str], bool]:
+    async def execute(self) -> tuple[bool, str | None, bool]:
         """执行Command的抽象方法，子类必须实现
 
         Returns:
@@ -176,7 +176,7 @@ class BaseCommand(ABC):
         )
 
     async def send_command(
-        self, command_name: str, args: Optional[dict] = None, display_message: str = "", storage_message: bool = True,set_reply: bool = False,reply_message: Optional[Dict[str, Any]] = None
+        self, command_name: str, args: dict | None = None, display_message: str = "", storage_message: bool = True
     ) -> bool:
         """发送命令消息
 

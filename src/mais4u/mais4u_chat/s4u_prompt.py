@@ -1,24 +1,27 @@
-from src.config.config import global_config
-from src.common.logger import get_logger
-from src.chat.utils.prompt import Prompt, global_prompt_manager
-from src.chat.utils.chat_message_builder import build_readable_messages, get_raw_msg_before_timestamp_with_chat
-import time
-from src.chat.utils.utils import get_recent_group_speaker
+import asyncio
 
 # 旧的Hippocampus系统已被移除，现在使用增强记忆系统
 # from src.chat.memory_system.enhanced_memory_manager import enhanced_memory_manager
 import random
+import time
 from datetime import datetime
-import asyncio
-from src.mais4u.s4u_config import s4u_config
-from src.chat.message_receive.message import MessageRecvS4U
-from src.person_info.person_info import Person, get_person_id
-from src.chat.message_receive.chat_stream import ChatStream
-from src.mais4u.mais4u_chat.super_chat_manager import get_super_chat_manager
-from src.mais4u.mais4u_chat.screen_manager import screen_manager
+
 from src.chat.express.expression_selector import expression_selector
-from .s4u_mood_manager import mood_manager
+from src.chat.message_receive.chat_stream import ChatStream
+from src.chat.message_receive.message import MessageRecvS4U
+from src.chat.utils.chat_message_builder import build_readable_messages, get_raw_msg_before_timestamp_with_chat
+from src.chat.utils.prompt import Prompt, global_prompt_manager
+from src.chat.utils.utils import get_recent_group_speaker
+from src.common.logger import get_logger
+from src.config.config import global_config
 from src.mais4u.mais4u_chat.internal_manager import internal_manager
+from src.mais4u.mais4u_chat.screen_manager import screen_manager
+from src.mais4u.mais4u_chat.super_chat_manager import get_super_chat_manager
+from src.mais4u.s4u_config import s4u_config
+from src.person_info.person_info import PersonInfoManager, get_person_info_manager
+from src.person_info.relationship_fetcher import relationship_fetcher_manager
+
+from .s4u_mood_manager import mood_manager
 
 logger = get_logger("prompt")
 
@@ -196,7 +199,7 @@ class PromptBuilder:
             limit=300,
         )
 
-        talk_type = f"{message.message_info.platform}:{str(message.chat_stream.user_info.user_id)}"
+        talk_type = f"{message.message_info.platform}:{message.chat_stream.user_info.user_id!s}"
 
         core_dialogue_list = []
         background_dialogue_list = []

@@ -1,20 +1,71 @@
-from src.common.logger import get_logger
-from .person_info import Person,is_person_known
 import random
-from src.llm_models.utils_model import LLMRequest
-from src.config.config import global_config, model_config
-from src.chat.utils.chat_message_builder import build_readable_messages
+import time
+from datetime import datetime
+from difflib import SequenceMatcher
+from typing import Any
+
+import jieba
 import orjson
 from json_repair import repair_json
-from datetime import datetime
-from typing import List, Dict, Any
-from src.chat.utils.prompt_builder import Prompt, global_prompt_manager
-import traceback
+from sklearn.feature_extraction.text import TfidfVectorizer
+from sklearn.metrics.pairwise import cosine_similarity
+
+from src.chat.utils.chat_message_builder import build_readable_messages
+from src.common.logger import get_logger
+from src.config.config import global_config, model_config
+from src.llm_models.utils_model import LLMRequest
+
+from .person_info import PersonInfoManager, get_person_info_manager
 
 logger = get_logger("relation")
 
-def init_prompt():
-    Prompt(
+
+class RelationshipManager:
+    def __init__(self):
+        self.relationship_llm = LLMRequest(
+            model_set=model_config.model_task_config.utils, request_type="relationship"
+        )  # 用于动作规划
+
+    @staticmethod
+    async def is_known_some_one(platform, user_id):
+        """判断是否认识某人"""
+        person_info_manager = get_person_info_manager()
+        return await person_info_manager.is_person_known(platform, user_id)
+
+    @staticmethod
+    async def first_knowing_some_one(platform: str, user_id: str, user_nickname: str, user_cardname: str):
+        """判断是否认识某人"""
+        person_id = PersonInfoManager.get_person_id(platform, user_id)
+        # 生成唯一的 person_name
+        person_info_manager = get_person_info_manager()
+        unique_nickname = await person_info_manager._generate_unique_person_name(user_nickname)
+        data = {
+            "platform": platform,
+            "user_id": user_id,
+            "nickname": user_nickname,
+            "konw_time": int(time.time()),
+            "person_name": unique_nickname,  # 使用唯一的 person_name
+        }
+        # 先创建用户基本信息，使用安全创建方法避免竞态条件
+        await person_info_manager._safe_create_person_info(person_id=person_id, data=data)
+        # 更新昵称
+        await person_info_manager.update_one_field(
+            person_id=person_id, field_name="nickname", value=user_nickname, data=data
+        )
+        # 尝试生成更好的名字
+        # await person_info_manager.qv_person_name(
+        # person_id=person_id, user_nickname=user_nickname, user_cardname=user_cardname, user_avatar=user_avatar
+        # )
+
+    async def update_person_impression(self, person_id, timestamp, bot_engaged_messages: list[dict[str, Any]]):
+        """更新用户印象
+
+        Args:
+            person_id: 用户ID
+            chat_id: 聊天ID
+            reason: 更新原因
+            timestamp: 时间戳 (用于记录交互时间)
+            bot_engaged_messages: bot参与的消息列表
         """
         person_info_manager = get_person_info_manager()
         person_name = await person_info_manager.get_value(person_id, "person_name")

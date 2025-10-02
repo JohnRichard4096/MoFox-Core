@@ -5,11 +5,11 @@
 """
 
 import traceback
-from typing import Dict, List, Any
+from typing import Any
 
+from src.chat.interest_system import bot_interest_manager
 from src.common.data_models.database_data_model import DatabaseMessages
 from src.common.data_models.info_data_model import InterestScore
-from src.chat.interest_system import bot_interest_manager
 from src.common.logger import get_logger
 from src.config.config import global_config
 
@@ -47,11 +47,11 @@ class ChatterInterestScoringSystem:
         )  # 每次不回复增加的概率
 
         # 用户关系数据
-        self.user_relationships: Dict[str, float] = {}  # user_id -> relationship_score
+        self.user_relationships: dict[str, float] = {}  # user_id -> relationship_score
 
     async def calculate_interest_scores(
-        self, messages: List[DatabaseMessages], bot_nickname: str
-    ) -> List[InterestScore]:
+        self, messages: list[DatabaseMessages], bot_nickname: str
+    ) -> list[InterestScore]:
         """计算消息的兴趣度评分"""
         user_messages = [msg for msg in messages if str(msg.user_info.user_id) != str(global_config.bot.qq_account)]
         if not user_messages:
@@ -97,7 +97,7 @@ class ChatterInterestScoringSystem:
             details=details,
         )
 
-    async def _calculate_interest_match_score(self, content: str, keywords: List[str] = None) -> float:
+    async def _calculate_interest_match_score(self, content: str, keywords: list[str] = None) -> float:
         """计算兴趣匹配度 - 使用智能embedding匹配"""
         if not content:
             return 0.0
@@ -109,7 +109,7 @@ class ChatterInterestScoringSystem:
             # 智能匹配未初始化，返回默认分数
             return 0.3
 
-    async def _calculate_smart_interest_match(self, content: str, keywords: List[str] = None) -> float:
+    async def _calculate_smart_interest_match(self, content: str, keywords: list[str] = None) -> float:
         """使用embedding计算智能兴趣匹配"""
         try:
             # 如果没有传入关键词，则提取
@@ -134,7 +134,7 @@ class ChatterInterestScoringSystem:
             logger.error(f"智能兴趣匹配计算失败: {e}")
             return 0.0
 
-    def _extract_keywords_from_database(self, message: DatabaseMessages) -> List[str]:
+    def _extract_keywords_from_database(self, message: DatabaseMessages) -> list[str]:
         """从数据库消息中提取关键词"""
         keywords = []
 
@@ -166,7 +166,7 @@ class ChatterInterestScoringSystem:
 
         return keywords[:15]  # 返回前15个关键词
 
-    def _extract_keywords_from_content(self, content: str) -> List[str]:
+    def _extract_keywords_from_content(self, content: str) -> list[str]:
         """从内容中提取关键词（降级方案）"""
         import re
 
@@ -287,7 +287,7 @@ class ChatterInterestScoringSystem:
         """获取用户关系分"""
         return self.user_relationships.get(user_id, 0.3)
 
-    def get_scoring_stats(self) -> Dict:
+    def get_scoring_stats(self) -> dict:
         """获取评分系统统计"""
         return {
             "no_reply_count": self.no_reply_count,
@@ -318,7 +318,7 @@ class ChatterInterestScoringSystem:
             logger.error(f"初始化智能兴趣系统失败: {e}")
             traceback.print_exc()
 
-    def get_matching_config(self) -> Dict[str, Any]:
+    def get_matching_config(self) -> dict[str, Any]:
         """获取匹配配置信息"""
         return {
             "use_smart_matching": self.use_smart_matching,

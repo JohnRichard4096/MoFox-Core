@@ -3,17 +3,16 @@
 提供更简单易用的命令处理方式，无需手写正则表达式
 """
 
-from abc import ABC, abstractmethod
-from typing import Tuple, Optional, List
 import re
+from abc import ABC, abstractmethod
 
-from src.common.logger import get_logger
-from src.plugin_system.base.component_types import PlusCommandInfo, ComponentType, ChatType
 from src.chat.message_receive.message import MessageRecv
-from src.plugin_system.apis import send_api
-from src.plugin_system.base.command_args import CommandArgs
-from src.plugin_system.base.base_command import BaseCommand
+from src.common.logger import get_logger
 from src.config.config import global_config
+from src.plugin_system.apis import send_api
+from src.plugin_system.base.base_command import BaseCommand
+from src.plugin_system.base.command_args import CommandArgs
+from src.plugin_system.base.component_types import ChatType, ComponentType, PlusCommandInfo
 
 logger = get_logger("plus_command")
 
@@ -39,7 +38,7 @@ class PlusCommand(ABC):
     command_description: str = ""
     """命令描述"""
 
-    command_aliases: List[str] = []
+    command_aliases: list[str] = []
     """命令别名列表，如 ['say', 'repeat']"""
 
     priority: int = 0
@@ -51,7 +50,7 @@ class PlusCommand(ABC):
     intercept_message: bool = False
     """是否拦截消息，不进行后续处理"""
 
-    def __init__(self, message: MessageRecv, plugin_config: Optional[dict] = None):
+    def __init__(self, message: MessageRecv, plugin_config: dict | None = None):
         """初始化命令组件
 
         Args:
@@ -172,7 +171,7 @@ class PlusCommand(ABC):
         return False
 
     @abstractmethod
-    async def execute(self, args: CommandArgs) -> Tuple[bool, Optional[str], bool]:
+    async def execute(self, args: CommandArgs) -> tuple[bool, str | None, bool]:
         """执行命令的抽象方法，子类必须实现
 
         Args:
@@ -341,7 +340,7 @@ class PlusCommandAdapter(BaseCommand):
     将PlusCommand适配到现有的插件系统，继承BaseCommand
     """
 
-    def __init__(self, plus_command_class, message: MessageRecv, plugin_config: Optional[dict] = None):
+    def __init__(self, plus_command_class, message: MessageRecv, plugin_config: dict | None = None):
         """初始化适配器
 
         Args:
@@ -363,7 +362,7 @@ class PlusCommandAdapter(BaseCommand):
         # 创建PlusCommand实例
         self.plus_command = plus_command_class(message, plugin_config)
 
-    async def execute(self) -> Tuple[bool, Optional[str], bool]:
+    async def execute(self) -> tuple[bool, str | None, bool]:
         """执行命令
 
         Returns:
@@ -382,7 +381,7 @@ class PlusCommandAdapter(BaseCommand):
             return await self.plus_command.execute(self.plus_command.args)
         except Exception as e:
             logger.error(f"执行命令时出错: {e}", exc_info=True)
-            return False, f"命令执行出错: {str(e)}", self.intercept_message
+            return False, f"命令执行出错: {e!s}", self.intercept_message
 
 
 def create_plus_command_adapter(plus_command_class):
@@ -401,13 +400,13 @@ def create_plus_command_adapter(plus_command_class):
         command_pattern = plus_command_class._generate_command_pattern()
         chat_type_allow = getattr(plus_command_class, "chat_type_allow", ChatType.ALL)
 
-        def __init__(self, message: MessageRecv, plugin_config: Optional[dict] = None):
+        def __init__(self, message: MessageRecv, plugin_config: dict | None = None):
             super().__init__(message, plugin_config)
             self.plus_command = plus_command_class(message, plugin_config)
             self.priority = getattr(plus_command_class, "priority", 0)
             self.intercept_message = getattr(plus_command_class, "intercept_message", False)
 
-        async def execute(self) -> Tuple[bool, Optional[str], bool]:
+        async def execute(self) -> tuple[bool, str | None, bool]:
             """执行命令"""
             # 从BaseCommand的正则匹配结果中提取参数
             args_text = ""
@@ -429,7 +428,7 @@ def create_plus_command_adapter(plus_command_class):
                 return await self.plus_command.execute(command_args)
             except Exception as e:
                 logger.error(f"执行命令时出错: {e}", exc_info=True)
-                return False, f"命令执行出错: {str(e)}", self.intercept_message
+                return False, f"命令执行出错: {e!s}", self.intercept_message
 
     return AdapterClass
 

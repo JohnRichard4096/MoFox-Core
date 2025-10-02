@@ -1,6 +1,7 @@
-from typing import Dict
+from typing import Any
 
 from src.common.logger import get_logger
+
 from .relationship_builder import RelationshipBuilder
 
 logger = get_logger("relationship_builder_manager")
@@ -13,7 +14,7 @@ class RelationshipBuilderManager:
     """
 
     def __init__(self):
-        self.builders: Dict[str, RelationshipBuilder] = {}
+        self.builders: dict[str, RelationshipBuilder] = {}
 
     def get_or_create_builder(self, chat_id: str) -> RelationshipBuilder:
         """获取或创建关系构建器
@@ -29,6 +30,73 @@ class RelationshipBuilderManager:
             logger.debug(f"创建聊天 {chat_id} 的关系构建器")
 
         return self.builders[chat_id]
+
+    def get_builder(self, chat_id: str) -> RelationshipBuilder | None:
+        """获取关系构建器
+
+        Args:
+            chat_id: 聊天ID
+
+        Returns:
+            Optional[RelationshipBuilder]: 关系构建器实例或None
+        """
+        return self.builders.get(chat_id)
+
+    def remove_builder(self, chat_id: str) -> bool:
+        """移除关系构建器
+
+        Args:
+            chat_id: 聊天ID
+
+        Returns:
+            bool: 是否成功移除
+        """
+        if chat_id in self.builders:
+            del self.builders[chat_id]
+            logger.debug(f"移除聊天 {chat_id} 的关系构建器")
+            return True
+        return False
+
+    def get_all_chat_ids(self) -> list[str]:
+        """获取所有管理的聊天ID列表
+
+        Returns:
+            List[str]: 聊天ID列表
+        """
+        return list(self.builders.keys())
+
+    def get_status(self) -> dict[str, Any]:
+        """获取管理器状态
+
+        Returns:
+            Dict[str, any]: 状态信息
+        """
+        return {
+            "total_builders": len(self.builders),
+            "chat_ids": list(self.builders.keys()),
+        }
+
+    async def process_chat_messages(self, chat_id: str):
+        """处理指定聊天的消息
+
+        Args:
+            chat_id: 聊天ID
+        """
+        builder = self.get_or_create_builder(chat_id)
+        await builder.build_relation()
+
+    async def force_cleanup_user(self, chat_id: str, person_id: str) -> bool:
+        """强制清理指定用户的关系构建缓存
+
+        Args:
+            chat_id: 聊天ID
+            person_id: 用户ID
+
+        Returns:
+            bool: 是否成功清理
+        """
+        builder = self.get_builder(chat_id)
+        return builder.force_cleanup_user_segments(person_id) if builder else False
 
 
 # 全局管理器实例

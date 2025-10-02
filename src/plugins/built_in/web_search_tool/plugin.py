@@ -4,14 +4,12 @@ Web Search Tool Plugin
 一个功能强大的网络搜索和URL解析插件，支持多种搜索引擎和解析策略。
 """
 
-from typing import List, Tuple, Type
-
-from src.plugin_system import BasePlugin, register_plugin, ComponentInfo, ConfigField, PythonDependency
-from src.plugin_system.apis import config_api
 from src.common.logger import get_logger
+from src.plugin_system import BasePlugin, ComponentInfo, ConfigField, PythonDependency, register_plugin
+from src.plugin_system.apis import config_api
 
-from .tools.web_search import WebSurfingTool
 from .tools.url_parser import URLParserTool
+from .tools.web_search import WebSurfingTool
 
 logger = get_logger("web_search_plugin")
 
@@ -31,7 +29,7 @@ class WEBSEARCHPLUGIN(BasePlugin):
     # 插件基本信息
     plugin_name: str = "web_search_tool"  # 内部标识符
     enable_plugin: bool = True
-    dependencies: List[str] = []  # 插件依赖列表
+    dependencies: list[str] = []  # 插件依赖列表
 
     def __init__(self, *args, **kwargs):
         """初始化插件，立即加载所有搜索引擎"""
@@ -40,10 +38,10 @@ class WEBSEARCHPLUGIN(BasePlugin):
         # 立即初始化所有搜索引擎，触发API密钥管理器的日志输出
         logger.info("🚀 正在初始化所有搜索引擎...")
         try:
+            from .engines.bing_engine import BingSearchEngine
+            from .engines.ddg_engine import DDGSearchEngine
             from .engines.exa_engine import ExaSearchEngine
             from .engines.tavily_engine import TavilySearchEngine
-            from .engines.ddg_engine import DDGSearchEngine
-            from .engines.bing_engine import BingSearchEngine
 
             # 实例化所有搜索引擎，这会触发API密钥管理器的初始化
             exa_engine = ExaSearchEngine()
@@ -71,7 +69,7 @@ class WEBSEARCHPLUGIN(BasePlugin):
             logger.error(f"❌ 搜索引擎初始化失败: {e}", exc_info=True)
 
     # Python包依赖列表
-    python_dependencies: List[PythonDependency] = [
+    python_dependencies: list[PythonDependency] = [
         PythonDependency(package_name="asyncddgs", description="异步DuckDuckGo搜索库", optional=False),
         PythonDependency(
             package_name="exa_py",
@@ -119,7 +117,7 @@ class WEBSEARCHPLUGIN(BasePlugin):
         },
     }
 
-    def get_plugin_components(self) -> List[Tuple[ComponentInfo, Type]]:
+    def get_plugin_components(self) -> list[tuple[ComponentInfo, type]]:
         """
         获取插件组件列表
 

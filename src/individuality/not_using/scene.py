@@ -1,6 +1,7 @@
-import orjson
 import os
 from typing import Any
+
+import orjson
 
 
 def load_scenes() -> dict[str, Any]:
@@ -13,7 +14,7 @@ def load_scenes() -> dict[str, Any]:
     current_dir = os.path.dirname(os.path.abspath(__file__))
     json_path = os.path.join(current_dir, "template_scene.json")
 
-    with open(json_path, "r", encoding="utf-8") as f:
+    with open(json_path, encoding="utf-8") as f:
         return orjson.loads(f.read())
 
 

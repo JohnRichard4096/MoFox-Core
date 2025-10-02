@@ -3,9 +3,9 @@ Bot服务UI日志适配器
 在最小侵入的情况下捕获Bot的日志并发送到UI
 """
 
-import sys
-import os
 import logging
+import os
+import sys
 import threading
 import time
 

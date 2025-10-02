@@ -1,10 +1,11 @@
 import os
+
 from rich.traceback import install
-from src.common.logger import get_logger
 
 # SQLAlchemy相关导入
 from src.common.database.sqlalchemy_init import initialize_database_compat
-from src.common.database.sqlalchemy_models import get_engine, get_db_session
+from src.common.database.sqlalchemy_models import get_db_session, get_engine
+from src.common.logger import get_logger
 
 install(extra_lines=3)
 

@@ -1,17 +1,19 @@
-import time
-import orjson
 import hashlib
+import time
 from pathlib import Path
-import numpy as np
+from typing import Any
+
 import faiss
-from typing import Any, Dict, Optional, Union
-from src.common.logger import get_logger
-from src.llm_models.utils_model import LLMRequest
-from src.config.config import global_config, model_config
+import numpy as np
+import orjson
+
 from src.common.config_helpers import resolve_embedding_dimension
-from src.common.database.sqlalchemy_models import CacheEntries
 from src.common.database.sqlalchemy_database_api import db_query, db_save
+from src.common.database.sqlalchemy_models import CacheEntries
+from src.common.logger import get_logger
 from src.common.vector_db import vector_db_service
+from src.config.config import global_config, model_config
+from src.llm_models.utils_model import LLMRequest
 
 logger = get_logger("cache_manager")
 
@@ -40,14 +42,14 @@ class CacheManager:
             self.semantic_cache_collection_name = "semantic_cache"
 
             # L1 缓存 (内存)
-            self.l1_kv_cache: Dict[str, Dict[str, Any]] = {}
+            self.l1_kv_cache: dict[str, dict[str, Any]] = {}
             embedding_dim = resolve_embedding_dimension(global_config.lpmm_knowledge.embedding_dimension)
             if not embedding_dim:
                 embedding_dim = global_config.lpmm_knowledge.embedding_dimension
 
             self.embedding_dimension = embedding_dim
             self.l1_vector_index = faiss.IndexFlatIP(embedding_dim)
-            self.l1_vector_id_to_key: Dict[int, str] = {}
+            self.l1_vector_id_to_key: dict[int, str] = {}
 
             # L2 向量缓存 (使用新的服务)
             vector_db_service.get_or_create_collection(self.semantic_cache_collection_name)
@@ -59,7 +61,7 @@ class CacheManager:
             logger.info("缓存管理器已初始化: L1 (内存+FAISS), L2 (数据库+ChromaDB)")
 
     @staticmethod
-    def _validate_embedding(embedding_result: Any) -> Optional[np.ndarray]:
+    def _validate_embedding(embedding_result: Any) -> np.ndarray | None:
         """
         验证和标准化嵌入向量格式
         """
@@ -100,7 +102,7 @@ class CacheManager:
             return None
 
     @staticmethod
-    def _generate_key(tool_name: str, function_args: Dict[str, Any], tool_file_path: Union[str, Path]) -> str:
+    def _generate_key(tool_name: str, function_args: dict[str, Any], tool_file_path: str | Path) -> str:
         """生成确定性的缓存键，包含文件修改时间以实现自动失效。"""
         try:
             tool_file_path = Path(tool_file_path)
@@ -124,10 +126,10 @@ class CacheManager:
     async def get(
         self,
         tool_name: str,
-        function_args: Dict[str, Any],
-        tool_file_path: Union[str, Path],
-        semantic_query: Optional[str] = None,
-    ) -> Optional[Any]:
+        function_args: dict[str, Any],
+        tool_file_path: str | Path,
+        semantic_query: str | None = None,
+    ) -> Any | None:
         """
         从缓存获取结果，查询顺序: L1-KV -> L1-Vector -> L2-KV -> L2-Vector。
         """
@@ -251,11 +253,11 @@ class CacheManager:
     async def set(
         self,
         tool_name: str,
-        function_args: Dict[str, Any],
-        tool_file_path: Union[str, Path],
+        function_args: dict[str, Any],
+        tool_file_path: str | Path,
         data: Any,
-        ttl: Optional[int] = None,
-        semantic_query: Optional[str] = None,
+        ttl: int | None = None,
+        semantic_query: str | None = None,
     ):
         """将结果存入所有缓存层。"""
         if ttl is None:

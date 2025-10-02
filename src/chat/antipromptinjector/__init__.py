@@ -1,4 +1,3 @@
-# -*- coding: utf-8 -*-
 """
 MaiBot 反注入系统模块
 
@@ -14,25 +13,25 @@ MaiBot 反注入系统模块
 """
 
 from .anti_injector import AntiPromptInjector, get_anti_injector, initialize_anti_injector
-from .types import DetectionResult, ProcessResult
-from .core import PromptInjectionDetector, MessageShield
-from .processors.message_processor import MessageProcessor
-from .management import AntiInjectionStatistics, UserBanManager
+from .core import MessageShield, PromptInjectionDetector
 from .decision import CounterAttackGenerator, ProcessingDecisionMaker
+from .management import AntiInjectionStatistics, UserBanManager
+from .processors.message_processor import MessageProcessor
+from .types import DetectionResult, ProcessResult
 
 __all__ = [
+    "AntiInjectionStatistics",
     "AntiPromptInjector",
+    "CounterAttackGenerator",
+    "DetectionResult",
+    "MessageProcessor",
+    "MessageShield",
+    "ProcessResult",
+    "ProcessingDecisionMaker",
+    "PromptInjectionDetector",
+    "UserBanManager",
     "get_anti_injector",
     "initialize_anti_injector",
-    "DetectionResult",
-    "ProcessResult",
-    "PromptInjectionDetector",
-    "MessageShield",
-    "MessageProcessor",
-    "AntiInjectionStatistics",
-    "UserBanManager",
-    "CounterAttackGenerator",
-    "ProcessingDecisionMaker",
 ]
 
 

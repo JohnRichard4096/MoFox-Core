@@ -1,8 +1,9 @@
-import subprocess
-import sys
 import importlib
 import importlib.util
-from typing import List, Tuple, Optional, Any
+import subprocess
+import sys
+from typing import Any
+
 from packaging import version
 from packaging.requirements import Requirement
 
@@ -19,7 +20,7 @@ class DependencyManager:
     负责检查和自动安装插件的Python包依赖
     """
 
-    def __init__(self, auto_install: bool = True, use_mirror: bool = False, mirror_url: Optional[str] = None):
+    def __init__(self, auto_install: bool = True, use_mirror: bool = False, mirror_url: str | None = None):
         """初始化依赖管理器
 
         Args:
@@ -46,7 +47,7 @@ class DependencyManager:
             self.mirror_url = mirror_url or ""
             self.install_timeout = 300
 
-    def check_dependencies(self, dependencies: Any, plugin_name: str = "") -> Tuple[bool, List[str], List[str]]:
+    def check_dependencies(self, dependencies: Any, plugin_name: str = "") -> tuple[bool, list[str], list[str]]:
         """检查依赖包是否满足要求
 
         Args:
@@ -69,7 +70,7 @@ class DependencyManager:
                     logger.info(f"{log_prefix}缺少依赖包: {dep.get_pip_requirement()}")
                     missing_packages.append(dep.get_pip_requirement())
             except Exception as e:
-                error_msg = f"检查依赖 {dep.package_name} 时发生错误: {str(e)}"
+                error_msg = f"检查依赖 {dep.package_name} 时发生错误: {e!s}"
                 error_messages.append(error_msg)
                 logger.error(f"{log_prefix}{error_msg}")
 
@@ -84,7 +85,7 @@ class DependencyManager:
 
         return all_satisfied, missing_packages, error_messages
 
-    def install_dependencies(self, packages: List[str], plugin_name: str = "") -> Tuple[bool, List[str]]:
+    def install_dependencies(self, packages: list[str], plugin_name: str = "") -> tuple[bool, list[str]]:
         """自动安装缺失的依赖包
 
         Args:
@@ -115,7 +116,7 @@ class DependencyManager:
                     logger.error(f"{log_prefix}❌ 安装失败: {package}")
             except Exception as e:
                 failed_packages.append(package)
-                logger.error(f"{log_prefix}❌ 安装 {package} 时发生异常: {str(e)}")
+                logger.error(f"{log_prefix}❌ 安装 {package} 时发生异常: {e!s}")
 
         success = len(failed_packages) == 0
         if success:
@@ -125,7 +126,7 @@ class DependencyManager:
 
         return success, failed_packages
 
-    def check_and_install_dependencies(self, dependencies: Any, plugin_name: str = "") -> Tuple[bool, List[str]]:
+    def check_and_install_dependencies(self, dependencies: Any, plugin_name: str = "") -> tuple[bool, list[str]]:
         """检查并自动安装依赖（组合操作）
 
         Args:
@@ -163,7 +164,7 @@ class DependencyManager:
         return False, all_errors
 
     @staticmethod
-    def _normalize_dependencies(dependencies: Any) -> List[PythonDependency]:
+    def _normalize_dependencies(dependencies: Any) -> list[PythonDependency]:
         """将依赖列表标准化为PythonDependency对象"""
         normalized = []
 
@@ -277,7 +278,7 @@ class DependencyManager:
 
 
 # 全局依赖管理器实例
-_global_dependency_manager: Optional[DependencyManager] = None
+_global_dependency_manager: DependencyManager | None = None
 
 
 def get_dependency_manager() -> DependencyManager:
@@ -288,7 +289,7 @@ def get_dependency_manager() -> DependencyManager:
     return _global_dependency_manager
 
 
-def configure_dependency_manager(auto_install: bool = True, use_mirror: bool = False, mirror_url: Optional[str] = None):
+def configure_dependency_manager(auto_install: bool = True, use_mirror: bool = False, mirror_url: str | None = None):
     """配置全局依赖管理器"""
     global _global_dependency_manager
     _global_dependency_manager = DependencyManager(

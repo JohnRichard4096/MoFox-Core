@@ -1,22 +1,25 @@
 import asyncio
-import traceback
-import time
 import random
-from typing import Optional, Dict, Tuple, List  # 导入类型提示
-from maim_message import UserInfo, Seg
-from src.common.logger import get_logger
-from src.chat.message_receive.chat_stream import ChatStream, get_chat_manager
-from .s4u_stream_generator import S4UStreamGenerator
-from src.chat.message_receive.message import MessageSending, MessageRecv, MessageRecvS4U
-from src.config.config import global_config
-from src.common.message.api import get_global_api
-from src.chat.message_receive.storage import MessageStorage
-from .s4u_watching_manager import watching_manager
+import time
+import traceback
+
 import orjson
-from .s4u_mood_manager import mood_manager
-from src.person_info.relationship_builder_manager import relationship_builder_manager
+from maim_message import Seg, UserInfo
+
+from src.chat.message_receive.chat_stream import ChatStream, get_chat_manager
+from src.chat.message_receive.message import MessageRecv, MessageRecvS4U, MessageSending
+from src.chat.message_receive.storage import MessageStorage
+from src.common.logger import get_logger
+from src.common.message.api import get_global_api
+from src.config.config import global_config
+from src.mais4u.constant_s4u import ENABLE_S4U
 from src.mais4u.s4u_config import s4u_config
-from src.person_info.person_info import get_person_id
+from src.person_info.person_info import PersonInfoManager
+from src.person_info.relationship_builder_manager import relationship_builder_manager
+
+from .s4u_mood_manager import mood_manager
+from .s4u_stream_generator import S4UStreamGenerator
+from .s4u_watching_manager import watching_manager
 from .super_chat_manager import get_super_chat_manager
 from .yes_or_no import yes_or_no_head
 
@@ -31,7 +34,7 @@ class MessageSenderContainer:
         self.original_message = original_message
         self.queue = asyncio.Queue()
         self.storage = MessageStorage()
-        self._task: Optional[asyncio.Task] = None
+        self._task: asyncio.Task | None = None
         self._paused_event = asyncio.Event()
         self._paused_event.set()  # 默认设置为非暂停状态
 
@@ -157,7 +160,7 @@ class MessageSenderContainer:
 
 class S4UChatManager:
     def __init__(self):
-        self.s4u_chats: Dict[str, "S4UChat"] = {}
+        self.s4u_chats: dict[str, "S4UChat"] = {}
 
     def get_or_create_chat(self, chat_stream: ChatStream) -> "S4UChat":
         if chat_stream.stream_id not in self.s4u_chats:
@@ -195,16 +198,16 @@ class S4UChat:
         self._new_message_event = asyncio.Event()  # 用于唤醒处理器
 
         self._processing_task = asyncio.create_task(self._message_processor())
-        self._current_generation_task: Optional[asyncio.Task] = None
+        self._current_generation_task: asyncio.Task | None = None
         # 当前消息的元数据：(队列类型, 优先级分数, 计数器, 消息对象)
-        self._current_message_being_replied: Optional[Tuple[str, float, int, MessageRecv]] = None
+        self._current_message_being_replied: tuple[str, float, int, MessageRecv] | None = None
 
         self._is_replying = False
         self.gpt = S4UStreamGenerator()
         self.gpt.chat_stream = self.chat_stream
-        self.interest_dict: Dict[str, float] = {}  # 用户兴趣分
+        self.interest_dict: dict[str, float] = {}  # 用户兴趣分
 
-        self.internal_message: List[MessageRecvS4U] = []
+        self.internal_message: list[MessageRecvS4U] = []
 
         self.msg_id = ""
         self.voice_done = ""

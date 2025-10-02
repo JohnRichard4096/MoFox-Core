@@ -1,6 +1,5 @@
 from enum import Enum
 
-
 # 设计这系列类的目的是为未来可能的扩展做准备
 
 

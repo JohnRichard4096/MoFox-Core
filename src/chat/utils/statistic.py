@@ -1,11 +1,11 @@
 import asyncio
 from collections import defaultdict
 from datetime import datetime, timedelta
-from typing import Any, Dict, Tuple, List
+from typing import Any
 
+from src.common.database.sqlalchemy_database_api import db_get, db_query, db_save
+from src.common.database.sqlalchemy_models import LLMUsage, Messages, OnlineTime
 from src.common.logger import get_logger
-from src.common.database.sqlalchemy_models import OnlineTime, LLMUsage, Messages
-from src.common.database.sqlalchemy_database_api import db_query, db_save, db_get
 from src.manager.async_task_manager import AsyncTask
 from src.manager.local_store_manager import local_storage
 
@@ -162,7 +162,7 @@ class StatisticOutputTask(AsyncTask):
         # 延迟300秒启动，运行间隔300秒
         super().__init__(task_name="Statistics Data Output Task", wait_before_start=0, run_interval=300)
 
-        self.name_mapping: Dict[str, Tuple[str, float]] = {}
+        self.name_mapping: dict[str, tuple[str, float]] = {}
         """
             联系人/群聊名称映射 {聊天ID: (联系人/群聊名称, 记录时间（timestamp）)}
             注：设计记录时间的目的是方便更新名称，使联系人/群聊名称保持最新
@@ -182,7 +182,7 @@ class StatisticOutputTask(AsyncTask):
             deploy_time = datetime(2000, 1, 1)
             local_storage["deploy_time"] = now.timestamp()
 
-        self.stat_period: List[Tuple[str, timedelta, str]] = [
+        self.stat_period: list[tuple[str, timedelta, str]] = [
             ("all_time", now - deploy_time, "自部署以来"),  # 必须保留"all_time"
             ("last_7_days", timedelta(days=7), "最近7天"),
             ("last_24_hours", timedelta(days=1), "最近24小时"),
@@ -193,7 +193,7 @@ class StatisticOutputTask(AsyncTask):
         统计时间段 [(统计名称, 统计时间段, 统计描述), ...]
         """
 
-    def _statistic_console_output(self, stats: Dict[str, Any], now: datetime):
+    def _statistic_console_output(self, stats: dict[str, Any], now: datetime):
         """
         输出统计数据到控制台
         :param stats: 统计数据
@@ -251,7 +251,7 @@ class StatisticOutputTask(AsyncTask):
     # -- 以下为统计数据收集方法 --
 
     @staticmethod
-    async def _collect_model_request_for_period(collect_period: List[Tuple[str, datetime]]) -> Dict[str, Any]:
+    async def _collect_model_request_for_period(collect_period: list[tuple[str, datetime]]) -> dict[str, Any]:
         """
         收集指定时间段的LLM请求统计数据
 
@@ -405,8 +405,8 @@ class StatisticOutputTask(AsyncTask):
 
     @staticmethod
     async def _collect_online_time_for_period(
-        collect_period: List[Tuple[str, datetime]], now: datetime
-    ) -> Dict[str, Any]:
+        collect_period: list[tuple[str, datetime]], now: datetime
+    ) -> dict[str, Any]:
         """
         收集指定时间段的在线时间统计数据
 
@@ -464,7 +464,7 @@ class StatisticOutputTask(AsyncTask):
                     break
         return stats
 
-    async def _collect_message_count_for_period(self, collect_period: List[Tuple[str, datetime]]) -> Dict[str, Any]:
+    async def _collect_message_count_for_period(self, collect_period: list[tuple[str, datetime]]) -> dict[str, Any]:
         """
         收集指定时间段的消息统计数据
 
@@ -535,7 +535,7 @@ class StatisticOutputTask(AsyncTask):
                     break
         return stats
 
-    async def _collect_all_statistics(self, now: datetime) -> Dict[str, Dict[str, Any]]:
+    async def _collect_all_statistics(self, now: datetime) -> dict[str, dict[str, Any]]:
         """
         收集各时间段的统计数据
         :param now: 基准当前时间
@@ -545,7 +545,7 @@ class StatisticOutputTask(AsyncTask):
 
         if "last_full_statistics" in local_storage:
             # 如果存在上次完整统计数据，则使用该数据进行增量统计
-            last_stat: Dict[str, Any] = local_storage["last_full_statistics"]  # 上次完整统计数据 # type: ignore
+            last_stat: dict[str, Any] = local_storage["last_full_statistics"]  # 上次完整统计数据 # type: ignore
 
             self.name_mapping = last_stat["name_mapping"]  # 上次完整统计数据的名称映射
             last_all_time_stat = last_stat["stat_data"]  # 上次完整统计的统计数据
@@ -632,7 +632,7 @@ class StatisticOutputTask(AsyncTask):
     # -- 以下为统计数据格式化方法 --
 
     @staticmethod
-    def _format_total_stat(stats: Dict[str, Any]) -> str:
+    def _format_total_stat(stats: dict[str, Any]) -> str:
         """
         格式化总统计数据
         """
@@ -648,7 +648,7 @@ class StatisticOutputTask(AsyncTask):
         return "\n".join(output)
 
     @staticmethod
-    def _format_model_classified_stat(stats: Dict[str, Any]) -> str:
+    def _format_model_classified_stat(stats: dict[str, Any]) -> str:
         """
         格式化按模型分类的统计数据
         """
@@ -674,7 +674,7 @@ class StatisticOutputTask(AsyncTask):
         output.append("")
         return "\n".join(output)
 
-    def _format_chat_stat(self, stats: Dict[str, Any]) -> str:
+    def _format_chat_stat(self, stats: dict[str, Any]) -> str:
         """
         格式化聊天统计数据
         """
@@ -1019,7 +1019,7 @@ class StatisticOutputTask(AsyncTask):
     async def _generate_chart_data(self, stat: dict[str, Any]) -> dict:
         """生成图表数据 (异步)"""
         now = datetime.now()
-        chart_data: Dict[str, Any] = {}
+        chart_data: dict[str, Any] = {}
 
         time_ranges = [
             ("6h", 6, 10),
@@ -1035,16 +1035,16 @@ class StatisticOutputTask(AsyncTask):
 
     async def _collect_interval_data(self, now: datetime, hours: int, interval_minutes: int) -> dict:
         start_time = now - timedelta(hours=hours)
-        time_points: List[datetime] = []
+        time_points: list[datetime] = []
         current_time = start_time
         while current_time <= now:
             time_points.append(current_time)
             current_time += timedelta(minutes=interval_minutes)
 
         total_cost_data = [0.0] * len(time_points)
-        cost_by_model: Dict[str, List[float]] = {}
-        cost_by_module: Dict[str, List[float]] = {}
-        message_by_chat: Dict[str, List[int]] = {}
+        cost_by_model: dict[str, list[float]] = {}
+        cost_by_module: dict[str, list[float]] = {}
+        message_by_chat: dict[str, list[int]] = {}
         time_labels = [t.strftime("%H:%M") for t in time_points]
         interval_seconds = interval_minutes * 60
 

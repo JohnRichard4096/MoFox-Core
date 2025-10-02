@@ -5,19 +5,16 @@
 这是系统的内置插件，提供基础的聊天交互功能
 """
 
-from typing import List, Tuple, Type
-
-# 导入新插件系统
-from src.plugin_system import BasePlugin, register_plugin, ComponentInfo
-from src.plugin_system.base.config_types import ConfigField
-
-
 # 导入依赖的系统组件
 from src.common.logger import get_logger
 
+# 导入新插件系统
+from src.plugin_system import BasePlugin, ComponentInfo, register_plugin
+from src.plugin_system.base.config_types import ConfigField
+from src.plugins.built_in.core_actions.anti_injector_manager import AntiInjectorStatusCommand
+
 # 导入API模块 - 标准Python包方式
 from src.plugins.built_in.core_actions.emoji import EmojiAction
-from src.plugins.built_in.core_actions.anti_injector_manager import AntiInjectorStatusCommand
 
 logger = get_logger("core_actions")
 
@@ -62,7 +59,7 @@ class CoreActionsPlugin(BasePlugin):
         },
     }
 
-    def get_plugin_components(self) -> List[Tuple[ComponentInfo, Type]]:
+    def get_plugin_components(self) -> list[tuple[ComponentInfo, type]]:
         """返回插件包含的组件列表"""
 
         # --- 根据配置注册组件 ---

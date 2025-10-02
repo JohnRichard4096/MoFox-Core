@@ -1,17 +1,17 @@
-# -*- coding: utf-8 -*-
 """
 增强记忆系统适配器
 将增强记忆系统集成到现有MoFox Bot架构中
 """
 
 import time
-from typing import Dict, List, Optional, Any
 from dataclasses import dataclass
+from typing import Any
 
-from src.common.logger import get_logger
-from src.chat.memory_system.integration_layer import MemoryIntegrationLayer, IntegrationConfig, IntegrationMode
-from src.chat.memory_system.memory_chunk import MemoryChunk, MemoryType
+from src.chat.memory_system.integration_layer import IntegrationConfig, IntegrationMode, MemoryIntegrationLayer
 from src.chat.memory_system.memory_formatter import FormatterConfig, format_memories_for_llm
+
+from src.chat.memory_system.memory_chunk import MemoryChunk, MemoryType
+from src.common.logger import get_logger
 from src.llm_models.utils_model import LLMRequest
 
 logger = get_logger(__name__)
@@ -47,10 +47,10 @@ class AdapterConfig:
 class EnhancedMemoryAdapter:
     """增强记忆系统适配器"""
 
-    def __init__(self, llm_model: LLMRequest, config: Optional[AdapterConfig] = None):
+    def __init__(self, llm_model: LLMRequest, config: AdapterConfig | None = None):
         self.llm_model = llm_model
         self.config = config or AdapterConfig()
-        self.integration_layer: Optional[MemoryIntegrationLayer] = None
+        self.integration_layer: MemoryIntegrationLayer | None = None
         self._initialized = False
 
         # 统计信息
@@ -96,7 +96,7 @@ class EnhancedMemoryAdapter:
             # 如果初始化失败，禁用增强记忆功能
             self.config.enable_enhanced_memory = False
 
-    async def process_conversation_memory(self, context: Optional[Dict[str, Any]] = None) -> Dict[str, Any]:
+    async def process_conversation_memory(self, context: dict[str, Any] | None = None) -> dict[str, Any]:
         """处理对话记忆，以上下文为唯一输入"""
         if not self._initialized or not self.config.enable_enhanced_memory:
             return {"success": False, "error": "Enhanced memory not available"}
@@ -105,7 +105,7 @@ class EnhancedMemoryAdapter:
         self.adapter_stats["total_processed"] += 1
 
         try:
-            payload_context: Dict[str, Any] = dict(context or {})
+            payload_context: dict[str, Any] = dict(context or {})
 
             conversation_text = payload_context.get("conversation_text")
             if not conversation_text:
@@ -146,8 +146,8 @@ class EnhancedMemoryAdapter:
             return {"success": False, "error": str(e)}
 
     async def retrieve_relevant_memories(
-        self, query: str, user_id: str, context: Optional[Dict[str, Any]] = None, limit: Optional[int] = None
-    ) -> List[MemoryChunk]:
+        self, query: str, user_id: str, context: dict[str, Any] | None = None, limit: int | None = None
+    ) -> list[MemoryChunk]:
         """检索相关记忆"""
         if not self._initialized or not self.config.enable_enhanced_memory:
             return []
@@ -166,7 +166,7 @@ class EnhancedMemoryAdapter:
             return []
 
     async def get_memory_context_for_prompt(
-        self, query: str, user_id: str, context: Optional[Dict[str, Any]] = None, max_memories: int = 5
+        self, query: str, user_id: str, context: dict[str, Any] | None = None, max_memories: int = 5
     ) -> str:
         """获取用于提示词的记忆上下文"""
         memories = await self.retrieve_relevant_memories(query, user_id, context, max_memories)
@@ -186,7 +186,7 @@ class EnhancedMemoryAdapter:
 
         return format_memories_for_llm(memories=memories, query_context=query, config=formatter_config)
 
-    async def get_enhanced_memory_summary(self, user_id: str) -> Dict[str, Any]:
+    async def get_enhanced_memory_summary(self, user_id: str) -> dict[str, Any]:
         """获取增强记忆系统摘要"""
         if not self._initialized or not self.config.enable_enhanced_memory:
             return {"available": False, "reason": "Not initialized or disabled"}
@@ -222,7 +222,7 @@ class EnhancedMemoryAdapter:
             new_avg = (current_avg * (total_processed - 1) + processing_time) / total_processed
             self.adapter_stats["average_processing_time"] = new_avg
 
-    def get_adapter_stats(self) -> Dict[str, Any]:
+    def get_adapter_stats(self) -> dict[str, Any]:
         """获取适配器统计信息"""
         return self.adapter_stats.copy()
 
@@ -253,7 +253,7 @@ class EnhancedMemoryAdapter:
 
 
 # 全局适配器实例
-_enhanced_memory_adapter: Optional[EnhancedMemoryAdapter] = None
+_enhanced_memory_adapter: EnhancedMemoryAdapter | None = None
 
 
 async def get_enhanced_memory_adapter(llm_model: LLMRequest) -> EnhancedMemoryAdapter:
@@ -292,8 +292,8 @@ async def initialize_enhanced_memory_system(llm_model: LLMRequest):
 
 
 async def process_conversation_with_enhanced_memory(
-    context: Dict[str, Any], llm_model: Optional[LLMRequest] = None
-) -> Dict[str, Any]:
+    context: dict[str, Any], llm_model: LLMRequest | None = None
+) -> dict[str, Any]:
     """使用增强记忆系统处理对话，上下文需包含 conversation_text 等信息"""
     if not llm_model:
         # 获取默认的LLM模型
@@ -323,10 +323,10 @@ async def process_conversation_with_enhanced_memory(
 async def retrieve_memories_with_enhanced_system(
     query: str,
     user_id: str,
-    context: Optional[Dict[str, Any]] = None,
+    context: dict[str, Any] | None = None,
     limit: int = 10,
-    llm_model: Optional[LLMRequest] = None,
-) -> List[MemoryChunk]:
+    llm_model: LLMRequest | None = None,
+) -> list[MemoryChunk]:
     """使用增强记忆系统检索记忆"""
     if not llm_model:
         # 获取默认的LLM模型
@@ -345,9 +345,9 @@ async def retrieve_memories_with_enhanced_system(
 async def get_memory_context_for_prompt(
     query: str,
     user_id: str,
-    context: Optional[Dict[str, Any]] = None,
+    context: dict[str, Any] | None = None,
     max_memories: int = 5,
-    llm_model: Optional[LLMRequest] = None,
+    llm_model: LLMRequest | None = None,
 ) -> str:
     """获取用于提示词的记忆上下文"""
     if not llm_model:

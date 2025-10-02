@@ -1,12 +1,12 @@
-from typing import AsyncGenerator
-from src.llm_models.utils_model import LLMRequest, RequestType
-from src.llm_models.payload_content.message import MessageBuilder
-from src.config.config import model_config
-from src.chat.message_receive.message import MessageRecvS4U
-from src.mais4u.mais4u_chat.s4u_prompt import prompt_builder
-from src.common.logger import get_logger
+import asyncio
 import re
+from collections.abc import AsyncGenerator
 
+from src.chat.message_receive.message import MessageRecvS4U
+from src.common.logger import get_logger
+from src.config.config import model_config
+from src.mais4u.mais4u_chat.s4u_prompt import prompt_builder
+from src.mais4u.openai_client import AsyncOpenAIClient
 
 logger = get_logger("s4u_stream_generator")
 
@@ -99,7 +99,7 @@ class S4UStreamGenerator:
 
         logger.info(
             f"{self.current_model_name}思考:{message_txt[:30] + '...' if len(message_txt) > 30 else message_txt}"
-        )  # noqa: E501
+        )
 
         current_client = self.client_1
         self.current_model_name = self.model_1_name

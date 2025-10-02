@@ -1,5 +1,4 @@
 #!/usr/bin/env python3
-# -*- coding: utf-8 -*-
 """
 Bilibili 插件包
 提供B站视频观看体验功能，像真实用户一样浏览和评价视频

@@ -28,29 +28,28 @@
 
 """
 
-import traceback
-import time
 import asyncio
-from typing import Optional, Union, Dict, Any
-from src.common.logger import get_logger
+import time
+import traceback
+from typing import Any
+
+from maim_message import Seg, UserInfo
 
 # 导入依赖
-from src.chat.message_receive.chat_stream import get_chat_manager
-from maim_message import UserInfo
-from src.chat.message_receive.chat_stream import ChatStream
+from src.chat.message_receive.chat_stream import ChatStream, get_chat_manager
+from src.chat.message_receive.message import MessageRecv, MessageSending
 from src.chat.message_receive.uni_message_sender import HeartFCSender
-from src.chat.message_receive.message import MessageSending, MessageRecv
-from maim_message import Seg
+from src.common.logger import get_logger
 from src.config.config import global_config
 
 # 日志记录器
 logger = get_logger("send_api")
 
 # 适配器命令响应等待池
-_adapter_response_pool: Dict[str, asyncio.Future] = {}
+_adapter_response_pool: dict[str, asyncio.Future] = {}
 
 
-def message_dict_to_message_recv(message_dict: Dict[str, Any]) -> Optional[MessageRecv]:
+def message_dict_to_message_recv(message_dict: dict[str, Any]) -> MessageRecv | None:
     """查找要回复的消息
 
     Args:
@@ -134,13 +133,13 @@ async def wait_adapter_response(request_id: str, timeout: float = 30.0) -> dict:
 
 async def _send_to_target(
     message_type: str,
-    content: Union[str, dict],
+    content: str | dict,
     stream_id: str,
     display_message: str = "",
     typing: bool = False,
     reply_to: str = "",
     set_reply: bool = False,
-    reply_to_message: Optional[Dict[str, Any]] = None,
+    reply_to_message: dict[str, Any] | None = None,
     storage_message: bool = True,
     show_log: bool = True,
     selected_expressions:List[int] = None,
@@ -249,7 +248,7 @@ async def text_to_stream(
     stream_id: str,
     typing: bool = False,
     reply_to: str = "",
-    reply_to_message: Optional[Dict[str, Any]] = None,
+    reply_to_message: dict[str, Any] | None = None,
     set_reply: bool = True,
     storage_message: bool = True,
     selected_expressions:List[int] = None,
@@ -317,7 +316,7 @@ async def image_to_stream(
 
 
 async def command_to_stream(
-    command: Union[str, dict],
+    command: str | dict,
     stream_id: str,
     storage_message: bool = True,
     display_message: str = "",
@@ -345,7 +344,7 @@ async def custom_to_stream(
     display_message: str = "",
     typing: bool = False,
     reply_to: str = "",
-    reply_to_message: Optional[Dict[str, Any]] = None,
+    reply_to_message: dict[str, Any] | None = None,
     set_reply: bool = True,
     storage_message: bool = True,
     show_log: bool = True,
@@ -381,8 +380,8 @@ async def custom_to_stream(
 async def adapter_command_to_stream(
     action: str,
     params: dict,
-    platform: Optional[str] = "qq",
-    stream_id: Optional[str] = None,
+    platform: str | None = "qq",
+    stream_id: str | None = None,
     timeout: float = 30.0,
     storage_message: bool = False,
 ) -> dict:
@@ -501,4 +500,4 @@ async def adapter_command_to_stream(
     except Exception as e:
         logger.error(f"[SendAPI] 发送适配器命令时出错: {e}")
         traceback.print_exc()
-        return {"status": "error", "message": f"发送适配器命令时出错: {str(e)}"}
+        return {"status": "error", "message": f"发送适配器命令时出错: {e!s}"}

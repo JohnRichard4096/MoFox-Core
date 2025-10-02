@@ -1,15 +1,15 @@
-# -*- coding: utf-8 -*-
 """
 历史记录工具模块
 提供用于获取QQ空间发送历史的功能。
 """
 
-import orjson
 import os
 from pathlib import Path
-from typing import Dict, Any, Optional, List
+from typing import Any
 
+import orjson
 import requests
+
 from src.common.logger import get_logger
 
 logger = get_logger("MaiZone.HistoryUtils")
@@ -26,11 +26,11 @@ class _CookieManager:
         return str(cookie_dir / f"cookies-{uin}.json")
 
     @staticmethod
-    def load_cookies(qq_account: str) -> Optional[Dict[str, str]]:
+    def load_cookies(qq_account: str) -> dict[str, str] | None:
         cookie_file = _CookieManager.get_cookie_file_path(qq_account)
         if os.path.exists(cookie_file):
             try:
-                with open(cookie_file, "r", encoding="utf-8") as f:
+                with open(cookie_file, encoding="utf-8") as f:
                     return orjson.loads(f.read())
             except Exception as e:
                 logger.error(f"加载Cookie文件失败: {e}")
@@ -42,7 +42,7 @@ class _SimpleQZoneAPI:
 
     LIST_URL = "https://user.qzone.qq.com/proxy/domain/taotao.qq.com/cgi-bin/emotion_cgi_msglist_v6"
 
-    def __init__(self, cookies_dict: Optional[Dict[str, str]] = None):
+    def __init__(self, cookies_dict: dict[str, str] | None = None):
         self.cookies = cookies_dict or {}
         self.gtk2 = ""
         p_skey = self.cookies.get("p_skey") or self.cookies.get("p_skey".upper())
@@ -55,7 +55,7 @@ class _SimpleQZoneAPI:
             hash_val += (hash_val << 5) + ord(char)
         return str(hash_val & 2147483647)
 
-    def get_feed_list(self, target_qq: str, num: int) -> List[Dict[str, Any]]:
+    def get_feed_list(self, target_qq: str, num: int) -> list[dict[str, Any]]:
         try:
             params = {
                 "g_tk": self.gtk2,

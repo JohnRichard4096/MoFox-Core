@@ -1,4 +1,3 @@
-# -*- coding: utf-8 -*-
 """
 处理决策器模块
 
@@ -6,6 +5,7 @@
 """
 
 from src.common.logger import get_logger
+
 from ..types import DetectionResult
 
 logger = get_logger("anti_injector.decision_maker")

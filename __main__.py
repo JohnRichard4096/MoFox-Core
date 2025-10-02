@@ -12,7 +12,7 @@ if __name__ == "__main__":
 
     # 执行bot.py的代码
     bot_file = current_dir / "bot.py"
-    with open(bot_file, "r", encoding="utf-8") as f:
+    with open(bot_file, encoding="utf-8") as f:
         exec(f.read())
 
 

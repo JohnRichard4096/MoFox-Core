@@ -5,33 +5,49 @@ MaiBot 插件系统
 """
 
 # 导出主要的公共接口
+from .apis import (
+    chat_api,
+    component_manage_api,
+    config_api,
+    database_api,
+    emoji_api,
+    generator_api,
+    get_logger,
+    llm_api,
+    message_api,
+    person_api,
+    plugin_manage_api,
+    register_plugin,
+    send_api,
+    tool_api,
+)
 from .base import (
-    BasePlugin,
+    ActionActivationType,
+    ActionInfo,
     BaseAction,
     BaseCommand,
-    BaseTool,
-    ConfigField,
-    ComponentType,
-    ActionActivationType,
-    ChatMode,
-    ComponentInfo,
-    ActionInfo,
-    CommandInfo,
-    PlusCommandInfo,
-    PluginInfo,
-    ToolInfo,
-    PythonDependency,
     BaseEventHandler,
+    BasePlugin,
+    BaseTool,
+    ChatMode,
+    ChatType,
+    CommandArgs,
+    CommandInfo,
+    ComponentInfo,
+    ComponentType,
+    ConfigField,
     EventHandlerInfo,
     EventType,
     MaiMessages,
-    ToolParamType,
+    PluginInfo,
     # 新增的增强命令系统
     PlusCommand,
-    CommandArgs,
     PlusCommandAdapter,
+    PlusCommandInfo,
+    PythonDependency,
+    ToolInfo,
+    ToolParamType,
     create_plus_command_adapter,
-    ChatType,
 )
 
 # 导入工具模块
@@ -41,28 +57,10 @@ from .utils import (
     # validate_plugin_manifest,
     # generate_plugin_manifest,
 )
+from .utils.dependency_config import configure_dependency_settings, get_dependency_config
 
 # 导入依赖管理模块
-from .utils.dependency_manager import get_dependency_manager, configure_dependency_manager
-from .utils.dependency_config import get_dependency_config, configure_dependency_settings
-
-from .apis import (
-    chat_api,
-    tool_api,
-    component_manage_api,
-    config_api,
-    database_api,
-    emoji_api,
-    generator_api,
-    llm_api,
-    message_api,
-    person_api,
-    plugin_manage_api,
-    send_api,
-    register_plugin,
-    get_logger,
-)
-
+from .utils.dependency_manager import configure_dependency_manager, get_dependency_manager
 
 __version__ = "2.0.0"
 

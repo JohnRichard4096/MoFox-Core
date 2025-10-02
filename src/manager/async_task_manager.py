@@ -1,8 +1,7 @@
-from abc import abstractmethod, ABCMeta
-
 import asyncio
-from asyncio import Task, Event, Lock
-from typing import Callable, Dict
+from abc import ABCMeta, abstractmethod
+from asyncio import Event, Lock, Task
+from collections.abc import Callable
 
 from src.common.logger import get_logger
 
@@ -46,7 +45,7 @@ class AsyncTaskManager:
     """异步任务管理器"""
 
     def __init__(self):
-        self.tasks: Dict[str, Task] = {}
+        self.tasks: dict[str, Task] = {}
         """任务列表"""
 
         self.abort_flag: Event = Event()
@@ -116,7 +115,7 @@ class AsyncTaskManager:
             self.tasks[task.task_name] = task_inst  # 将任务添加到任务列表
             logger.debug(f"已启动任务 '{task.task_name}'")
 
-    def get_tasks_status(self) -> Dict[str, Dict[str, str]]:
+    def get_tasks_status(self) -> dict[str, dict[str, str]]:
         """
         获取所有任务的状态
         """
