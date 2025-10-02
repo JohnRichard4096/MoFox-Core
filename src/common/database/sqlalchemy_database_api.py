@@ -124,6 +124,10 @@ async def db_query(
             raise ValueError("query_type must be 'get', 'create', 'update', 'delete' or 'count'")
 
         async with get_db_session() as session:
+            if not session:
+                logger.error("[SQLAlchemy] 无法获取数据库会话")
+                return None if single_result else []
+
             if query_type == "get":
                 query = select(model_class)
 
@@ -221,7 +225,7 @@ async def db_query(
                 # 删除记录
                 affected_rows = 0
                 for record in records_to_delete:
-                    session.delete(record)
+                    await session.delete(record)
                     affected_rows += 1
 
                 return affected_rows
@@ -274,6 +278,9 @@ async def db_save(
     """
     try:
         async with get_db_session() as session:
+            if not session:
+                logger.error("[SQLAlchemy] 无法获取数据库会话")
+                return None
             # 如果提供了key_field和key_value，尝试更新现有记录
             if key_field and key_value is not None:
                 if hasattr(model_class, key_field):

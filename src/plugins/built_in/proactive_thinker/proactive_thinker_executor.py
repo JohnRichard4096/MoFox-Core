@@ -128,7 +128,9 @@ class ProactiveThinkerExecutor:
             limit=3,
             order_by=["-time"]
         )
-        action_history_context = "\n".join([f"- {a['action_data']}" for a in action_history]) if action_history else "无"
+        action_history_context = "无"
+        if isinstance(action_history, list):
+            action_history_context = "\n".join([f"- {a['action_data']}" for a in action_history if isinstance(a, dict)]) or "无"
 
         return {
             "person_id": person_id,
