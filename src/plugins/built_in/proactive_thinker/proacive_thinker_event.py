@@ -33,7 +33,7 @@ class ColdStartTask(AsyncTask):
         """任务主循环，周期性地检查是否有需要“破冰”的新用户。"""
         logger.info("冷启动任务已启动，将周期性检查白名单中的新朋友。")
         # 初始等待一段时间，确保其他服务（如数据库）完全启动
-        await asyncio.sleep(20)
+        await asyncio.sleep(100)
 
         while True:
             try:
@@ -179,7 +179,16 @@ class ProactiveThinkingTask(AsyncTask):
                             f"【日常唤醒】聊天流 {stream.stream_id} 已冷却 {time_since_last_active:.2f} 秒，触发主动对话。"
                         )
 
-                        await self.executor.execute(stream_id=stream.stream_id, start_mode="wake_up")
+                        # 构建符合 executor 期望的 stream_id 格式
+                        if stream.group_info and stream.group_info.group_id:
+                            formatted_stream_id = f"{stream.user_info.platform}:{stream.group_info.group_id}:group"
+                        elif stream.user_info and stream.user_info.user_id:
+                            formatted_stream_id = f"{stream.user_info.platform}:{stream.user_info.user_id}:private"
+                        else:
+                            logger.warning(f"【日常唤醒】跳过 stream {stream.stream_id}，因为它缺少有效的用户信息或群组信息。")
+                            continue
+
+                        await self.executor.execute(stream_id=formatted_stream_id, start_mode="wake_up")
 
                         # 【关键步骤】在触发后，立刻更新活跃时间并保存。
                         # 这可以防止在同一个检查周期内，对同一个目标因为意外的延迟而发送多条消息。
@@ -203,17 +212,15 @@ class ProactiveThinkerEventHandler(BaseEventHandler):
 
     async def execute(self, kwargs: dict | None) -> "HandlerResult":
         """在机器人启动时执行，根据配置决定是否启动后台任务。"""
-        logger.info("检测到插件启动事件，正在初始化【主动思考】插件...")
+        logger.info("检测到插件启动事件，正在初始化【主动思考】")
         # 检查总开关
         if global_config.proactive_thinking.enable:
             # 启动负责“日常唤醒”的核心任务
-            logger.info("【主动思考】功能已启用，正在启动“日常唤醒”任务...")
             proactive_task = ProactiveThinkingTask()
             await async_task_manager.add_task(proactive_task)
 
             # 检查“冷启动”功能的独立开关
             if global_config.proactive_thinking.enable_cold_start:
-                logger.info("“冷启动”功能已启用，正在启动“破冰”任务...")
                 cold_start_task = ColdStartTask()
                 await async_task_manager.add_task(cold_start_task)
 

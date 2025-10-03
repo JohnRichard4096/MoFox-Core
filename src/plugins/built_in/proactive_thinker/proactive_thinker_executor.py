@@ -95,9 +95,9 @@ class ProactiveThinkerExecutor:
         try:
             platform, chat_id, stream_type = stream_id.split(":")
             if stream_type == "private":
-                return chat_api.ChatManager.get_private_stream_by_user_id(platform, chat_id)
+                return chat_api.ChatManager.get_private_stream_by_user_id(platform=platform, user_id=chat_id)
             elif stream_type == "group":
-                return chat_api.ChatManager.get_group_stream_by_group_id(platform, chat_id)
+                return chat_api.ChatManager.get_group_stream_by_group_id(platform=platform,group_id=chat_id)
         except Exception as e:
             logger.error(f"解析 stream_id ({stream_id}) 或获取 stream 失败: {e}")
         return None
@@ -122,7 +122,12 @@ class ProactiveThinkerExecutor:
         # 获取日程
         schedules = await schedule_api.ScheduleAPI.get_today_schedule()
         schedule_context = (
-            "\n".join([f"- {s['title']} ({s['start_time']}-{s['end_time']})" for s in schedules])
+            "\n".join(
+                [
+                    f"- {s.get('time_range', '未知时间')}: {s.get('activity', '未知活动')}"
+                    for s in schedules
+                ]
+            )
             if schedules
             else "今天没有日程安排。"
         )
@@ -157,7 +162,6 @@ class ProactiveThinkerExecutor:
             "schedule_context": schedule_context,
             "recent_chat_history": recent_chat_history,
             "action_history_context": action_history_context,
-            "relationship": {"short_impression": short_impression, "impression": impression, "attitude": attitude},
             "persona": {
                 "core": global_config.personality.personality_core,
                 "side": global_config.personality.personality_side,
@@ -219,7 +223,8 @@ class ProactiveThinkerExecutor:
 
 请输出你的决策:
 """
-
+        if global_config.debug.show_prompt:
+            logger.info(f"主动思考规划器原始提示词:{prompt}")
         is_success, response, _, _ = await llm_api.generate_with_model(
             prompt=prompt, model_config=model_config.model_task_config.utils
         )
@@ -229,6 +234,8 @@ class ProactiveThinkerExecutor:
 
         try:
             # 假设LLM返回JSON格式的决策结果
+            if global_config.debug.show_prompt:
+                logger.info(f"主动思考规划器响应:{response}")
             decision = orjson.loads(response)
             return decision
         except orjson.JSONDecodeError:
@@ -298,4 +305,6 @@ class ProactiveThinkerExecutor:
 - 你的语气应该符合你的人设以及你对Ta的好感度。
 - 直接输出你要说的第一句话，不要包含任何额外的前缀或解释。
 """
+        if global_config.debug.show_prompt:
+            logger.info(f"主动思考回复器原始提示词:{prompt}")
         return prompt
