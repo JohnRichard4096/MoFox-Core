@@ -8,9 +8,8 @@ from dataclasses import dataclass
 from typing import Any
 
 from src.chat.memory_system.integration_layer import IntegrationConfig, IntegrationMode, MemoryIntegrationLayer
-from src.chat.memory_system.memory_formatter import FormatterConfig, format_memories_for_llm
-
 from src.chat.memory_system.memory_chunk import MemoryChunk, MemoryType
+from src.chat.memory_system.memory_formatter import FormatterConfig, format_memories_for_llm
 from src.common.logger import get_logger
 from src.llm_models.utils_model import LLMRequest
 

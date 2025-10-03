@@ -12,7 +12,6 @@ from src.chat.memory_system.enhanced_memory_adapter import (
     process_conversation_with_enhanced_memory,
     retrieve_memories_with_enhanced_system,
 )
-
 from src.common.logger import get_logger
 
 logger = get_logger(__name__)

@@ -6,7 +6,6 @@
 from typing import Any
 
 from src.chat.memory_system.enhanced_memory_hooks import enhanced_memory_hooks
-
 from src.common.logger import get_logger
 
 logger = get_logger(__name__)

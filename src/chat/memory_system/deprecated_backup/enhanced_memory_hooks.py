@@ -7,7 +7,6 @@ from datetime import datetime
 from typing import Any
 
 from src.chat.memory_system.enhanced_memory_manager import enhanced_memory_manager
-
 from src.common.logger import get_logger
 from src.config.config import global_config
 

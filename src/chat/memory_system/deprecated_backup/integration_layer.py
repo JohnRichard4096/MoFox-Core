@@ -10,7 +10,6 @@ from enum import Enum
 from typing import Any
 
 from src.chat.memory_system.enhanced_memory_core import EnhancedMemorySystem
-
 from src.chat.memory_system.memory_chunk import MemoryChunk
 from src.common.logger import get_logger
 from src.llm_models.utils_model import LLMRequest

@@ -9,8 +9,8 @@ from enum import Enum
 from typing import Any
 
 import orjson
-from src.chat.memory_system.enhanced_reranker import EnhancedReRanker, ReRankingConfig
 
+from src.chat.memory_system.enhanced_reranker import EnhancedReRanker, ReRankingConfig
 from src.chat.memory_system.memory_chunk import MemoryChunk, MemoryType
 from src.common.logger import get_logger
 

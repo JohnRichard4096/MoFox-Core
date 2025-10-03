@@ -90,7 +90,7 @@ class MessageManager:
                 return
             await self._check_and_handle_interruption(chat_stream)
             await chat_stream.context_manager.add_message(message)
-        
+
         except Exception as e:
             logger.error(f"添加消息到聊天流 {stream_id} 时发生错误: {e}")
 
