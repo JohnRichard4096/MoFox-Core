@@ -245,6 +245,11 @@ class StreamLoopManager:
 
                 except asyncio.CancelledError:
                     logger.info(f"流循环被取消: {stream_id}")
+                    if self.chatter_manager:
+                        task = self.chatter_manager.get_processing_task(stream_id)
+                        if task and not task.done():
+                            task.cancel()
+                            logger.debug(f"已取消 chatter 处理任务: {stream_id}")
                     break
                 except Exception as e:
                     logger.error(f"流循环出错 {stream_id}: {e}", exc_info=True)
@@ -319,8 +324,9 @@ class StreamLoopManager:
             start_time = time.time()
 
             # 直接调用chatter_manager处理流上下文
-            context.processing_task = asyncio.create_task(self.chatter_manager.process_stream_context(stream_id, context))
-            results = await context.processing_task
+            task = asyncio.create_task(self.chatter_manager.process_stream_context(stream_id, context))
+            self.chatter_manager.set_processing_task(stream_id, task)
+            results = await task
             success = results.get("success", False)
 
             if success:

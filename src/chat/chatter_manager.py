@@ -1,6 +1,7 @@
 import time
 from typing import Any
 
+import asyncio
 from src.chat.planner_actions.action_manager import ChatterActionManager
 from src.common.data_models.message_manager_data_model import StreamContext
 from src.common.logger import get_logger
@@ -15,6 +16,7 @@ class ChatterManager:
         self.action_manager = action_manager
         self.chatter_classes: dict[ChatType, list[type]] = {}
         self.instances: dict[str, BaseChatter] = {}
+        self._processing_tasks: dict[str, asyncio.Task] = {}
 
         # 管理器统计
         self.stats = {
@@ -155,3 +157,11 @@ class ChatterManager:
             "successful_executions": 0,
             "failed_executions": 0,
         }
+
+    def set_processing_task(self, stream_id: str, task: asyncio.Task):
+        """设置流的处理任务"""
+        self._processing_tasks[stream_id] = task
+
+    def get_processing_task(self, stream_id: str) -> asyncio.Task | None:
+        """获取流的处理任务"""
+        return self._processing_tasks.get(stream_id)
