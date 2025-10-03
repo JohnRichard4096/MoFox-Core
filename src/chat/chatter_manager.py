@@ -141,12 +141,16 @@ class ChatterManager:
             self.stats["failed_executions"] += 1
             logger.error(f"处理流 {stream_id} 时发生错误: {e}")
             raise
+        finally:
+            # 无论成功还是失败，都要清理处理任务记录
+            self.remove_processing_task(stream_id)
 
     def get_stats(self) -> dict[str, Any]:
         """获取管理器统计信息"""
         stats = self.stats.copy()
         stats["active_instances"] = len(self.instances)
         stats["registered_chatter_types"] = len(self.chatter_classes)
+        stats["active_processing_tasks"] = len(self.get_active_processing_tasks())
         return stats
 
     def reset_stats(self):
@@ -165,3 +169,66 @@ class ChatterManager:
     def get_processing_task(self, stream_id: str) -> asyncio.Task | None:
         """获取流的处理任务"""
         return self._processing_tasks.get(stream_id)
+
+    def cancel_processing_task(self, stream_id: str) -> bool:
+        """取消流的处理任务
+
+        Args:
+            stream_id: 流ID
+
+        Returns:
+            bool: 是否成功取消了任务
+        """
+        task = self._processing_tasks.get(stream_id)
+        if task and not task.done():
+            try:
+                task.cancel()
+                logger.info(f"已取消流 {stream_id} 的处理任务")
+                return True
+            except Exception as e:
+                logger.warning(f"取消流 {stream_id} 的处理任务时出错: {e}")
+                return False
+        return False
+
+    def remove_processing_task(self, stream_id: str) -> None:
+        """移除流的处理任务记录
+
+        Args:
+            stream_id: 流ID
+        """
+        if stream_id in self._processing_tasks:
+            del self._processing_tasks[stream_id]
+            logger.debug(f"已移除流 {stream_id} 的处理任务记录")
+
+    def get_active_processing_tasks(self) -> dict[str, asyncio.Task]:
+        """获取所有活跃的处理任务
+
+        Returns:
+            Dict[str, asyncio.Task]: 流ID到处理任务的映射
+        """
+        # 过滤掉已完成的任务
+        active_tasks = {}
+        for stream_id, task in self._processing_tasks.items():
+            if not task.done():
+                active_tasks[stream_id] = task
+            else:
+                logger.debug(f"清理已完成的处理任务: {stream_id}")
+                del self._processing_tasks[stream_id]
+
+        return active_tasks
+
+    async def cancel_all_processing_tasks(self) -> int:
+        """取消所有活跃的处理任务
+
+        Returns:
+            int: 成功取消的任务数量
+        """
+        active_tasks = self.get_active_processing_tasks()
+        cancelled_count = 0
+
+        for stream_id, task in active_tasks.items():
+            if self.cancel_processing_task(stream_id):
+                cancelled_count += 1
+
+        logger.info(f"已取消 {cancelled_count} 个活跃处理任务")
+        return cancelled_count

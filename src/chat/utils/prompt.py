@@ -397,9 +397,15 @@ class Prompt:
                 task_timeout = task_timeouts.get(task_name, 2.0)  # 默认2秒
 
                 try:
-                    result = await asyncio.wait_for(task, timeout=task_timeout)
-                    results.append(result)
-                    logger.debug(f"构建任务{task_name}完成 ({task_timeout}s)")
+                    # 确保任务是一个协程对象
+                    if asyncio.iscoroutine(task):
+                        result = await asyncio.wait_for(task, timeout=task_timeout)
+                        results.append(result)
+                        logger.debug(f"构建任务{task_name}完成 ({task_timeout}s)")
+                    else:
+                        logger.warning(f"任务{task_name}不是协程对象，类型: {type(task)}，跳过处理")
+                        default_result = self._get_default_result_for_task(task_name)
+                        results.append(default_result)
                 except asyncio.TimeoutError:
                     logger.warning(f"构建任务{task_name}超时 ({task_timeout}s)，使用默认值")
                     # 为超时任务提供默认值
