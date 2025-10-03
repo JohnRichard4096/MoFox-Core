@@ -104,10 +104,18 @@ class MainSystem:
     async def _async_cleanup(self):
         """异步清理资源"""
         try:
+  
+            # 停止数据库服务
+            try:
+                from src.common.database.database import stop_database
+                await stop_database()
+                logger.info("🛑 数据库服务已停止")
+            except Exception as e:
+                logger.error(f"停止数据库服务时出错: {e}")
+
             # 停止消息管理器
             try:
                 from src.chat.message_manager import message_manager
-
                 await message_manager.stop()
                 logger.info("🛑 消息管理器已停止")
             except Exception as e:
@@ -259,15 +267,14 @@ MoFox_Bot(第三方修改版)
             logger.error(f"回复后关系追踪系统初始化失败: {e}")
             relationship_tracker = None
 
+  
         # 启动情绪管理器
         await mood_manager.start()
         logger.info("情绪管理器初始化成功")
 
         # 初始化聊天管理器
-
         await get_chat_manager()._initialize()
         asyncio.create_task(get_chat_manager()._auto_save_task())
-
         logger.info("聊天管理器初始化成功")
 
         # 初始化增强记忆系统

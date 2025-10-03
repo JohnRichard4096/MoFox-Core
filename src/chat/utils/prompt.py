@@ -526,8 +526,20 @@ class Prompt:
 
             # 构建表达习惯块
             if selected_expressions:
-                style_habits_str = "\n".join([f"- {expr}" for expr in selected_expressions])
-                expression_habits_block = f"- 你可以参考以下的语言习惯，当情景合适就使用，但不要生硬使用，以合理的方式结合到你的回复中：\n{style_habits_str}"
+                # 格式化表达方式，提取关键信息
+                formatted_expressions = []
+                for expr in selected_expressions:
+                    if isinstance(expr, dict):
+                        situation = expr.get("situation", "")
+                        style = expr.get("style", "")
+                        if situation and style:
+                            formatted_expressions.append(f"- {situation}：{style}")
+                
+                if formatted_expressions:
+                    style_habits_str = "\n".join(formatted_expressions)
+                    expression_habits_block = f"你可以参考以下的语言习惯，当情景合适就使用，但不要生硬使用，以合理的方式结合到你的回复中：\n{style_habits_str}"
+                else:
+                    expression_habits_block = ""
             else:
                 expression_habits_block = ""
 

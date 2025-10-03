@@ -131,24 +131,6 @@ class AffinityChatter(BaseChatter):
         """
         return self.planner.get_planner_stats()
 
-    def get_interest_scoring_stats(self) -> dict[str, Any]:
-        """
-        获取兴趣度评分统计信息
-
-        Returns:
-            兴趣度评分统计信息字典
-        """
-        return self.planner.get_interest_scoring_stats()
-
-    def get_relationship_stats(self) -> dict[str, Any]:
-        """
-        获取用户关系统计信息
-
-        Returns:
-            用户关系统计信息字典
-        """
-        return self.planner.get_relationship_stats()
-
     def get_current_mood_state(self) -> str:
         """
         获取当前聊天的情绪状态
@@ -167,27 +149,6 @@ class AffinityChatter(BaseChatter):
         """
         return self.planner.get_mood_stats()
 
-    def get_user_relationship(self, user_id: str) -> float:
-        """
-        获取用户关系分
-
-        Args:
-            user_id: 用户ID
-
-        Returns:
-            用户关系分 (0.0-1.0)
-        """
-        return self.planner.get_user_relationship(user_id)
-
-    def update_interest_keywords(self, new_keywords: dict):
-        """
-        更新兴趣关键词
-
-        Args:
-            new_keywords: 新的兴趣关键词字典
-        """
-        self.planner.update_interest_keywords(new_keywords)
-        logger.info(f"聊天流 {self.stream_id} 已更新兴趣关键词: {list(new_keywords.keys())}")
 
     def reset_stats(self):
         """重置统计信息"""

@@ -293,14 +293,14 @@ class DefaultReplyer:
         try:
             # 构建 Prompt
             with Timer("构建Prompt", {}):  # 内部计时器，可选保留
-                prompt,selected_expressions = await self.build_prompt_reply_context(
+                prompt = await asyncio.create_task(self.build_prompt_reply_context(
+                    reply_to=reply_to,
                     extra_info=extra_info,
                     available_actions=available_actions,
                     choosen_actions=choosen_actions,
                     enable_tool=enable_tool,
                     reply_message=reply_message,
-                    read_mark=read_mark,
-                )
+                ))
 
             if not prompt:
                 logger.warning("构建prompt失败，跳过回复生成")
@@ -591,7 +591,7 @@ class DefaultReplyer:
                 # 获取记忆系统实例
                 memory_system = get_memory_system()
 
-                # 检索相关记忆
+                    # 使用统一记忆系统检索相关记忆
                 enhanced_memories = await memory_system.retrieve_relevant_memories(
                     query=target, user_id=memory_user_id, scope_id=stream.stream_id, context=memory_context, limit=10
                 )

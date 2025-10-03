@@ -23,7 +23,6 @@ class StreamLoopManager:
     def __init__(self, max_concurrent_streams: int | None = None):
         # 流循环任务管理
         self.stream_loops: dict[str, asyncio.Task] = {}
-        self.loop_lock = asyncio.Lock()
 
         # 统计信息
         self.stats: dict[str, Any] = {
@@ -69,35 +68,25 @@ class StreamLoopManager:
 
         # 取消所有流循环
         try:
-            # 使用带超时的锁获取，避免无限等待
-            lock_acquired = await asyncio.wait_for(self.loop_lock.acquire(), timeout=10.0)
-            if not lock_acquired:
-                logger.error("停止管理器时获取锁超时")
-            else:
-                try:
-                    # 创建任务列表以便并发取消
-                    cancel_tasks = []
-                    for stream_id, task in list(self.stream_loops.items()):
-                        if not task.done():
-                            task.cancel()
-                            cancel_tasks.append((stream_id, task))
-                    
-                    # 并发等待所有任务取消
-                    if cancel_tasks:
-                        logger.info(f"正在取消 {len(cancel_tasks)} 个流循环任务...")
-                        await asyncio.gather(
-                            *[self._wait_for_task_cancel(stream_id, task) for stream_id, task in cancel_tasks],
-                            return_exceptions=True
-                        )
-                    
-                    self.stream_loops.clear()
-                    logger.info("所有流循环已清理")
-                finally:
-                    self.loop_lock.release()
-        except asyncio.TimeoutError:
-            logger.error("停止管理器时获取锁超时")
+            # 创建任务列表以便并发取消
+            cancel_tasks = []
+            for stream_id, task in list(self.stream_loops.items()):
+                if not task.done():
+                    task.cancel()
+                    cancel_tasks.append((stream_id, task))
+
+            # 并发等待所有任务取消
+            if cancel_tasks:
+                logger.info(f"正在取消 {len(cancel_tasks)} 个流循环任务...")
+                await asyncio.gather(
+                    *[self._wait_for_task_cancel(stream_id, task) for stream_id, task in cancel_tasks],
+                    return_exceptions=True
+                )
+
+            self.stream_loops.clear()
+            logger.info("所有流循环已清理")
         except Exception as e:
-            logger.error(f"停止管理器时获取锁异常: {e}")
+            logger.error(f"停止管理器时出错: {e}")
 
         logger.info("流循环管理器已停止")
 
@@ -106,88 +95,66 @@ class StreamLoopManager:
 
         Args:
             stream_id: 流ID
+            force: 是否强制启动
 
         Returns:
             bool: 是否成功启动
         """
-        # 使用更细粒度的锁策略：先检查是否需要锁，再获取锁
-        # 快速路径：如果流已存在，无需获取锁
+        # 快速路径：如果流已存在，无需处理
         if stream_id in self.stream_loops:
             logger.debug(f"流 {stream_id} 循环已在运行")
             return True
 
-        # 判断是否需要强制分发（在锁外执行，减少锁持有时间）
+        # 判断是否需要强制分发
         should_force = force or self._should_force_dispatch_for_stream(stream_id)
 
-        # 获取锁进行流循环创建
-        try:
-            # 使用带超时的锁获取，避免无限等待
-            lock_acquired = await asyncio.wait_for(self.loop_lock.acquire(), timeout=5.0)
-            if not lock_acquired:
-                logger.error(f"获取流循环锁超时: {stream_id}")
-                return False
-        except asyncio.TimeoutError:
-            logger.error(f"获取流循环锁超时: {stream_id}")
-            return False
-        except Exception as e:
-            logger.error(f"获取流循环锁异常: {stream_id} - {e}")
+        # 检查是否超过最大并发限制
+        current_streams = len(self.stream_loops)
+        if current_streams >= self.max_concurrent_streams and not should_force:
+            logger.warning(
+                f"超过最大并发流数限制({current_streams}/{self.max_concurrent_streams})，无法启动流 {stream_id}"
+            )
             return False
 
-        try:
-            # 双重检查：在获取锁后再次检查流是否已存在
+        # 处理强制分发情况
+        if should_force and current_streams >= self.max_concurrent_streams:
+            logger.warning(
+                f"流 {stream_id} 未读消息积压严重(>{self.force_dispatch_unread_threshold})，突破并发限制强制启动分发 (当前: {current_streams}/{self.max_concurrent_streams})"
+            )
+            # 检查是否有现有的分发循环，如果有则先移除
             if stream_id in self.stream_loops:
-                logger.debug(f"流 {stream_id} 循环已在运行（双重检查）")
-                return True
+                logger.info(f"发现现有流循环 {stream_id}，将先移除再重新创建")
+                existing_task = self.stream_loops[stream_id]
+                if not existing_task.done():
+                    existing_task.cancel()
+                    # 创建异步任务来等待取消完成，并添加异常处理
+                    cancel_task = asyncio.create_task(
+                        self._wait_for_task_cancel(stream_id, existing_task),
+                        name=f"cancel_existing_loop_{stream_id}"
+                    )
+                    # 为取消任务添加异常处理，避免孤儿任务
+                    cancel_task.add_done_callback(
+                        lambda task: logger.debug(f"取消任务完成: {stream_id}") if not task.exception()
+                        else logger.error(f"取消任务异常: {stream_id} - {task.exception()}")
+                    )
+                # 从字典中移除
+                del self.stream_loops[stream_id]
+                current_streams -= 1  # 更新当前流数量
 
-            # 检查是否超过最大并发限制
-            current_streams = len(self.stream_loops)
-            if current_streams >= self.max_concurrent_streams and not should_force:
-                logger.warning(
-                    f"超过最大并发流数限制({current_streams}/{self.max_concurrent_streams})，无法启动流 {stream_id}"
-                )
-                return False
+        # 创建流循环任务
+        try:
+            task = asyncio.create_task(
+                self._stream_loop(stream_id),
+                name=f"stream_loop_{stream_id}"  # 为任务添加名称，便于调试
+            )
+            self.stream_loops[stream_id] = task
+            self.stats["total_loops"] += 1
 
-            if should_force and current_streams >= self.max_concurrent_streams:
-                logger.warning(
-                    f"流 {stream_id} 未读消息积压严重(>{self.force_dispatch_unread_threshold})，突破并发限制强制启动分发 (当前: {current_streams}/{self.max_concurrent_streams})"
-                )
-                # 检查是否有现有的分发循环，如果有则先移除
-                if stream_id in self.stream_loops:
-                    logger.info(f"发现现有流循环 {stream_id}，将先移除再重新创建")
-                    existing_task = self.stream_loops[stream_id]
-                    if not existing_task.done():
-                        existing_task.cancel()
-                        # 创建异步任务来等待取消完成，并添加异常处理
-                        cancel_task = asyncio.create_task(
-                            self._wait_for_task_cancel(stream_id, existing_task),
-                            name=f"cancel_existing_loop_{stream_id}"
-                        )
-                        # 为取消任务添加异常处理，避免孤儿任务
-                        cancel_task.add_done_callback(
-                            lambda task: logger.debug(f"取消任务完成: {stream_id}") if not task.exception()
-                            else logger.error(f"取消任务异常: {stream_id} - {task.exception()}")
-                        )
-                    # 从字典中移除
-                    del self.stream_loops[stream_id]
-                    current_streams -= 1  # 更新当前流数量
-
-            # 创建流循环任务
-            try:
-                task = asyncio.create_task(
-                    self._stream_loop(stream_id),
-                    name=f"stream_loop_{stream_id}"  # 为任务添加名称，便于调试
-                )
-                self.stream_loops[stream_id] = task
-                self.stats["total_loops"] += 1
-
-                logger.info(f"启动流循环: {stream_id} (当前总数: {len(self.stream_loops)})")
-                return True
-            except Exception as e:
-                logger.error(f"创建流循环任务失败: {stream_id} - {e}")
-                return False
-        finally:
-            # 确保锁被释放
-            self.loop_lock.release()
+            logger.info(f"启动流循环: {stream_id} (当前总数: {len(self.stream_loops)})")
+            return True
+        except Exception as e:
+            logger.error(f"创建流循环任务失败: {stream_id} - {e}")
+            return False
 
     async def stop_stream_loop(self, stream_id: str) -> bool:
         """停止指定流的循环任务
@@ -198,50 +165,27 @@ class StreamLoopManager:
         Returns:
             bool: 是否成功停止
         """
-        # 快速路径：如果流不存在，无需获取锁
+        # 快速路径：如果流不存在，无需处理
         if stream_id not in self.stream_loops:
             logger.debug(f"流 {stream_id} 循环不存在，无需停止")
             return False
 
-        # 获取锁进行流循环停止
-        try:
-            # 使用带超时的锁获取，避免无限等待
-            lock_acquired = await asyncio.wait_for(self.loop_lock.acquire(), timeout=5.0)
-            if not lock_acquired:
-                logger.error(f"获取流循环锁超时: {stream_id}")
-                return False
-        except asyncio.TimeoutError:
-            logger.error(f"获取流循环锁超时: {stream_id}")
-            return False
-        except Exception as e:
-            logger.error(f"获取流循环锁异常: {stream_id} - {e}")
-            return False
+        task = self.stream_loops[stream_id]
+        if not task.done():
+            task.cancel()
+            try:
+                # 设置取消超时，避免无限等待
+                await asyncio.wait_for(task, timeout=5.0)
+            except asyncio.CancelledError:
+                logger.debug(f"流循环任务已取消: {stream_id}")
+            except asyncio.TimeoutError:
+                logger.warning(f"流循环任务取消超时: {stream_id}")
+            except Exception as e:
+                logger.error(f"等待流循环任务结束时出错: {stream_id} - {e}")
 
-        try:
-            # 双重检查：在获取锁后再次检查流是否存在
-            if stream_id not in self.stream_loops:
-                logger.debug(f"流 {stream_id} 循环不存在（双重检查）")
-                return False
-
-            task = self.stream_loops[stream_id]
-            if not task.done():
-                task.cancel()
-                try:
-                    # 设置取消超时，避免无限等待
-                    await asyncio.wait_for(task, timeout=5.0)
-                except asyncio.CancelledError:
-                    logger.debug(f"流循环任务已取消: {stream_id}")
-                except asyncio.TimeoutError:
-                    logger.warning(f"流循环任务取消超时: {stream_id}")
-                except Exception as e:
-                    logger.error(f"等待流循环任务结束时出错: {stream_id} - {e}")
-            
-            del self.stream_loops[stream_id]
-            logger.info(f"停止流循环: {stream_id} (剩余: {len(self.stream_loops)})")
-            return True
-        finally:
-            # 确保锁被释放
-            self.loop_lock.release()
+        del self.stream_loops[stream_id]
+        logger.info(f"停止流循环: {stream_id} (剩余: {len(self.stream_loops)})")
+        return True
 
     async def _stream_loop(self, stream_id: str) -> None:
         """单个流的无限循环
@@ -309,22 +253,9 @@ class StreamLoopManager:
 
         finally:
             # 清理循环标记
-            try:
-                # 使用带超时的锁获取，避免无限等待
-                lock_acquired = await asyncio.wait_for(self.loop_lock.acquire(), timeout=5.0)
-                if not lock_acquired:
-                    logger.error(f"流结束时获取锁超时: {stream_id}")
-                else:
-                    try:
-                        if stream_id in self.stream_loops:
-                            del self.stream_loops[stream_id]
-                            logger.debug(f"清理流循环标记: {stream_id}")
-                    finally:
-                        self.loop_lock.release()
-            except asyncio.TimeoutError:
-                logger.error(f"流结束时获取锁超时: {stream_id}")
-            except Exception as e:
-                logger.error(f"流结束时获取锁异常: {stream_id} - {e}")
+            if stream_id in self.stream_loops:
+                del self.stream_loops[stream_id]
+                logger.debug(f"清理流循环标记: {stream_id}")
 
             logger.info(f"流循环结束: {stream_id}")
 

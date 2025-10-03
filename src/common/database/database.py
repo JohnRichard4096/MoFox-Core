@@ -7,6 +7,10 @@ from src.common.database.sqlalchemy_init import initialize_database_compat
 from src.common.database.sqlalchemy_models import get_db_session, get_engine
 from src.common.logger import get_logger
 
+# 数据库批量调度器和连接池
+from src.common.database.db_batch_scheduler import get_db_batch_scheduler
+from src.common.database.connection_pool_manager import start_connection_pool, stop_connection_pool
+
 install(extra_lines=3)
 
 _sql_engine = None
@@ -25,7 +29,22 @@ class DatabaseProxy:
     @staticmethod
     async def initialize(*args, **kwargs):
         """初始化数据库连接"""
-        return await initialize_database_compat()
+        result = await initialize_database_compat()
+
+        # 启动数据库优化系统
+        try:
+            # 启动数据库批量调度器
+            batch_scheduler = get_db_batch_scheduler()
+            await batch_scheduler.start()
+            logger.info("🚀 数据库批量调度器启动成功")
+
+            # 启动连接池管理器
+            await start_connection_pool()
+            logger.info("🚀 连接池管理器启动成功")
+        except Exception as e:
+            logger.error(f"启动数据库优化系统失败: {e}")
+
+        return result
 
 
 class SQLAlchemyTransaction:
@@ -101,3 +120,18 @@ async def initialize_sql_database(database_config):
     except Exception as e:
         logger.error(f"初始化SQL数据库失败: {e}")
         return None
+
+
+async def stop_database():
+    """停止数据库相关服务"""
+    try:
+        # 停止连接池管理器
+        await stop_connection_pool()
+        logger.info("🛑 连接池管理器已停止")
+
+        # 停止数据库批量调度器
+        batch_scheduler = get_db_batch_scheduler()
+        await batch_scheduler.stop()
+        logger.info("🛑 数据库批量调度器已停止")
+    except Exception as e:
+        logger.error(f"停止数据库优化系统时出错: {e}")

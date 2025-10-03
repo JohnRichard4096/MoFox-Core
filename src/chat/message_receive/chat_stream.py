@@ -602,12 +602,62 @@ class ChatManager:
             return None
 
     @staticmethod
+    def _prepare_stream_data(stream_data_dict: dict) -> dict:
+        """准备聊天流保存数据"""
+        user_info_d = stream_data_dict.get("user_info")
+        group_info_d = stream_data_dict.get("group_info")
+
+        return {
+            "platform": stream_data_dict["platform"],
+            "create_time": stream_data_dict["create_time"],
+            "last_active_time": stream_data_dict["last_active_time"],
+            "user_platform": user_info_d["platform"] if user_info_d else "",
+            "user_id": user_info_d["user_id"] if user_info_d else "",
+            "user_nickname": user_info_d["user_nickname"] if user_info_d else "",
+            "user_cardname": user_info_d.get("user_cardname", "") if user_info_d else None,
+            "group_platform": group_info_d["platform"] if group_info_d else "",
+            "group_id": group_info_d["group_id"] if group_info_d else "",
+            "group_name": group_info_d["group_name"] if group_info_d else "",
+            "energy_value": stream_data_dict.get("energy_value", 5.0),
+            "sleep_pressure": stream_data_dict.get("sleep_pressure", 0.0),
+            "focus_energy": stream_data_dict.get("focus_energy", 0.5),
+            # 新增动态兴趣度系统字段
+            "base_interest_energy": stream_data_dict.get("base_interest_energy", 0.5),
+            "message_interest_total": stream_data_dict.get("message_interest_total", 0.0),
+            "message_count": stream_data_dict.get("message_count", 0),
+            "action_count": stream_data_dict.get("action_count", 0),
+            "reply_count": stream_data_dict.get("reply_count", 0),
+            "last_interaction_time": stream_data_dict.get("last_interaction_time", time.time()),
+            "consecutive_no_reply": stream_data_dict.get("consecutive_no_reply", 0),
+            "interruption_count": stream_data_dict.get("interruption_count", 0),
+        }
+
+    @staticmethod
     async def _save_stream(stream: ChatStream):
         """保存聊天流到数据库"""
         if stream.saved:
             return
         stream_data_dict = stream.to_dict()
 
+        # 尝试使用数据库批量调度器
+        try:
+            from src.common.database.db_batch_scheduler import batch_update, get_batch_session
+
+            async with get_batch_session() as scheduler:
+                # 使用批量更新
+                result = await batch_update(
+                    model_class=ChatStreams,
+                    conditions={"stream_id": stream_data_dict["stream_id"]},
+                    data=ChatManager._prepare_stream_data(stream_data_dict)
+                )
+                if result and result > 0:
+                    stream.saved = True
+                    logger.debug(f"聊天流 {stream.stream_id} 通过批量调度器保存成功")
+                    return
+        except (ImportError, Exception) as e:
+            logger.debug(f"批量调度器保存聊天流失败，使用原始方法: {e}")
+
+        # 回退到原始方法
         async def _db_save_stream_async(s_data_dict: dict):
             async with get_db_session() as session:
                 user_info_d = s_data_dict.get("user_info")

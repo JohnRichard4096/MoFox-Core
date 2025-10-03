@@ -16,6 +16,7 @@ from sqlalchemy.ext.declarative import declarative_base
 from sqlalchemy.orm import Mapped, mapped_column
 
 from src.common.logger import get_logger
+from src.common.database.connection_pool_manager import get_connection_pool_manager
 
 logger = get_logger("sqlalchemy_models")
 
@@ -764,8 +765,9 @@ async def get_db_session() -> AsyncGenerator[AsyncSession]:
     """
     异步数据库会话上下文管理器。
     在初始化失败时会yield None，调用方需要检查会话是否为None。
+
+    现在使用透明的连接池管理器来复用现有连接，提高并发性能。
     """
-    session: AsyncSession | None = None
     SessionLocal = None
     try:
         _, SessionLocal = await initialize_database()
@@ -775,24 +777,21 @@ async def get_db_session() -> AsyncGenerator[AsyncSession]:
         logger.error(f"数据库初始化失败，无法创建会话: {e}")
         raise
 
-    try:
-        session = SessionLocal()
-        # 对于 SQLite，在会话开始时设置 PRAGMA
+    # 使用连接池管理器获取会话
+    pool_manager = get_connection_pool_manager()
+
+    async with pool_manager.get_session(SessionLocal) as session:
+        # 对于 SQLite，在会话开始时设置 PRAGMA（仅对新连接）
         from src.config.config import global_config
 
         if global_config.database.database_type == "sqlite":
-            await session.execute(text("PRAGMA busy_timeout = 60000"))
-            await session.execute(text("PRAGMA foreign_keys = ON"))
+            try:
+                await session.execute(text("PRAGMA busy_timeout = 60000"))
+                await session.execute(text("PRAGMA foreign_keys = ON"))
+            except Exception as e:
+                logger.debug(f"设置 SQLite PRAGMA 时出错（可能是复用连接）: {e}")
 
         yield session
-    except Exception as e:
-        logger.error(f"数据库会话期间发生错误: {e}")
-        if session:
-            await session.rollback()
-        raise  # 将会话期间的错误重新抛出给调用者
-    finally:
-        if session:
-            await session.close()
 
 
 async def get_engine():
