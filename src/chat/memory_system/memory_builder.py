@@ -32,7 +32,10 @@ import time
 from dataclasses import dataclass
 from datetime import datetime
 from enum import Enum
-from typing import Any
+from typing import Any, Type, TypeVar
+
+E = TypeVar("E", bound=Enum)
+
 
 import orjson
 
@@ -47,6 +50,21 @@ from src.common.logger import get_logger
 from src.llm_models.utils_model import LLMRequest
 
 logger = get_logger(__name__)
+
+
+CHINESE_TO_MEMORY_TYPE: dict[str, MemoryType] = {
+    "个人事实": MemoryType.PERSONAL_FACT,
+    "事件": MemoryType.EVENT,
+    "偏好": MemoryType.PREFERENCE,
+    "观点": MemoryType.OPINION,
+    "关系": MemoryType.RELATIONSHIP,
+    "情感": MemoryType.EMOTION,
+    "知识": MemoryType.KNOWLEDGE,
+    "技能": MemoryType.SKILL,
+    "目标": MemoryType.GOAL,
+    "经验": MemoryType.EXPERIENCE,
+    "上下文": MemoryType.CONTEXTUAL,
+}
 
 
 class ExtractionStrategy(Enum):
@@ -428,7 +446,7 @@ class MemoryBuilder:
                     subject=normalized_subject,
                     predicate=predicate_value,
                     obj=object_value,
-                    memory_type=MemoryType(mem_data.get("type", "contextual")),
+                    memory_type=self._resolve_memory_type(mem_data.get("type")),
                     chat_id=context.get("chat_id"),
                     source_context=mem_data.get("reasoning", ""),
                     importance=importance_level,
@@ -459,7 +477,33 @@ class MemoryBuilder:
 
         return memories
 
-    def _parse_enum_value(self, enum_cls: type[Enum], raw_value: Any, default: Enum, field_name: str) -> Enum:
+    def _resolve_memory_type(self, type_str: Any) -> MemoryType:
+        """健壮地解析记忆类型，兼容中文和英文"""
+        if not isinstance(type_str, str) or not type_str.strip():
+            return MemoryType.CONTEXTUAL
+
+        cleaned_type = type_str.strip()
+
+        # 尝试中文映射
+        if cleaned_type in CHINESE_TO_MEMORY_TYPE:
+            return CHINESE_TO_MEMORY_TYPE[cleaned_type]
+
+        # 尝试直接作为枚举值解析
+        try:
+            return MemoryType(cleaned_type.lower().replace(" ", "_"))
+        except ValueError:
+            pass
+
+        # 尝试作为枚举名解析
+        try:
+            return MemoryType[cleaned_type.upper()]
+        except KeyError:
+            pass
+
+        logger.warning(f"无法解析未知的记忆类型 '{type_str}'，回退到上下文类型")
+        return MemoryType.CONTEXTUAL
+
+    def _parse_enum_value(self, enum_cls: Type[E], raw_value: Any, default: E, field_name: str) -> E:
         """解析枚举值，兼容数字/字符串表示"""
         if isinstance(raw_value, enum_cls):
             return raw_value
