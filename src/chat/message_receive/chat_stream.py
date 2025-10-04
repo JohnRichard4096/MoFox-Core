@@ -161,7 +161,7 @@ class ChatStream:
         self.last_active_time = time.time()
         self.saved = False
 
-    def set_context(self, message: "MessageRecv"):
+    async def set_context(self, message: "MessageRecv"):
         """设置聊天消息上下文"""
         # 将MessageRecv转换为DatabaseMessages并设置到stream_context
         import json
@@ -234,6 +234,7 @@ class ChatStream:
             # 新增兴趣度系统字段 - 添加安全处理
             actions=self._safe_get_actions(message),
             should_reply=getattr(message, "should_reply", False),
+            should_act=getattr(message, "should_act", False),
         )
 
         self.stream_context.set_current_message(db_message)
@@ -279,6 +280,45 @@ class ChatStream:
         except Exception as e:
             logger.warning(f"获取actions字段失败: {e}")
             return None
+
+    async def _calculate_message_interest(self, db_message):
+        """计算消息兴趣值并更新消息对象"""
+        try:
+            from src.chat.interest_system.interest_manager import get_interest_manager
+
+            interest_manager = get_interest_manager()
+
+            if interest_manager.has_calculator():
+                # 使用兴趣值计算组件计算
+                result = await interest_manager.calculate_interest(db_message)
+
+                if result.success:
+                    # 更新消息对象的兴趣值相关字段
+                    db_message.interest_value = result.interest_value
+                    db_message.should_reply = result.should_reply
+                    db_message.should_act = result.should_act
+
+                    logger.debug(f"消息 {db_message.message_id} 兴趣值已更新: {result.interest_value:.3f}, "
+                                f"should_reply: {result.should_reply}, should_act: {result.should_act}")
+                else:
+                    logger.warning(f"消息 {db_message.message_id} 兴趣值计算失败: {result.error_message}")
+                    # 使用默认值
+                    db_message.interest_value = 0.3
+                    db_message.should_reply = False
+                    db_message.should_act = False
+            else:
+                # 没有兴趣值计算组件，抛出异常
+                raise RuntimeError("没有可用的兴趣值计算组件")
+
+        except Exception as e:
+            logger.error(f"计算消息兴趣值失败: {e}", exc_info=True)
+            # 异常情况下使用默认值
+            if hasattr(db_message, 'interest_value'):
+                db_message.interest_value = 0.3
+            if hasattr(db_message, 'should_reply'):
+                db_message.should_reply = False
+            if hasattr(db_message, 'should_act'):
+                db_message.should_act = False
 
     def _extract_reply_from_segment(self, segment) -> str | None:
         """从消息段中提取reply_to信息"""
@@ -497,7 +537,9 @@ class ChatManager:
                         optimized_stream.set_context(self.last_messages[stream_id])
 
                     # 转换为原始ChatStream以保持兼容性
-                    return self._convert_to_original_stream(optimized_stream)
+                    original_stream = self._convert_to_original_stream(optimized_stream)
+
+                    return original_stream
 
             except Exception as e:
                 logger.debug(f"缓存管理器获取流失败，使用原始方法: {e}")
@@ -517,7 +559,7 @@ class ChatManager:
                 from .message import MessageRecv  # 延迟导入，避免循环引用
 
                 if stream_id in self.last_messages and isinstance(self.last_messages[stream_id], MessageRecv):
-                    stream.set_context(self.last_messages[stream_id])
+                    await stream.set_context(self.last_messages[stream_id])
                 else:
                     logger.error(f"聊天流 {stream_id} 不在最后消息列表中，可能是新创建的")
                 return stream
@@ -581,7 +623,7 @@ class ChatManager:
         from .message import MessageRecv  # 延迟导入，避免循环引用
 
         if stream_id in self.last_messages and isinstance(self.last_messages[stream_id], MessageRecv):
-            stream.set_context(self.last_messages[stream_id])
+            await stream.set_context(self.last_messages[stream_id])
         else:
             logger.error(f"聊天流 {stream_id} 不在最后消息列表中，可能是新创建的")
 
@@ -597,13 +639,13 @@ class ChatManager:
         await self._save_stream(stream)
         return stream
 
-    def get_stream(self, stream_id: str) -> ChatStream | None:
+    async def get_stream(self, stream_id: str) -> ChatStream | None:
         """通过stream_id获取聊天流"""
         stream = self.streams.get(stream_id)
         if not stream:
             return None
         if stream_id in self.last_messages:
-            stream.set_context(self.last_messages[stream_id])
+            await stream.set_context(self.last_messages[stream_id])
         return stream
 
     def get_stream_by_info(
@@ -613,9 +655,9 @@ class ChatManager:
         stream_id = self._generate_stream_id(platform, user_info, group_info)
         return self.streams.get(stream_id)
 
-    def get_stream_name(self, stream_id: str) -> str | None:
+    async def get_stream_name(self, stream_id: str) -> str | None:
         """根据 stream_id 获取聊天流名称"""
-        stream = self.get_stream(stream_id)
+        stream = await self.get_stream(stream_id)
         if not stream:
             return None
 
@@ -813,8 +855,9 @@ class ChatManager:
                 stream = ChatStream.from_dict(data)
                 stream.saved = True
                 self.streams[stream.stream_id] = stream
-                if stream.stream_id in self.last_messages:
-                    stream.set_context(self.last_messages[stream.stream_id])
+                # 不在异步加载中设置上下文，避免复杂依赖
+                # if stream.stream_id in self.last_messages:
+                #     await stream.set_context(self.last_messages[stream.stream_id])
 
                 # 确保 ChatStream 有自己的 context_manager
                 if not hasattr(stream, "context_manager"):

@@ -165,7 +165,7 @@ class ChatterActionManager:
             logger.debug(f"🎯 [ActionManager] execute_action接收到 target_message: {target_message}")
             # 通过chat_id获取chat_stream
             chat_manager = get_chat_manager()
-            chat_stream = chat_manager.get_stream(chat_id)
+            chat_stream = await chat_manager.get_stream(chat_id)
 
             if not chat_stream:
                 logger.error(f"{log_prefix} 无法找到chat_id对应的chat_stream: {chat_id}")
@@ -322,13 +322,13 @@ class ChatterActionManager:
             from src.plugin_system.apis.chat_api import get_chat_manager
 
             chat_manager = get_chat_manager()
-            chat_stream = chat_manager.get_stream(stream_id)
+            chat_stream = await chat_manager.get_stream(stream_id)
             if chat_stream:
                 context = chat_stream.context_manager
                 if context.context.interruption_count > 0:
                     old_count = context.context.interruption_count
                     old_afc_adjustment = context.context.get_afc_threshold_adjustment()
-                    context.context.reset_interruption_count()
+                    await context.context.reset_interruption_count()
                     logger.debug(
                         f"动作执行成功，重置聊天流 {stream_id} 的打断计数: {old_count} -> 0, afc调整: {old_afc_adjustment} -> 0"
                     )

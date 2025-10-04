@@ -240,6 +240,7 @@ class Messages(Base):
     # 兴趣度系统字段
     actions = Column(Text, nullable=True)  # JSON格式存储动作列表
     should_reply = Column(Boolean, nullable=True, default=False)
+    should_act = Column(Boolean, nullable=True, default=False)
 
     __table_args__ = (
         Index("idx_messages_message_id", "message_id"),
@@ -247,6 +248,7 @@ class Messages(Base):
         Index("idx_messages_time", "time"),
         Index("idx_messages_user_id", "user_id"),
         Index("idx_messages_should_reply", "should_reply"),
+        Index("idx_messages_should_act", "should_act"),
     )
 
 

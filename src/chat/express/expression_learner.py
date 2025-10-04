@@ -63,7 +63,7 @@ class ExpressionLearner:
             model_set=model_config.model_task_config.replyer, request_type="expressor.learner"
         )
         self.chat_id = chat_id
-        self.chat_name = get_chat_manager().get_stream_name(chat_id) or chat_id
+        self.chat_name = chat_id  # 初始化时使用chat_id，稍后异步更新
 
         # 维护每个chat的上次学习时间
         self.last_learning_time: float = time.time()
@@ -71,6 +71,14 @@ class ExpressionLearner:
         # 学习参数
         self.min_messages_for_learning = 25  # 触发学习所需的最少消息数
         self.min_learning_interval = 300  # 最短学习时间间隔（秒）
+        self._chat_name_initialized = False
+
+    async def _initialize_chat_name(self):
+        """异步初始化chat_name"""
+        if not self._chat_name_initialized:
+            stream_name = await get_chat_manager().get_stream_name(self.chat_id)
+            self.chat_name = stream_name or self.chat_id
+            self._chat_name_initialized = True
 
     def can_learn_for_chat(self) -> bool:
         """
@@ -144,6 +152,9 @@ class ExpressionLearner:
         Returns:
             bool: 是否成功触发学习
         """
+        # 初始化chat_name
+        await self._initialize_chat_name()
+
         if not await self.should_trigger_learning():
             return False
 
@@ -293,7 +304,7 @@ class ExpressionLearner:
             return []
         learnt_expressions, chat_id = res
 
-        chat_stream = get_chat_manager().get_stream(chat_id)
+        chat_stream = await get_chat_manager().get_stream(chat_id)
         if chat_stream is None:
             group_name = f"聊天流 {chat_id}"
         elif chat_stream.group_info:

@@ -55,8 +55,8 @@ class SingleStreamContextManager:
         """
         try:
             self.context.add_message(message)
-            # 推迟兴趣度计算到分发阶段
-            message.interest_value = getattr(message, "interest_value", None)
+            # 在上下文管理器中计算兴趣值
+            await self._calculate_message_interest(message)
             self.total_messages += 1
             self.last_access_time = time.time()
             # 启动流的循环任务（如果还未启动）
@@ -228,51 +228,44 @@ class SingleStreamContextManager:
 
     async def _calculate_message_interest(self, message: DatabaseMessages) -> float:
         """
-        异步计算消息的兴趣度。
-        此方法通过检查当前是否存在正在运行的 asyncio 事件循环来兼容同步和异步调用。
+        在上下文管理器中计算消息的兴趣度
         """
-
-        # 内部异步函数，封装实际的计算逻辑
-        async def _get_score():
-            try:
-                from src.plugins.built_in.affinity_flow_chatter.interest_scoring import (
-                    chatter_interest_scoring_system,
-                )
-
-                interest_score = await chatter_interest_scoring_system._calculate_single_message_score(
-                    message=message, bot_nickname=global_config.bot.nickname
-                )
-                interest_value = interest_score.total_score
-                logger.debug(f"使用插件内部系统计算兴趣度: {interest_value:.3f}")
-                return interest_value
-            except ImportError as e:
-                logger.debug(f"兴趣度计算插件加载失败，可能未启用: {e}")
-                return 0.5
-            except Exception as e:
-                # 在某些情况下（例如机器人自己的消息），没有兴趣度是正常的
-                logger.info(f"插件内部兴趣度计算失败，使用默认值: {e}")
-                return 0.5
-
-        # 检查并获取当前事件循环
         try:
-            loop = asyncio.get_running_loop()
-        except RuntimeError:  # 'RuntimeError: There is no current event loop...'
-            loop = None
+            from src.chat.interest_system.interest_manager import get_interest_manager
 
-        if loop and loop.is_running():
-            # 如果事件循环正在运行，直接 await
-            return await _get_score()
-        else:
-            # 否则，使用 asyncio.run() 来安全执行
-            return asyncio.run(_get_score())
+            interest_manager = get_interest_manager()
+
+            if interest_manager.has_calculator():
+                # 使用兴趣值计算组件计算
+                result = await interest_manager.calculate_interest(message)
+
+                if result.success:
+                    # 更新消息对象的兴趣值相关字段
+                    message.interest_value = result.interest_value
+                    message.should_reply = result.should_reply
+                    message.should_act = result.should_act
+
+                    logger.debug(f"消息 {message.message_id} 兴趣值已更新: {result.interest_value:.3f}, "
+                                f"should_reply: {result.should_reply}, should_act: {result.should_act}")
+                    return result.interest_value
+                else:
+                    logger.warning(f"消息 {message.message_id} 兴趣值计算失败: {result.error_message}")
+                    return 0.5
+            else:
+                logger.debug("未找到兴趣值计算器，使用默认兴趣值")
+                return 0.5
+
+        except Exception as e:
+            logger.error(f"计算消息兴趣度时发生错误: {e}", exc_info=True)
+            return 0.5
 
     async def add_message_async(self, message: DatabaseMessages, skip_energy_update: bool = False) -> bool:
         """异步实现的 add_message：将消息添加到 context，并 await 能量更新与分发。"""
         try:
             self.context.add_message(message)
 
-            # 推迟兴趣度计算到分发阶段
-            message.interest_value = getattr(message, "interest_value", None)
+            # 在上下文管理器中计算兴趣值
+            await self._calculate_message_interest(message)
 
             self.total_messages += 1
             self.last_access_time = time.time()
@@ -280,7 +273,7 @@ class SingleStreamContextManager:
             # 启动流的循环任务（如果还未启动）
             asyncio.create_task(stream_loop_manager.start_stream_loop(self.stream_id))
 
-            logger.debug(f"添加消息到单流上下文(异步): {self.stream_id} (兴趣度待计算)")
+            logger.debug(f"添加消息到单流上下文(异步): {self.stream_id}")
             return True
         except Exception as e:
             logger.error(f"添加消息到单流上下文失败 (async) {self.stream_id}: {e}", exc_info=True)

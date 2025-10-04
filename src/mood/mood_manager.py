@@ -48,16 +48,26 @@ class ChatMood:
     def __init__(self, chat_id: str):
         self.chat_id: str = chat_id
 
-        chat_manager = get_chat_manager()
-        self.chat_stream = chat_manager.get_stream(self.chat_id)
-
-        if not self.chat_stream:
-            raise ValueError(f"Chat stream for chat_id {chat_id} not found")
-
-        self.log_prefix = f"[{self.chat_stream.group_info.group_name if self.chat_stream.group_info else self.chat_stream.user_info.user_nickname}]"
+        # 这些将在异步初始化中设置
+        self.chat_stream = None  # type: ignore
+        self.log_prefix = f"[{chat_id}]"
+        self._initialized = False
 
         self.mood_state: str = "感觉很平静"
         self.is_angry_from_wakeup: bool = False  # 是否因被吵醒而愤怒
+
+    async def _initialize(self):
+        """异步初始化方法"""
+        if not self._initialized:
+            from src.chat.message_receive.chat_stream import get_chat_manager
+            chat_manager = get_chat_manager()
+            self.chat_stream = await chat_manager.get_stream(self.chat_id)
+
+            if not self.chat_stream:
+                raise ValueError(f"Chat stream for chat_id {self.chat_id} not found")
+
+            self.log_prefix = f"[{self.chat_stream.group_info.group_name if self.chat_stream.group_info else self.chat_stream.user_info.user_nickname}]"
+            self._initialized = True
 
         self.regression_count: int = 0
 

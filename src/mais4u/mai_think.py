@@ -38,13 +38,11 @@ def init_prompt():
 class MaiThinking:
     def __init__(self, chat_id):
         self.chat_id = chat_id
-        self.chat_stream = get_chat_manager().get_stream(chat_id)
-        self.platform = self.chat_stream.platform
-
-        if self.chat_stream.group_info:
-            self.is_group = True
-        else:
-            self.is_group = False
+        # 这些将在异步初始化中设置
+        self.chat_stream = None  # type: ignore
+        self.platform = None
+        self.is_group = False
+        self._initialized = False
 
         self.s4u_message_processor = S4UMessageProcessor()
 
@@ -62,6 +60,15 @@ class MaiThinking:
         self.target = ""
 
         self.thinking_model = LLMRequest(model_set=model_config.model_task_config.replyer, request_type="thinking")
+
+    async def _initialize(self):
+        """异步初始化方法"""
+        if not self._initialized:
+            self.chat_stream = await get_chat_manager().get_stream(self.chat_id)
+            if self.chat_stream:
+                self.platform = self.chat_stream.platform
+                self.is_group = bool(self.chat_stream.group_info)
+            self._initialized = True
 
     async def do_think_before_response(self):
         pass
@@ -98,6 +105,9 @@ class MaiThinking:
         pass
 
     async def build_internal_message_recv(self, message_text: str):
+        # 初始化
+        await self._initialize()
+
         msg_id = f"internal_{time.time()}"
 
         message_dict = {

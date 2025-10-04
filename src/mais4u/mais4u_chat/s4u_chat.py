@@ -162,9 +162,9 @@ class S4UChatManager:
     def __init__(self):
         self.s4u_chats: dict[str, "S4UChat"] = {}
 
-    def get_or_create_chat(self, chat_stream: ChatStream) -> "S4UChat":
+    async def get_or_create_chat(self, chat_stream: ChatStream) -> "S4UChat":
         if chat_stream.stream_id not in self.s4u_chats:
-            stream_name = get_chat_manager().get_stream_name(chat_stream.stream_id) or chat_stream.stream_id
+            stream_name = await get_chat_manager().get_stream_name(chat_stream.stream_id) or chat_stream.stream_id
             logger.info(f"Creating new S4UChat for stream: {stream_name}")
             self.s4u_chats[chat_stream.stream_id] = S4UChat(chat_stream)
         return self.s4u_chats[chat_stream.stream_id]
@@ -187,7 +187,7 @@ class S4UChat:
         self.last_msg_id = self.msg_id
         self.chat_stream = chat_stream
         self.stream_id = chat_stream.stream_id
-        self.stream_name = get_chat_manager().get_stream_name(self.stream_id) or self.stream_id
+        self.stream_name = self.stream_id  # 初始化时使用stream_id，稍后异步更新
         self.relationship_builder = relationship_builder_manager.get_or_create_builder(self.stream_id)
 
         # 两个消息队列
@@ -213,6 +213,13 @@ class S4UChat:
         self.voice_done = ""
 
         logger.info(f"[{self.stream_name}] S4UChat with two-queue system initialized.")
+        self._stream_name_initialized = False
+
+    async def _initialize_stream_name(self):
+        """异步初始化stream_name"""
+        if not self._stream_name_initialized:
+            self.stream_name = await get_chat_manager().get_stream_name(self.stream_id) or self.stream_id
+            self._stream_name_initialized = True
 
     @staticmethod
     def _get_priority_info(message: MessageRecv) -> dict:
@@ -263,6 +270,9 @@ class S4UChat:
                 self.interest_dict[person_id] = 0
 
     async def add_message(self, message: MessageRecvS4U | MessageRecv) -> None:
+        # 初始化stream_name
+        await self._initialize_stream_name()
+
         self.decay_interest_score()
 
         """根据VIP状态和中断逻辑将消息放入相应队列。"""

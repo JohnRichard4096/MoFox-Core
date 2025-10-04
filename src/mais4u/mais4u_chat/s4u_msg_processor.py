@@ -157,7 +157,7 @@ class S4UMessageProcessor:
 
         await self.storage.store_message(message, chat)
 
-        s4u_chat = get_s4u_chat_manager().get_or_create_chat(chat)
+        s4u_chat = await get_s4u_chat_manager().get_or_create_chat(chat)
 
         await s4u_chat.add_message(message)
 
@@ -191,7 +191,7 @@ class S4UMessageProcessor:
             chat = await get_chat_manager().get_or_create_stream(
                 platform="amaidesu_default", user_info=message.message_info.user_info, group_info=group_info
             )
-            s4u_chat = get_s4u_chat_manager().get_or_create_chat(chat)
+            s4u_chat = await get_s4u_chat_manager().get_or_create_chat(chat)
             message.message_info.group_info = s4u_chat.chat_stream.group_info
             message.message_info.platform = s4u_chat.chat_stream.platform
 
@@ -215,7 +215,7 @@ class S4UMessageProcessor:
     @staticmethod
     async def hadle_if_voice_done(message: MessageRecvS4U):
         if message.voice_done:
-            s4u_chat = get_s4u_chat_manager().get_or_create_chat(message.chat_stream)
+            s4u_chat = await get_s4u_chat_manager().get_or_create_chat(message.chat_stream)
             s4u_chat.voice_done = message.voice_done
             return True
         return False

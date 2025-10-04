@@ -8,6 +8,7 @@ from src.plugin_system.base.base_action import BaseAction
 from src.plugin_system.base.base_chatter import BaseChatter
 from src.plugin_system.base.base_command import BaseCommand
 from src.plugin_system.base.base_events_handler import BaseEventHandler
+from src.plugin_system.base.base_interest_calculator import BaseInterestCalculator
 from src.plugin_system.base.base_tool import BaseTool
 from src.plugin_system.base.component_types import (
     ActionInfo,
@@ -16,6 +17,7 @@ from src.plugin_system.base.component_types import (
     ComponentInfo,
     ComponentType,
     EventHandlerInfo,
+    InterestCalculatorInfo,
     PluginInfo,
     PlusCommandInfo,
     ToolInfo,
@@ -162,8 +164,13 @@ class ComponentRegistry:
                 assert isinstance(component_info, ChatterInfo)
                 assert issubclass(component_class, BaseChatter)
                 ret = self._register_chatter_component(component_info, component_class)
+            case ComponentType.INTEREST_CALCULATOR:
+                assert isinstance(component_info, InterestCalculatorInfo)
+                assert issubclass(component_class, BaseInterestCalculator)
+                ret = self._register_interest_calculator_component(component_info, component_class)
             case _:
                 logger.warning(f"未知组件类型: {component_type}")
+                ret = False
 
         if not ret:
             return False
@@ -309,6 +316,38 @@ class ComponentRegistry:
         self._enabled_chatter_registry[chatter_name] = chatter_class
 
         logger.debug(f"已注册Chatter组件: {chatter_name}")
+        return True
+
+    def _register_interest_calculator_component(
+        self, interest_calculator_info: "InterestCalculatorInfo", interest_calculator_class: type["BaseInterestCalculator"]
+    ) -> bool:
+        """注册InterestCalculator组件到特定注册表"""
+        calculator_name = interest_calculator_info.name
+
+        if not calculator_name:
+            logger.error(f"InterestCalculator组件 {interest_calculator_class.__name__} 必须指定名称")
+            return False
+        if not isinstance(interest_calculator_info, InterestCalculatorInfo) or not issubclass(interest_calculator_class, BaseInterestCalculator):
+            logger.error(f"注册失败: {calculator_name} 不是有效的InterestCalculator")
+            return False
+
+        # 创建专门的InterestCalculator注册表（如果还没有）
+        if not hasattr(self, "_interest_calculator_registry"):
+            self._interest_calculator_registry: dict[str, type["BaseInterestCalculator"]] = {}
+        if not hasattr(self, "_enabled_interest_calculator_registry"):
+            self._enabled_interest_calculator_registry: dict[str, type["BaseInterestCalculator"]] = {}
+
+        interest_calculator_class.plugin_name = interest_calculator_info.plugin_name
+        # 设置插件配置
+        interest_calculator_class.plugin_config = self.get_plugin_config(interest_calculator_info.plugin_name) or {}
+        self._interest_calculator_registry[calculator_name] = interest_calculator_class
+
+        if not interest_calculator_info.enabled:
+            logger.warning(f"InterestCalculator组件 {calculator_name} 未启用")
+            return True  # 未启用，但是也是注册成功
+        self._enabled_interest_calculator_registry[calculator_name] = interest_calculator_class
+
+        logger.debug(f"已注册InterestCalculator组件: {calculator_name}")
         return True
 
     # === 组件移除相关 ===

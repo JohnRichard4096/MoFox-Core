@@ -51,16 +51,28 @@ class ToolExecutor:
             chat_id: 聊天标识符，用于日志记录
         """
         self.chat_id = chat_id
-        self.chat_stream = get_chat_manager().get_stream(self.chat_id)
-        self.log_prefix = f"[{get_chat_manager().get_stream_name(self.chat_id) or self.chat_id}]"
+        # chat_stream 和 log_prefix 将在异步方法中初始化
+        self.chat_stream = None  # type: ignore
+        self.log_prefix = f"[{chat_id}]"
 
         self.llm_model = LLMRequest(model_set=model_config.model_task_config.tool_use, request_type="tool_executor")
 
         # 二步工具调用状态管理
         self._pending_step_two_tools: dict[str, dict[str, Any]] = {}
         """待处理的第二步工具调用，格式为 {tool_name: step_two_definition}"""
+        self._log_prefix_initialized = False
 
-        logger.info(f"{self.log_prefix}工具执行器初始化完成")
+        # logger.info(f"{self.log_prefix}工具执行器初始化完成")  # 移到异步初始化中
+
+    async def _initialize_log_prefix(self):
+        """异步初始化log_prefix和chat_stream"""
+        if not self._log_prefix_initialized:
+            from src.chat.message_receive.chat_stream import get_chat_manager
+            self.chat_stream = await get_chat_manager().get_stream(self.chat_id)
+            stream_name = await get_chat_manager().get_stream_name(self.chat_id)
+            self.log_prefix = f"[{stream_name or self.chat_id}]"
+            self._log_prefix_initialized = True
+            logger.info(f"{self.log_prefix}工具执行器初始化完成")
 
     async def execute_from_chat_message(
         self, target_message: str, chat_history: str, sender: str, return_details: bool = False
@@ -77,6 +89,8 @@ class ToolExecutor:
             如果return_details为False: Tuple[List[Dict], List[str], str] - (工具执行结果列表, 空, 空)
             如果return_details为True: Tuple[List[Dict], List[str], str] - (结果列表, 使用的工具, 提示词)
         """
+        # 初始化log_prefix
+        await self._initialize_log_prefix()
 
         # 获取可用工具
         tools = self._get_tool_definitions()

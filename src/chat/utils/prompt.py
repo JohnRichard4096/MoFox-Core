@@ -1047,11 +1047,11 @@ class Prompt:
 
         from src.plugin_system.apis import cross_context_api
 
-        other_chat_raw_ids = cross_context_api.get_context_groups(chat_id)
+        other_chat_raw_ids = await cross_context_api.get_context_groups(chat_id)
         if not other_chat_raw_ids:
             return ""
 
-        chat_stream = get_chat_manager().get_stream(chat_id)
+        chat_stream = await get_chat_manager().get_stream(chat_id)
         if not chat_stream:
             return ""
 

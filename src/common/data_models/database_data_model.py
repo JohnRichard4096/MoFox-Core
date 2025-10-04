@@ -98,6 +98,7 @@ class DatabaseMessages(BaseDataModel):
         # 新增字段
         actions: list | None = None,
         should_reply: bool = False,
+        should_act: bool = False,
         **kwargs: Any,
     ):
         self.message_id = message_id
@@ -109,6 +110,7 @@ class DatabaseMessages(BaseDataModel):
         # 新增字段
         self.actions = actions
         self.should_reply = should_reply
+        self.should_act = should_act
 
         self.key_words = key_words
         self.key_words_lite = key_words_lite

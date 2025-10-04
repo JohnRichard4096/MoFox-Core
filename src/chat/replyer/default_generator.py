@@ -226,13 +226,21 @@ class DefaultReplyer:
     ):
         self.express_model = LLMRequest(model_set=model_config.model_task_config.replyer, request_type=request_type)
         self.chat_stream = chat_stream
-        self.is_group_chat: Optional[bool] = None
-        self.chat_target_info: Optional[Dict[str, Any]] = None
-        self._initialized = False
+        # 这些将在异步初始化中设置
+        self.is_group_chat = False
+        self.chat_target_info = None
+        self._chat_info_initialized = False
 
         self.heart_fc_sender = HeartFCSender()
         # 使用新的增强记忆系统
         # from src.chat.memory_system.enhanced_memory_activator import EnhancedMemoryActivator
+        self._chat_info_initialized = False
+
+    async def _initialize_chat_info(self):
+        """异步初始化聊天信息"""
+        if not self._chat_info_initialized:
+            self.is_group_chat, self.chat_target_info = await get_chat_type_and_target_info(self.chat_stream.stream_id)
+            self._chat_info_initialized = True
         # self.memory_activator = EnhancedMemoryActivator()
         self.memory_activator = None  # 暂时禁用记忆激活器
         # 旧的即时记忆系统已被移除，现在使用增强记忆系统
@@ -280,7 +288,9 @@ class DefaultReplyer:
         Returns:
             Tuple[bool, Optional[Dict[str, Any]], Optional[str]]: (是否成功, 生成的回复, 使用的prompt)
         """
-        
+        # 初始化聊天信息
+        await self._initialize_chat_info()
+
         prompt = None
         selected_expressions = None
         if available_actions is None:
@@ -825,7 +835,7 @@ class DefaultReplyer:
             from src.plugin_system.apis.chat_api import get_chat_manager
 
             chat_manager = get_chat_manager()
-            chat_stream = chat_manager.get_stream(chat_id)
+            chat_stream = await chat_manager.get_stream(chat_id)
             if chat_stream:
                 stream_context = chat_stream.context_manager
                 # 使用真正的已读和未读消息
@@ -1015,47 +1025,24 @@ class DefaultReplyer:
         return read_history_prompt, unread_history_prompt
 
     async def _get_interest_scores_for_messages(self, messages: list[dict]) -> dict[str, float]:
-        """为消息获取兴趣度评分"""
+        """为消息获取兴趣度评分（使用预计算的兴趣值）"""
         interest_scores = {}
 
         try:
-            from src.common.data_models.database_data_model import DatabaseMessages
-            from src.plugins.built_in.affinity_flow_chatter.interest_scoring import (
-                chatter_interest_scoring_system as interest_scoring_system,
-            )
-
-            # 转换消息格式
-            db_messages = []
+            # 直接使用消息中的预计算兴趣值
             for msg_dict in messages:
-                try:
-                    db_msg = DatabaseMessages(
-                        message_id=msg_dict.get("message_id", ""),
-                        time=msg_dict.get("time", time.time()),
-                        chat_id=msg_dict.get("chat_id", ""),
-                        processed_plain_text=msg_dict.get("processed_plain_text", ""),
-                        user_id=msg_dict.get("user_id", ""),
-                        user_nickname=msg_dict.get("user_nickname", ""),
-                        user_platform=msg_dict.get("platform", "qq"),
-                        chat_info_group_id=msg_dict.get("group_id", ""),
-                        chat_info_group_name=msg_dict.get("group_name", ""),
-                        chat_info_group_platform=msg_dict.get("platform", "qq"),
-                    )
-                    db_messages.append(db_msg)
-                except Exception as e:
-                    logger.warning(f"转换消息格式失败: {e}")
-                    continue
+                message_id = msg_dict.get("message_id", "")
+                interest_value = msg_dict.get("interest_value")
 
-            # 计算兴趣度评分
-            if db_messages:
-                bot_nickname = global_config.bot.nickname or "麦麦"
-                scores = await interest_scoring_system.calculate_interest_scores(db_messages, bot_nickname)
-
-                # 构建兴趣度字典
-                for score in scores:
-                    interest_scores[score.message_id] = score.total_score
+                if interest_value is not None:
+                    interest_scores[message_id] = float(interest_value)
+                    logger.debug(f"使用预计算兴趣度 - 消息 {message_id}: {interest_value:.3f}")
+                else:
+                    interest_scores[message_id] = 0.5  # 默认值
+                    logger.debug(f"消息 {message_id} 无预计算兴趣值，使用默认值 0.5")
 
         except Exception as e:
-            logger.warning(f"获取兴趣度评分失败: {e}")
+            logger.warning(f"处理预计算兴趣值失败: {e}")
 
         return interest_scores
 

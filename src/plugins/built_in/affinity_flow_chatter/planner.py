@@ -9,7 +9,6 @@ from typing import TYPE_CHECKING, Any
 from src.common.logger import get_logger
 from src.config.config import global_config
 from src.mood.mood_manager import mood_manager
-from src.plugins.built_in.affinity_flow_chatter.interest_scoring import chatter_interest_scoring_system
 from src.plugins.built_in.affinity_flow_chatter.plan_executor import ChatterPlanExecutor
 from src.plugins.built_in.affinity_flow_chatter.plan_filter import ChatterPlanFilter
 from src.plugins.built_in.affinity_flow_chatter.plan_generator import ChatterPlanGenerator
@@ -105,43 +104,39 @@ class ChatterActionPlanner:
             interest_updates: list[dict[str, Any]] = []
 
             if unread_messages:
-                # 为每条消息计算兴趣度，并延迟提交数据库更新
+                # 直接使用消息中已计算的标志，无需重复计算兴趣值
                 for message in unread_messages:
                     try:
-                        interest_score = await chatter_interest_scoring_system._calculate_single_message_score(
-                            message=message,
-                            bot_nickname=global_config.bot.nickname,
-                        )
-                        message_interest = interest_score.total_score
+                        message_interest = getattr(message, 'interest_value', 0.3)
+                        message_should_reply = getattr(message, 'should_reply', False)
+                        message_should_act = getattr(message, 'should_act', False)
 
-                        message.interest_value = message_interest
-                        message.should_reply = (
-                            message_interest > global_config.affinity_flow.non_reply_action_interest_threshold
-                        )
+                        # 确保interest_value不是None
+                        if message_interest is None:
+                            message_interest = 0.3
 
-                        interest_updates.append(
-                            {
-                                "message_id": message.message_id,
-                                "interest_value": message_interest,
-                                "should_reply": message.should_reply,
-                            }
-                        )
-
-                        logger.info(
-                            f"消息 {message.message_id} 兴趣度: {message_interest:.3f}, 应回复: {message.should_reply}"
-                        )
-
+                        # 更新最高兴趣度消息
                         if message_interest > score:
                             score = message_interest
-                            if message.should_reply:
+                            if message_should_reply:
                                 should_reply = True
                             else:
                                 reply_not_available = True
 
+                        # 如果should_act为false，强制设为no_action
+                        if not message_should_act:
+                            reply_not_available = True
+
+                        logger.debug(
+                            f"消息 {message.message_id} 预计算标志: interest={message_interest:.3f}, "
+                            f"should_reply={message_should_reply}, should_act={message_should_act}"
+                        )
+
                     except Exception as e:
-                        logger.warning(f"计算消息 {message.message_id} 兴趣度失败: {e}")
+                        logger.warning(f"处理消息 {message.message_id} 失败: {e}")
                         message.interest_value = 0.0
                         message.should_reply = False
+                        message.should_act = False
                         interest_updates.append(
                             {
                                 "message_id": message.message_id,

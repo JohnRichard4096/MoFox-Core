@@ -167,7 +167,7 @@ async def _send_to_target(
             logger.debug(f"[SendAPI] 发送{message_type}消息到 {stream_id}")
 
         # 查找目标聊天流
-        target_stream = get_chat_manager().get_stream(stream_id)
+        target_stream = await get_chat_manager().get_stream(stream_id)
         if not target_stream:
             logger.error(f"[SendAPI] 未找到聊天流: {stream_id}")
             return False
@@ -420,7 +420,7 @@ async def adapter_command_to_stream(
             logger.debug(f"[SendAPI] 自动生成临时stream_id: {stream_id}")
 
         # 查找目标聊天流
-        target_stream = get_chat_manager().get_stream(stream_id)
+        target_stream = await get_chat_manager().get_stream(stream_id)
         if not target_stream:
             # 如果是自动生成的stream_id且找不到聊天流，创建一个临时的虚拟流
             if stream_id.startswith("adapter_temp_"):

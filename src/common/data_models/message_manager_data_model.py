@@ -184,22 +184,22 @@ class StreamContext(BaseDataModel):
 
         return max(0.0, min(1.0, probability))
 
-    def increment_interruption_count(self):
+    async def increment_interruption_count(self):
         """增加打断计数"""
         self.interruption_count += 1
         self.last_interruption_time = time.time()
 
         # 同步打断计数到ChatStream
-        self._sync_interruption_count_to_stream()
+        await self._sync_interruption_count_to_stream()
 
-    def reset_interruption_count(self):
+    async def reset_interruption_count(self):
         """重置打断计数和afc阈值调整"""
         self.interruption_count = 0
         self.last_interruption_time = 0.0
         self.afc_threshold_adjustment = 0.0
 
         # 同步打断计数到ChatStream
-        self._sync_interruption_count_to_stream()
+        await self._sync_interruption_count_to_stream()
 
     def apply_interruption_afc_reduction(self, reduction_value: float):
         """应用打断导致的afc阈值降低"""
@@ -210,14 +210,14 @@ class StreamContext(BaseDataModel):
         """获取当前的afc阈值调整量"""
         return self.afc_threshold_adjustment
 
-    def _sync_interruption_count_to_stream(self):
+    async def _sync_interruption_count_to_stream(self):
         """同步打断计数到ChatStream"""
         try:
             from src.chat.message_receive.chat_stream import get_chat_manager
 
             chat_manager = get_chat_manager()
             if chat_manager:
-                chat_stream = chat_manager.get_stream(self.stream_id)
+                chat_stream = await chat_manager.get_stream(self.stream_id)
                 if chat_stream and hasattr(chat_stream, "interruption_count"):
                     # 在这里我们只是标记需要保存，实际的保存会在下次save时进行
                     chat_stream.saved = False

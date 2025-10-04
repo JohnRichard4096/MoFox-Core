@@ -132,7 +132,7 @@ class MessageManager:
         """添加消息到指定聊天流"""
         try:
             chat_manager = get_chat_manager()
-            chat_stream = chat_manager.get_stream(stream_id)
+            chat_stream = await chat_manager.get_stream(stream_id)
             if not chat_stream:
                 logger.warning(f"MessageManager.add_message: 聊天流 {stream_id} 不存在")
                 return
@@ -153,7 +153,7 @@ class MessageManager:
         """更新消息信息"""
         try:
             chat_manager = get_chat_manager()
-            chat_stream = chat_manager.get_stream(stream_id)
+            chat_stream = await chat_manager.get_stream(stream_id)
             if not chat_stream:
                 logger.warning(f"MessageManager.update_message: 聊天流 {stream_id} 不存在")
                 return
@@ -180,7 +180,7 @@ class MessageManager:
 
         try:
             chat_manager = get_chat_manager()
-            chat_stream = chat_manager.get_stream(stream_id)
+            chat_stream = await chat_manager.get_stream(stream_id)
             if not chat_stream:
                 logger.warning(f"MessageManager.bulk_update_messages: 聊天流 {stream_id} 不存在")
                 return 0
@@ -211,7 +211,7 @@ class MessageManager:
         """添加动作到消息"""
         try:
             chat_manager = get_chat_manager()
-            chat_stream = chat_manager.get_stream(stream_id)
+            chat_stream = await chat_manager.get_stream(stream_id)
             if not chat_stream:
                 logger.warning(f"MessageManager.add_action: 聊天流 {stream_id} 不存在")
                 return
@@ -223,12 +223,12 @@ class MessageManager:
         except Exception as e:
             logger.error(f"为消息 {message_id} 添加动作时发生错误: {e}")
 
-    def deactivate_stream(self, stream_id: str):
+    async def deactivate_stream(self, stream_id: str):
         """停用聊天流"""
         try:
             # 通过 ChatManager 获取 ChatStream
             chat_manager = get_chat_manager()
-            chat_stream = chat_manager.get_stream(stream_id)
+            chat_stream = await chat_manager.get_stream(stream_id)
             if not chat_stream:
                 logger.warning(f"停用流失败: 聊天流 {stream_id} 不存在")
                 return
@@ -245,12 +245,12 @@ class MessageManager:
         except Exception as e:
             logger.error(f"停用聊天流 {stream_id} 时发生错误: {e}")
 
-    def activate_stream(self, stream_id: str):
+    async def activate_stream(self, stream_id: str):
         """激活聊天流"""
         try:
             # 通过 ChatManager 获取 ChatStream
             chat_manager = get_chat_manager()
-            chat_stream = chat_manager.get_stream(stream_id)
+            chat_stream = await chat_manager.get_stream(stream_id)
             if not chat_stream:
                 logger.warning(f"激活流失败: 聊天流 {stream_id} 不存在")
                 return
@@ -262,12 +262,12 @@ class MessageManager:
         except Exception as e:
             logger.error(f"激活聊天流 {stream_id} 时发生错误: {e}")
 
-    def get_stream_stats(self, stream_id: str) -> StreamStats | None:
+    async def get_stream_stats(self, stream_id: str) -> StreamStats | None:
         """获取聊天流统计"""
         try:
             # 通过 ChatManager 获取 ChatStream
             chat_manager = get_chat_manager()
-            chat_stream = chat_manager.get_stream(stream_id)
+            chat_stream = await chat_manager.get_stream(stream_id)
             if not chat_stream:
                 return None
 
@@ -360,7 +360,7 @@ class MessageManager:
                     pass
 
                 # 增加打断计数并应用afc阈值降低
-                chat_stream.context_manager.context.increment_interruption_count()
+                await chat_stream.context_manager.context.increment_interruption_count()
                 chat_stream.context_manager.context.apply_interruption_afc_reduction(
                     global_config.chat.interruption_afc_reduction
                 )
@@ -382,7 +382,7 @@ class MessageManager:
         try:
             # 通过 ChatManager 获取 ChatStream
             chat_manager = get_chat_manager()
-            chat_stream = chat_manager.get_stream(stream_id)
+            chat_stream = await chat_manager.get_stream(stream_id)
             if not chat_stream:
                 logger.warning(f"清除消息失败: 聊天流 {stream_id} 不存在")
                 return
@@ -411,7 +411,7 @@ class MessageManager:
         """清除指定聊天流的所有未读消息"""
         try:
             chat_manager = get_chat_manager()
-            chat_stream = chat_manager.get_stream(stream_id)
+            chat_stream = await chat_manager.get_stream(stream_id)
             if not chat_stream:
                 logger.warning(f"clear_stream_unread_messages: 聊天流 {stream_id} 不存在")
                 return

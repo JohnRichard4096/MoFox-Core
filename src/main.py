@@ -101,6 +101,85 @@ class MainSystem:
         signal.signal(signal.SIGINT, signal_handler)
         signal.signal(signal.SIGTERM, signal_handler)
 
+    async def _initialize_interest_calculator(self):
+        """初始化兴趣值计算组件 - 通过插件系统自动发现和加载"""
+        try:
+            logger.info("开始自动发现兴趣值计算组件...")
+
+            # 使用组件注册表自动发现兴趣计算器组件
+            interest_calculators = {}
+            try:
+                from src.plugin_system.apis.component_manage_api import get_components_info_by_type
+                from src.plugin_system.base.component_types import ComponentType
+                interest_calculators = get_components_info_by_type(ComponentType.INTEREST_CALCULATOR)
+                logger.info(f"通过组件注册表发现 {len(interest_calculators)} 个兴趣计算器组件")
+            except Exception as e:
+                logger.error(f"从组件注册表获取兴趣计算器失败: {e}")
+
+            if not interest_calculators:
+                logger.warning("未发现任何兴趣计算器组件")
+                return
+
+            logger.info(f"发现的兴趣计算器组件:")
+            for calc_name, calc_info in interest_calculators.items():
+                enabled = getattr(calc_info, 'enabled', True)
+                default_enabled = getattr(calc_info, 'enabled_by_default', True)
+                logger.info(f"  - {calc_name}: 启用: {enabled}, 默认启用: {default_enabled}")
+
+            # 初始化兴趣度管理器
+            from src.chat.interest_system.interest_manager import get_interest_manager
+            interest_manager = get_interest_manager()
+            await interest_manager.initialize()
+
+            # 尝试注册计算器（单例模式，只注册第一个可用的）
+            registered_calculator = None
+
+            # 使用组件注册表获取组件类并注册
+            for calc_name, calc_info in interest_calculators.items():
+                enabled = getattr(calc_info, 'enabled', True)
+                default_enabled = getattr(calc_info, 'enabled_by_default', True)
+
+                if not enabled or not default_enabled:
+                    logger.info(f"兴趣计算器 {calc_name} 未启用，跳过")
+                    continue
+
+                try:
+                    from src.plugin_system.core.component_registry import component_registry
+                    component_class = component_registry.get_component_class(calc_name, ComponentType.INTEREST_CALCULATOR)
+
+                    if component_class:
+                        logger.info(f"成功获取 {calc_name} 的组件类: {component_class.__name__}")
+
+                        # 创建组件实例
+                        calculator_instance = component_class()
+                        logger.info(f"成功创建兴趣计算器实例: {calc_name}")
+
+                        # 初始化组件
+                        if await calculator_instance.initialize():
+                            # 注册到兴趣管理器
+                            success = await interest_manager.register_calculator(calculator_instance)
+                            if success:
+                                registered_calculator = calculator_instance
+                                logger.info(f"成功注册兴趣计算器: {calc_name}")
+                                break  # 只注册一个成功的计算器
+                            else:
+                                logger.error(f"兴趣计算器 {calc_name} 注册失败")
+                        else:
+                            logger.error(f"兴趣计算器 {calc_name} 初始化失败")
+                    else:
+                        logger.warning(f"无法找到 {calc_name} 的组件类")
+
+                except Exception as e:
+                    logger.error(f"处理兴趣计算器 {calc_name} 时出错: {e}", exc_info=True)
+
+            if registered_calculator:
+                logger.info(f"当前活跃的兴趣度计算器: {registered_calculator.component_name} v{registered_calculator.component_version}")
+            else:
+                logger.error("未能成功注册任何兴趣计算器")
+
+        except Exception as e:
+            logger.error(f"初始化兴趣度计算器失败: {e}", exc_info=True)
+
     async def _async_cleanup(self):
         """异步清理资源"""
         try:
@@ -264,7 +343,8 @@ MoFox_Bot(第三方修改版)
         # 初始化表情管理器
         get_emoji_manager().initialize()
         logger.info("表情包管理器初始化成功")
-
+        
+        '''
         # 初始化回复后关系追踪系统
         try:
             from src.plugins.built_in.affinity_flow_chatter.interest_scoring import chatter_interest_scoring_system
@@ -276,7 +356,7 @@ MoFox_Bot(第三方修改版)
         except Exception as e:
             logger.error(f"回复后关系追踪系统初始化失败: {e}")
             relationship_tracker = None
-
+        '''
   
         # 启动情绪管理器
         await mood_manager.start()
@@ -292,6 +372,9 @@ MoFox_Bot(第三方修改版)
         logger.info("增强记忆系统初始化成功")
 
         # 老记忆系统已完全删除
+
+        # 初始化消息兴趣值计算组件
+        await self._initialize_interest_calculator()
 
         # 初始化LPMM知识库
         from src.chat.knowledge.knowledge_lib import initialize_lpmm_knowledge
@@ -349,17 +432,36 @@ MoFox_Bot(第三方修改版)
         """调度定时任务"""
         try:
             while True:
-                tasks = [
-                    get_emoji_manager().start_periodic_check_register(),
-                    self.app.run(),
-                    self.server.run(),
-                ]
+                try:
+                    tasks = [
+                        get_emoji_manager().start_periodic_check_register(),
+                        self.app.run(),
+                        self.server.run(),
+                    ]
 
-                # 增强记忆系统不需要定时任务，已禁用原有记忆系统的定时任务
+                    # 增强记忆系统不需要定时任务，已禁用原有记忆系统的定时任务
+                    # 使用 return_exceptions=True 防止单个任务失败导致整个程序崩溃
+                    await asyncio.gather(*tasks, return_exceptions=True)
 
-                await asyncio.gather(*tasks)
+                except (ConnectionResetError, OSError) as e:
+                    logger.warning(f"网络连接发生错误，尝试重新启动任务: {e}")
+                    await asyncio.sleep(1)  # 短暂等待后重新开始
+                    continue
+                except asyncio.InvalidStateError as e:
+                    logger.error(f"异步任务状态无效，重新初始化: {e}")
+                    await asyncio.sleep(2)  # 等待更长时间让系统稳定
+                    continue
+                except Exception as e:
+                    logger.error(f"调度任务发生未预期异常: {e}")
+                    logger.error(traceback.format_exc())
+                    await asyncio.sleep(5)  # 发生其他错误时等待更长时间
+                    continue
+
+        except asyncio.CancelledError:
+            logger.info("调度任务被取消，正在退出...")
         except Exception as e:
-            logger.error(f"调度任务发生异常: {e}")
+            logger.error(f"调度任务发生致命异常: {e}")
+            logger.error(traceback.format_exc())
             raise
 
     async def shutdown(self):

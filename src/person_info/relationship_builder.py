@@ -58,15 +58,23 @@ class RelationshipBuilder:
         # 最后清理时间，用于定期清理老消息段
         self.last_cleanup_time = 0.0
 
-        # 获取聊天名称用于日志
-        try:
-            chat_name = get_chat_manager().get_stream_name(self.chat_id)
-            self.log_prefix = f"[{chat_name}]"
-        except Exception:
-            self.log_prefix = f"[{self.chat_id}]"
+        # log_prefix 将在异步方法中初始化
+        self.log_prefix = f"[{self.chat_id}]"
+        self._log_prefix_initialized = False
 
         # 加载持久化的缓存
         self._load_cache()
+
+    async def _initialize_log_prefix(self):
+        """异步初始化log_prefix"""
+        if not self._log_prefix_initialized:
+            try:
+                from src.chat.message_receive.chat_stream import get_chat_manager
+                chat_name = await get_chat_manager().get_stream_name(self.chat_id)
+                self.log_prefix = f"[{chat_name}]"
+            except Exception:
+                self.log_prefix = f"[{self.chat_id}]"
+            self._log_prefix_initialized = True
 
     # ================================
     # 缓存管理模块
@@ -339,6 +347,9 @@ class RelationshipBuilder:
         """构建关系
         immediate_build: 立即构建关系，可选值为"all"或person_id
         """
+        # 初始化log_prefix
+        await self._initialize_log_prefix()
+
         self._cleanup_old_segments()
         current_time = time.time()
 

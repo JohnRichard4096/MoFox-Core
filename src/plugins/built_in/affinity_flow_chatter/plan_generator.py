@@ -54,7 +54,7 @@ class ChatterPlanGenerator:
         """
         try:
             # 获取聊天类型和目标信息
-            chat_type, target_info = get_chat_type_and_target_info(self.chat_id)
+            chat_type, target_info = await get_chat_type_and_target_info(self.chat_id)
 
             # 获取可用动作列表
             available_actions = await self._get_available_actions(chat_type, mode)

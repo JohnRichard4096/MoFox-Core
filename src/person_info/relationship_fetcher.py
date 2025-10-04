@@ -79,8 +79,16 @@ class RelationshipFetcher:
             model_set=model_config.model_task_config.utils_small, request_type="relation.fetch"
         )
 
-        name = get_chat_manager().get_stream_name(self.chat_id)
-        self.log_prefix = f"[{name}] 实时信息"
+        self.log_prefix = f"[{self.chat_id}] 实时信息"  # 初始化时使用chat_id，稍后异步更新
+        self._log_prefix_initialized = False
+
+    async def _initialize_log_prefix(self):
+        """异步初始化log_prefix"""
+        if not self._log_prefix_initialized:
+            from src.chat.message_receive.chat_stream import get_chat_manager
+            name = await get_chat_manager().get_stream_name(self.chat_id)
+            self.log_prefix = f"[{name}] 实时信息"
+            self._log_prefix_initialized = True
 
     def _cleanup_expired_cache(self):
         """清理过期的信息缓存"""
@@ -94,6 +102,9 @@ class RelationshipFetcher:
 
     async def build_relation_info(self, person_id, points_num=5):
         """构建详细的人物关系信息，包含从数据库中查询的丰富关系描述"""
+        # 初始化log_prefix
+        await self._initialize_log_prefix()
+
         # 清理过期的信息缓存
         self._cleanup_expired_cache()
 

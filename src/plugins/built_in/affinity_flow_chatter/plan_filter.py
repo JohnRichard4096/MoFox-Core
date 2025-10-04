@@ -323,7 +323,7 @@ class ChatterPlanFilter:
             from src.plugin_system.apis.chat_api import get_chat_manager
 
             chat_manager = get_chat_manager()
-            chat_stream = chat_manager.get_stream(plan.chat_id)
+            chat_stream = await chat_manager.get_stream(plan.chat_id)
             if not chat_stream:
                 logger.warning(f"[plan_filter] 聊天流 {plan.chat_id} 不存在")
                 return "最近没有聊天内容。", "没有未读消息。", []
@@ -397,52 +397,22 @@ class ChatterPlanFilter:
         interest_scores = {}
 
         try:
-            from src.common.data_models.database_data_model import DatabaseMessages
-
-            from .interest_scoring import chatter_interest_scoring_system
-
-            # 使用插件内部的兴趣度评分系统计算评分
+            # 直接使用消息中已预计算的兴趣值，无需重新计算
             for msg_dict in messages:
                 try:
-                    # 将字典转换为DatabaseMessages对象
-                    # 处理两种可能的数据格式：flatten()返回的平铺字段 或 包含user_info字段的字典
-                    user_info_dict = msg_dict.get("user_info", {})
-                    if isinstance(user_info_dict, dict) and user_info_dict:
-                        # 如果有user_info字段，使用它
-                        db_message = DatabaseMessages(
-                            message_id=msg_dict.get("message_id", ""),
-                            user_id=user_info_dict.get("user_id", ""),
-                            user_nickname=user_info_dict.get("user_nickname", ""),
-                            user_platform=user_info_dict.get("platform", ""),
-                            processed_plain_text=msg_dict.get("processed_plain_text", ""),
-                            key_words=msg_dict.get("key_words", "[]"),
-                            is_mentioned=msg_dict.get("is_mentioned", False),
-                            **{"user_info": user_info_dict},  # 通过kwargs传入user_info
-                        )
-                    else:
-                        # 如果没有user_info字段，使用平铺的字段（flatten()方法返回的格式）
-                        db_message = DatabaseMessages(
-                            message_id=msg_dict.get("message_id", ""),
-                            user_id=msg_dict.get("user_id", ""),
-                            user_nickname=msg_dict.get("user_nickname", ""),
-                            user_platform=msg_dict.get("user_platform", ""),
-                            processed_plain_text=msg_dict.get("processed_plain_text", ""),
-                            key_words=msg_dict.get("key_words", "[]"),
-                            is_mentioned=msg_dict.get("is_mentioned", False),
-                        )
-
-                    # 计算消息兴趣度
-                    interest_score_obj = await chatter_interest_scoring_system._calculate_single_message_score(
-                        message=db_message, bot_nickname=global_config.bot.nickname
-                    )
-                    interest_score = interest_score_obj.total_score
+                    # 直接使用消息中已预计算的兴趣值
+                    interest_score = msg_dict.get("interest_value", 0.3)
+                    should_reply = msg_dict.get("should_reply", False)
 
                     # 构建兴趣度字典
                     interest_scores[msg_dict.get("message_id", "")] = interest_score
 
+                    logger.debug(f"使用消息预计算兴趣值: {interest_score:.3f}, should_reply: {should_reply}")
+
                 except Exception as e:
-                    logger.warning(f"计算消息兴趣度失败: {e}")
-                    continue
+                    logger.warning(f"获取消息预计算兴趣值失败: {e}")
+                    # 使用默认值
+                    interest_scores[msg_dict.get("message_id", "")] = 0.3
 
         except Exception as e:
             logger.warning(f"获取兴趣度评分失败: {e}")

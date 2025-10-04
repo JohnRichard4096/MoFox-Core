@@ -623,7 +623,7 @@ def translate_timestamp_to_human_readable(timestamp: float, mode: str = "normal"
         return time.strftime("%H:%M:%S", time.localtime(timestamp))
 
 
-def get_chat_type_and_target_info(chat_id: str) -> tuple[bool, dict | None]:
+async def get_chat_type_and_target_info(chat_id: str) -> tuple[bool, dict | None]:
     """
     获取聊天类型（是否群聊）和私聊对象信息。
 
@@ -640,7 +640,7 @@ def get_chat_type_and_target_info(chat_id: str) -> tuple[bool, dict | None]:
     chat_target_info = None
 
     try:
-        if chat_stream := get_chat_manager().get_stream(chat_id):
+        if chat_stream := await get_chat_manager().get_stream(chat_id):
             if chat_stream.group_info:
                 is_group_chat = True
                 chat_target_info = None  # Explicitly None for group chat

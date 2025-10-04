@@ -181,7 +181,7 @@ class StreamLoopManager:
     async def _fallback_acquire_slot(self, stream_id: str, force: bool) -> bool:
         """回退方案：获取槽位（原始方法）"""
         # 判断是否需要强制分发
-        should_force = force or self._should_force_dispatch_for_stream(stream_id)
+        should_force = force or await self._should_force_dispatch_for_stream(stream_id)
 
         # 检查是否超过最大并发限制
         current_streams = len(self.stream_loops)
@@ -410,7 +410,7 @@ class StreamLoopManager:
         """
         try:
             chat_manager = get_chat_manager()
-            chat_stream = chat_manager.get_stream(stream_id)
+            chat_stream = await chat_manager.get_stream(stream_id)
             if chat_stream:
                 return chat_stream.context_manager.context
             return None
@@ -538,13 +538,13 @@ class StreamLoopManager:
         self.chatter_manager = chatter_manager
         logger.info(f"设置chatter管理器: {chatter_manager.__class__.__name__}")
 
-    def _should_force_dispatch_for_stream(self, stream_id: str) -> bool:
+    async def _should_force_dispatch_for_stream(self, stream_id: str) -> bool:
         if not self.force_dispatch_unread_threshold or self.force_dispatch_unread_threshold <= 0:
             return False
 
         try:
             chat_manager = get_chat_manager()
-            chat_stream = chat_manager.get_stream(stream_id)
+            chat_stream = await chat_manager.get_stream(stream_id)
             if not chat_stream:
                 return False
 
@@ -595,7 +595,7 @@ class StreamLoopManager:
         """分发完成后基于历史消息刷新能量值"""
         try:
             chat_manager = get_chat_manager()
-            chat_stream = chat_manager.get_stream(stream_id)
+            chat_stream = await chat_manager.get_stream(stream_id)
             if not chat_stream:
                 logger.debug(f"刷新能量时未找到聊天流: {stream_id}")
                 return
@@ -622,7 +622,7 @@ class StreamLoopManager:
         except Exception as e:
             logger.error(f"等待流循环任务结束时出错: {stream_id} - {e}")
 
-    def _force_dispatch_stream(self, stream_id: str) -> None:
+    async def _force_dispatch_stream(self, stream_id: str) -> None:
         """强制分发流处理
         
         当流的未读消息超过阈值时，强制触发分发处理
@@ -657,7 +657,7 @@ class StreamLoopManager:
 
             # 获取聊天管理器和流
             chat_manager = get_chat_manager()
-            chat_stream = chat_manager.get_stream(stream_id)
+            chat_stream = await chat_manager.get_stream(stream_id)
             if not chat_stream:
                 logger.warning(f"强制分发时未找到流: {stream_id}")
                 return

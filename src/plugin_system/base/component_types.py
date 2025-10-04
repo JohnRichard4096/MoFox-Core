@@ -19,6 +19,7 @@ class ComponentType(Enum):
     SCHEDULER = "scheduler"  # 定时任务组件（预留）
     EVENT_HANDLER = "event_handler"  # 事件处理组件
     CHATTER = "chatter"  # 聊天处理器组件
+    INTEREST_CALCULATOR = "interest_calculator"  # 兴趣度计算组件
 
     def __str__(self) -> str:
         return self.value
@@ -227,6 +228,17 @@ class ChatterInfo(ComponentInfo):
     def __post_init__(self):
         super().__post_init__()
         self.component_type = ComponentType.CHATTER
+
+
+@dataclass
+class InterestCalculatorInfo(ComponentInfo):
+    """兴趣度计算组件信息（单例模式）"""
+
+    enabled_by_default: bool = True  # 是否默认启用
+
+    def __post_init__(self):
+        super().__post_init__()
+        self.component_type = ComponentType.INTEREST_CALCULATOR
 
 
 @dataclass

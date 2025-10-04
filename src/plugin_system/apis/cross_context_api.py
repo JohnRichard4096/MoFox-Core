@@ -16,11 +16,11 @@ from src.config.config import global_config
 logger = get_logger("cross_context_api")
 
 
-def get_context_groups(chat_id: str) -> list[list[str]] | None:
+async def get_context_groups(chat_id: str) -> list[list[str]] | None:
     """
     获取当前聊天所在的共享组的其他聊天ID
     """
-    current_stream = get_chat_manager().get_stream(chat_id)
+    current_stream = await get_chat_manager().get_stream(chat_id)
     if not current_stream:
         return None
 
@@ -59,7 +59,7 @@ async def build_cross_context_normal(chat_stream: ChatStream, other_chat_infos: 
                 limit=5,  # 可配置
             )
             if messages:
-                chat_name = get_chat_manager().get_stream_name(stream_id) or chat_raw_id
+                chat_name = await get_chat_manager().get_stream_name(stream_id) or chat_raw_id
                 formatted_messages, _ = await build_readable_messages_with_id(messages, timestamp_mode="relative")
                 cross_context_messages.append(f'[以下是来自"{chat_name}"的近期消息]\n{formatted_messages}')
         except Exception as e:
@@ -100,7 +100,7 @@ async def build_cross_context_s4u(
                     user_messages = [msg for msg in messages if msg.get("user_id") == user_id][-5:]
 
                     if user_messages:
-                        chat_name = get_chat_manager().get_stream_name(stream_id) or chat_raw_id
+                        chat_name = await get_chat_manager().get_stream_name(stream_id) or chat_raw_id
                         user_name = (
                             target_user_info.get("person_name") or target_user_info.get("user_nickname") or user_id
                         )
@@ -167,7 +167,7 @@ async def get_chat_history_by_group_name(group_name: str) -> str:
                 limit=5,  # 可配置
             )
             if messages:
-                chat_name = get_chat_manager().get_stream_name(stream_id) or chat_raw_id
+                chat_name = await get_chat_manager().get_stream_name(stream_id) or chat_raw_id
                 formatted_messages, _ = await build_readable_messages_with_id(messages, timestamp_mode="relative")
                 cross_context_messages.append(f'[以下是来自"{chat_name}"的近期消息]\n{formatted_messages}')
         except Exception as e:
