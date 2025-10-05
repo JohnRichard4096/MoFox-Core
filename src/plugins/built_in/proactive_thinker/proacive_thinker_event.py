@@ -11,7 +11,7 @@ from src.common.logger import get_logger
 from src.config.config import global_config
 from src.manager.async_task_manager import AsyncTask, async_task_manager
 from src.plugin_system import BaseEventHandler, EventType
-from src.plugin_system.apis import chat_api, person_api
+from src.plugin_system.apis import chat_api, message_api, person_api
 from src.plugin_system.base.base_event import HandlerResult
 
 from .proactive_thinker_executor import ProactiveThinkerExecutor
@@ -160,7 +160,9 @@ class ProactiveThinkingTask(AsyncTask):
                             continue
 
                         # 检查冷却时间
-                        time_since_last_active = time.time() - stream.last_active_time
+                        recent_messages = await message_api.get_recent_messages(chat_id=stream.stream_id, limit=1,limit_mode="latest")
+                        last_message_time = recent_messages[0]["time"] if recent_messages else stream.create_time
+                        time_since_last_active = time.time() - last_message_time
                         if time_since_last_active > next_interval:
                             logger.info(
                                 f"【日常唤醒-私聊】聊天流 {stream.stream_id} 已冷却 {time_since_last_active:.2f} 秒，触发主动对话。"
@@ -184,7 +186,9 @@ class ProactiveThinkingTask(AsyncTask):
                     # 检查群聊是否在白名单内
                     if not enabled_groups or f"qq:{stream.group_info.group_id}" in enabled_groups:
                         # 检查冷却时间
-                        time_since_last_active = time.time() - stream.last_active_time
+                        recent_messages = await message_api.get_recent_messages(chat_id=stream.stream_id, limit=1)
+                        last_message_time = recent_messages[0]["time"] if recent_messages else stream.create_time
+                        time_since_last_active = time.time() - last_message_time
                         if time_since_last_active > next_interval:
                             logger.info(
                                 f"【日常唤醒-群聊】聊天流 {stream.stream_id} 已冷却 {time_since_last_active:.2f} 秒，触发主动对话。"

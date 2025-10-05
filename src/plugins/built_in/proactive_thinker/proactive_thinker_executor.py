@@ -1,8 +1,10 @@
+import time
 from datetime import datetime
 from typing import Any
 
 import orjson
 
+from src.chat.utils.chat_message_builder import get_actions_by_timestamp_with_chat
 from src.common.logger import get_logger
 from src.config.config import global_config, model_config
 from src.mood.mood_manager import mood_manager
@@ -140,17 +142,18 @@ class ProactiveThinkerExecutor:
             else "今天没有日程安排。"
         )
 
-        recent_messages = await message_api.get_recent_messages(stream.stream_id)
+        recent_messages = await message_api.get_recent_messages(stream.stream_id,limit=50,limit_mode="latest",hours=12)
         recent_chat_history = (
             await message_api.build_readable_messages_to_str(recent_messages) if recent_messages else "无"
         )
 
-        action_history_list = await database_api.db_query(
-            database_api.MODEL_MAPPING["ActionRecords"],
-            filters={"chat_id": stream_id, "action_name": "proactive_decision"},
-            limit=3,
-            order_by=["-time"],
+        action_history_list = await get_actions_by_timestamp_with_chat(
+            chat_id=stream.stream_id,
+            timestamp_start=time.time() - 3600 * 24,  #过去24小时
+            timestamp_end=time.time(),
+            limit=7,
         )
+
         action_history_context = (
             "\n".join([f"- {a['action_data']}" for a in action_history_list if isinstance(a, dict)])
             if isinstance(action_history_list, list)
