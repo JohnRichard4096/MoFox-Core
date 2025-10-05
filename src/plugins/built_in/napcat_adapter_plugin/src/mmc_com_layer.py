@@ -28,7 +28,7 @@ def create_router(plugin_config: dict):
     return router
 
 
-async def mmc_start_com(plugin_config: dict = None):
+async def mmc_start_com(plugin_config: dict | None = None):
     """启动MaiBot连接"""
     logger.debug("正在连接MaiBot")
     if plugin_config:
