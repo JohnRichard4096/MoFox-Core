@@ -72,7 +72,7 @@ class WEBSEARCHPLUGIN(BasePlugin):
             logger.error(f"❌ 搜索引擎初始化失败: {e}", exc_info=True)
 
     # Python包依赖列表
-    python_dependencies: list[PythonDependency] = [
+    python_dependencies: list[PythonDependency] = [  # noqa: RUF012
         PythonDependency(package_name="asyncddgs", description="异步DuckDuckGo搜索库", optional=False),
         PythonDependency(
             package_name="exa_py",

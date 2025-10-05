@@ -414,13 +414,13 @@ MoFox_Bot(第三方修改版)
         manager_init_tasks = []
 
         # 表情管理器
-        manager_init_tasks.append(self._safe_init("表情包管理器", get_emoji_manager().initialize))
+        manager_init_tasks.append(self._safe_init("表情包管理器", get_emoji_manager().initialize)())
 
         # 情绪管理器
-        manager_init_tasks.append(self._safe_init("情绪管理器", mood_manager.start))
+        manager_init_tasks.append(self._safe_init("情绪管理器", mood_manager.start)())
 
         # 聊天管理器
-        manager_init_tasks.append(self._safe_init("聊天管理器", get_chat_manager()._initialize))
+        manager_init_tasks.append(self._safe_init("聊天管理器", get_chat_manager()._initialize)())
 
         # 等待所有管理器初始化完成
         results = await asyncio.gather(*manager_init_tasks, return_exceptions=True)
@@ -502,7 +502,7 @@ MoFox_Bot(第三方修改版)
             except Exception as e:
                 logger.error(f"日程表管理器初始化失败: {e}")
 
-    async def _safe_init(self, component_name: str, init_func) -> callable:
+    def _safe_init(self, component_name: str, init_func) -> callable:
         """安全初始化组件，捕获异常"""
         async def wrapper():
             try:

@@ -548,6 +548,8 @@ class WebSearchConfig(ValidatedConfigBase):
     enable_url_tool: bool = Field(default=True, description="启用URL工具")
     tavily_api_keys: list[str] = Field(default_factory=lambda: [], description="Tavily API密钥列表，支持轮询机制")
     exa_api_keys: list[str] = Field(default_factory=lambda: [], description="exa API密钥列表，支持轮询机制")
+    searxng_instances: list[str] = Field(default_factory=list, description="SearXNG 实例 URL 列表")
+    searxng_api_keys: list[str] = Field(default_factory=list, description="SearXNG 实例 API 密钥列表")
     enabled_engines: list[str] = Field(default_factory=lambda: ["ddg"], description="启用的搜索引擎")
     search_strategy: Literal["fallback", "single", "parallel"] = Field(default="single", description="搜索策略")
 
