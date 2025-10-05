@@ -111,9 +111,9 @@ async def graceful_shutdown(main_system_instance):
         try:
             from src.chat.message_receive.chat_stream import get_chat_manager
             chat_manager = get_chat_manager()
-            if hasattr(chat_manager, "_stop_auto_save"):
+            if hasattr(chat_manager, "stop_auto_save"):
                 logger.info("正在停止聊天管理器...")
-                chat_manager._stop_auto_save()
+                chat_manager.stop_auto_save()
         except Exception as e:
             logger.warning(f"停止聊天管理器时出错: {e}")
 

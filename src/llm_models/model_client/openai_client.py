@@ -383,17 +383,61 @@ def _default_normal_response_parser(
 
 @client_registry.register_client_class("openai")
 class OpenaiClient(BaseClient):
+    # 类级别的全局缓存：所有 OpenaiClient 实例共享
+    _global_client_cache: dict[int, AsyncOpenAI] = {}
+    """全局 AsyncOpenAI 客户端缓存：config_hash -> AsyncOpenAI 实例"""
+    
     def __init__(self, api_provider: APIProvider):
         super().__init__(api_provider)
+        self._config_hash = self._calculate_config_hash()
+        """当前 provider 的配置哈希值"""
+
+    def _calculate_config_hash(self) -> int:
+        """计算当前配置的哈希值"""
+        config_tuple = (
+            self.api_provider.base_url,
+            self.api_provider.get_api_key(),
+            self.api_provider.timeout,
+        )
+        return hash(config_tuple)
 
     def _create_client(self) -> AsyncOpenAI:
-        """动态创建OpenAI客户端"""
-        return AsyncOpenAI(
+        """
+        获取或创建 OpenAI 客户端实例（全局缓存）
+        
+        多个 OpenaiClient 实例如果配置相同（base_url + api_key + timeout），
+        将共享同一个 AsyncOpenAI 客户端实例，最大化连接池复用。
+        """
+        # 检查全局缓存
+        if self._config_hash in self._global_client_cache:
+            return self._global_client_cache[self._config_hash]
+        
+        # 创建新的 AsyncOpenAI 实例
+        logger.debug(
+            f"创建新的 AsyncOpenAI 客户端实例 "
+            f"(base_url={self.api_provider.base_url}, "
+            f"config_hash={self._config_hash})"
+        )
+        
+        client = AsyncOpenAI(
             base_url=self.api_provider.base_url,
             api_key=self.api_provider.get_api_key(),
             max_retries=0,
             timeout=self.api_provider.timeout,
         )
+        
+        # 存入全局缓存
+        self._global_client_cache[self._config_hash] = client
+        
+        return client
+    
+    @classmethod
+    def get_cache_stats(cls) -> dict:
+        """获取全局缓存统计信息"""
+        return {
+            "cached_openai_clients": len(cls._global_client_cache),
+            "config_hashes": list(cls._global_client_cache.keys()),
+        }
 
     async def get_response(
         self,
