@@ -5,6 +5,7 @@ from typing import Any
 import orjson
 
 from src.chat.utils.chat_message_builder import build_readable_actions, get_actions_by_timestamp_with_chat
+from src.chat.utils.prompt import Prompt
 from src.common.logger import get_logger
 from src.config.config import global_config, model_config
 from src.mood.mood_manager import mood_manager
@@ -193,8 +194,12 @@ class ProactiveThinkerExecutor:
 
             person_id = person_api.get_person_id(user_info.platform, int(user_info.user_id))
             person_info_manager = get_person_info_manager()
+            person_info = await person_info_manager.get_values(person_id, ["user_id", "platform", "person_name"])
+            cross_context_block = await Prompt.build_cross_context(
+                stream.stream_id, "s4u", person_info
+            )
 
-            # 获取关系信息
+             # 获取关系信息
             short_impression = await person_info_manager.get_value(person_id, "short_impression") or "无"
             impression = await person_info_manager.get_value(person_id, "impression") or "无"
             attitude = await person_info_manager.get_value(person_id, "attitude") or 50
@@ -204,6 +209,7 @@ class ProactiveThinkerExecutor:
                     "chat_type": "private",
                     "person_id": person_id,
                     "user_info": user_info,
+                    "cross_context_block": cross_context_block,
                     "relationship": {
                         "short_impression": short_impression,
                         "impression": impression,
@@ -259,7 +265,9 @@ class ProactiveThinkerExecutor:
     - 简短印象: {relationship["short_impression"]}
     - 详细印象: {relationship["impression"]}
     - 好感度: {relationship["attitude"]}/100
-4.  **最近的聊天摘要**:
+4.  **和Ta在别处的讨论摘要**:
+{context["cross_context_block"]}
+5.  **最近的聊天摘要**:
 {context["recent_chat_history"]}
 """
         elif chat_type == "group":
@@ -408,9 +416,11 @@ class ProactiveThinkerExecutor:
     - 简短印象: {relationship["short_impression"]}
     - 详细印象: {relationship["impression"]}
     - 好感度: {relationship["attitude"]}/100
-3.  **最近的聊天摘要**:
+3.  **和Ta在别处的讨论摘要**:
+{context["cross_context_block"]}
+4.  **最近的聊天摘要**:
 {context["recent_chat_history"]}
-4.  **你最近的相关动作**:
+5.  **你最近的相关动作**:
 {context["action_history_context"]}
 
 # 对话指引
