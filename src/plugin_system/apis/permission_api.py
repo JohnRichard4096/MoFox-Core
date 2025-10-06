@@ -36,7 +36,7 @@ class IPermissionManager(ABC):
     async def check_permission(self, user: UserInfo, permission_node: str) -> bool: ...
 
     @abstractmethod
-    def is_master(self, user: UserInfo) -> bool: ...  # 同步快速判断
+    async def is_master(self, user: UserInfo) -> bool: ...  # 同步快速判断
 
     @abstractmethod
     async def register_permission_node(self, node: PermissionNode) -> bool: ...
@@ -82,9 +82,9 @@ class PermissionAPI:
         self._ensure_manager()
         return await self._permission_manager.check_permission(UserInfo(platform, user_id), permission_node)
 
-    def is_master(self, platform: str, user_id: str) -> bool:
+    async def is_master(self, platform: str, user_id: str) -> bool:
         self._ensure_manager()
-        return self._permission_manager.is_master(UserInfo(platform, user_id))
+        return await self._permission_manager.is_master(UserInfo(platform, user_id))
 
     async def register_permission_node(
         self,

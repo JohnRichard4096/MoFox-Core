@@ -48,35 +48,6 @@ class DatabaseProxy:
         return result
 
 
-class SQLAlchemyTransaction:
-    """SQLAlchemy 异步事务上下文管理器 (兼容旧代码示例，推荐直接使用 get_db_session)。"""
-
-    def __init__(self):
-        self._ctx = None
-        self.session = None
-
-    async def __aenter__(self):
-        # get_db_session 是一个 async contextmanager
-        self._ctx = get_db_session()
-        self.session = await self._ctx.__aenter__()
-        return self.session
-
-    async def __aexit__(self, exc_type, exc_val, exc_tb):
-        try:
-            if self.session:
-                if exc_type is None:
-                    try:
-                        await self.session.commit()
-                    except Exception:
-                        await self.session.rollback()
-                        raise
-                else:
-                    await self.session.rollback()
-        finally:
-            if self._ctx:
-                await self._ctx.__aexit__(exc_type, exc_val, exc_tb)
-
-
 # 创建全局数据库代理实例
 db = DatabaseProxy()
 

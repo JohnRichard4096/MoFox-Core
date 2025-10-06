@@ -231,7 +231,7 @@ class PermissionCommand(PlusCommand):
             target_user_id = chat_stream.user_info.user_id
 
         # 检查是否为Master用户
-        is_master = permission_api.is_master(chat_stream.platform, target_user_id)
+        is_master = await permission_api.is_master(chat_stream.platform, target_user_id)
 
         # 获取用户权限
         permissions = await permission_api.get_user_permissions(chat_stream.platform, target_user_id)
