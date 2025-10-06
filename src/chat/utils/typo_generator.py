@@ -56,7 +56,7 @@ class ChineseTypoGenerator:
 
         # 使用内置的词频文件
         char_freq = defaultdict(int)
-        dict_path = os.path.join(os.path.dirname(rjieba.__file__), "dict.txt")
+        dict_path = os.path.join(os.path.dirname(__file__), "dict.txt")
 
         # 读取rjieba的词典文件
         with open(dict_path, encoding="utf-8") as f:
