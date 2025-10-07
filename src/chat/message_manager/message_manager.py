@@ -339,9 +339,9 @@ class MessageManager:
         processing_task = self.chatter_manager.get_processing_task(chat_stream.stream_id)
 
         if processing_task and not processing_task.done():
-            # 计算打断概率
+            # 计算打断概率 - 使用新的线性概率模型
             interruption_probability = chat_stream.context_manager.context.calculate_interruption_probability(
-                global_config.chat.interruption_max_limit, global_config.chat.interruption_probability_factor
+                global_config.chat.interruption_max_limit
             )
 
             # 检查是否已达到最大打断次数

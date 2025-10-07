@@ -126,13 +126,20 @@ class ChatConfig(ValidatedConfigBase):
     timestamp_display_mode: Literal["normal", "normal_no_YMD", "relative"] = Field(
         default="normal_no_YMD", description="时间戳显示模式"
     )
-    # 消息打断系统配置
+    # 消息打断系统配置 - 线性概率模型
     interruption_enabled: bool = Field(default=True, description="是否启用消息打断系统")
-    interruption_max_limit: int = Field(default=3, ge=0, description="每个聊天流的最大打断次数")
-    interruption_probability_factor: float = Field(
-        default=0.8, ge=0.0, le=1.0, description="打断概率因子，当前打断次数/最大打断次数超过此值时触发概率下降"
+    interruption_max_limit: int = Field(default=10, ge=0, description="每个聊天流的最大打断次数")
+    interruption_min_probability: float = Field(
+        default=0.1, ge=0.0, le=1.0, description="最低打断概率（即使达到较高打断次数，也保证有此概率的打断机会）"
     )
     interruption_afc_reduction: float = Field(default=0.05, ge=0.0, le=1.0, description="每次连续打断降低的afc阈值数值")
+
+    # DEPRECATED: interruption_probability_factor (已废弃的配置项)
+    # 新的线性概率模型不再需要复杂的概率因子
+    # 保留此字段是为了向后兼容，现有配置文件不会报错
+    interruption_probability_factor: float = Field(
+        default=0.8, ge=0.0, le=1.0, description="[已废弃] 打断概率因子，新线性概率模型不再使用此参数"
+    )
 
     # 动态消息分发系统配置
     dynamic_distribution_enabled: bool = Field(default=True, description="是否启用动态消息分发周期调整")

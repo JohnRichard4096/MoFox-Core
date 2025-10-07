@@ -92,26 +92,37 @@ class StreamContext(BaseDataModel):
         recent_history = self.history_messages[-limit:] if len(self.history_messages) > limit else self.history_messages
         return recent_history
 
-    def calculate_interruption_probability(self, max_limit: int, probability_factor: float) -> float:
-        """计算打断概率"""
+    def calculate_interruption_probability(self, max_limit: int, min_probability: float = 0.1, probability_factor: float | None = None) -> float:
+        """计算打断概率 - 使用简单线性概率模型
+
+        Args:
+            max_limit: 最大打断次数
+            min_probability: 最低打断概率
+            probability_factor: 已废弃的参数，保留是为了向后兼容，不再使用
+
+        Returns:
+            float: 打断概率 (0.0 - 1.0)
+        """
         if max_limit <= 0:
             return 0.0
-
-        # 计算打断比例
-        interruption_ratio = self.interruption_count / max_limit
 
         # 如果已达到或超过最大次数，完全禁止打断
         if self.interruption_count >= max_limit:
             return 0.0
 
-        # 如果超过概率因子，概率下降
-        if interruption_ratio > probability_factor:
-            # 使用指数衰减，超过限制越多，概率越低
-            excess_ratio = interruption_ratio - probability_factor
-            probability = 0.8 * (0.5**excess_ratio)  # 基础概率0.8，指数衰减
-        else:
-            # 在限制内，保持较高概率
-            probability = 0.8
+        # 线性概率计算：次数越多，概率越低
+        # 公式：概率 = max(min_probability, 1.0 - (当前打断次数 / 最大打断次数))
+        # 这确保了：
+        # - 第1次打断：90% 概率 (如果min_probability=0.1, max_limit=10)
+        # - 第2次打断：80% 概率
+        # - ...
+        # - 第9次打断：10% 概率 (等于min_probability)
+        # - 第10次打断：0% 概率 (达到上限)
+
+        probability = 1.0 - (self.interruption_count / max_limit)
+
+        # 设置最低概率，确保始终有打断的可能性
+        probability = max(min_probability, probability)
 
         return max(0.0, min(1.0, probability))
 

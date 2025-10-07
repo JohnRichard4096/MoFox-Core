@@ -1,5 +1,5 @@
 [inner]
-version = "7.2.3"
+version = "7.2.4"
 
 #----以下是给开发人员阅读的，如果你只是部署了MoFox-Bot，不需要阅读----
 #如果你想要修改配置文件，请递增version的值
@@ -146,11 +146,16 @@ allow_reply_self = false # 是否允许回复自己说的话
 max_context_size = 25 # 上下文长度
 thinking_timeout = 40 # MoFox-Bot一次回复最长思考规划时间，超过这个时间的思考会放弃（往往是api反应太慢）
 
-# 消息打断系统配置
+# 消息打断系统配置 - 线性概率模型
 interruption_enabled = true # 是否启用消息打断系统
-interruption_max_limit = 3 # 每个聊天流的最大打断次数
-interruption_probability_factor = 0.8 # 打断概率因子，当前打断次数/最大打断次数超过此值时触发概率下降
+interruption_max_limit = 10 # 每个聊天流的最大打断次数
+interruption_min_probability = 0.1 # 最低打断概率（即使达到较高打断次数，也保证有此概率的打断机会）
 interruption_afc_reduction = 0.05 # 每次连续打断降低的afc阈值数值
+
+# DEPRECATED: interruption_probability_factor (已废弃的配置项)
+# 新的线性概率模型不再需要复杂的概率因子
+# 公式：打断概率 = max(最低概率, 1.0 - (当前打断次数 / 最大打断次数))
+# interruption_probability_factor = 0.8 # 此配置已废弃，请删除
 
 # 动态消息分发系统配置
 dynamic_distribution_enabled = true # 是否启用动态消息分发周期调整
