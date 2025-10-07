@@ -87,7 +87,7 @@ class CounterAttackGenerator:
             # 调用LLM
             response = await self._call_llm_with_timeout(prompt, model_config)
             
-            return response if response else self._get_fallback_response(detection_result)
+            return response or self._get_fallback_response(detection_result)
             
         except asyncio.TimeoutError:
             logger.error("LLM调用超时")
