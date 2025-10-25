@@ -24,80 +24,6 @@ install(extra_lines=3)
 logger = get_logger("unified_prompt")
 
 
-@dataclass
-class PromptParameters:
-    """统一提示词参数系统"""
-
-    # 基础参数
-    chat_id: str = ""
-    is_group_chat: bool = False
-    sender: str = ""
-    target: str = ""
-    reply_to: str = ""
-    extra_info: str = ""
-    prompt_mode: Literal["s4u", "normal", "minimal"] = "s4u"
-    bot_name: str = ""
-    bot_nickname: str = ""
-
-    # 功能开关
-    enable_tool: bool = True
-    enable_memory: bool = True
-    enable_expression: bool = True
-    enable_relation: bool = True
-    enable_cross_context: bool = True
-    enable_knowledge: bool = True
-
-    # 性能控制
-    max_context_messages: int = 50
-
-    # 调试选项
-    debug_mode: bool = False
-
-    # 聊天历史和上下文
-    chat_target_info: dict[str, Any] | None = None
-    message_list_before_now_long: list[dict[str, Any]] = field(default_factory=list)
-    message_list_before_short: list[dict[str, Any]] = field(default_factory=list)
-    chat_talking_prompt_short: str = ""
-    target_user_info: dict[str, Any] | None = None
-
-    # 已构建的内容块
-    expression_habits_block: str = ""
-    relation_info_block: str = ""
-    memory_block: str = ""
-    tool_info_block: str = ""
-    knowledge_prompt: str = ""
-    cross_context_block: str = ""
-    notice_block: str = ""
-
-    # 其他内容块
-    keywords_reaction_prompt: str = ""
-    extra_info_block: str = ""
-    time_block: str = ""
-    identity_block: str = ""
-    schedule_block: str = ""
-    moderation_prompt_block: str = ""
-    safety_guidelines_block: str = ""
-    reply_target_block: str = ""
-    mood_prompt: str = ""
-    action_descriptions: str = ""
-
-    # 可用动作信息
-    available_actions: dict[str, Any] | None = None
-
-    # 动态生成的聊天场景提示
-    chat_scene: str = ""
-
-    def validate(self) -> list[str]:
-        """参数验证"""
-        errors = []
-        if not self.chat_id:
-            errors.append("chat_id不能为空")
-        if self.prompt_mode not in ["s4u", "normal", "minimal"]:
-            errors.append("prompt_mode必须是's4u'、'normal'或'minimal'")
-        if self.max_context_messages <= 0:
-            errors.append("max_context_messages必须大于0")
-        return errors
-
 
 class PromptContext:
     """提示词上下文管理器"""
@@ -891,10 +817,39 @@ class Prompt:
             "moderation_prompt": self.parameters.moderation_prompt_block or context_data.get("moderation_prompt", ""),
             "safety_guidelines_block": self.parameters.safety_guidelines_block
             or context_data.get("safety_guidelines_block", ""),
+            "auth_role_prompt_block": self.parameters.auth_role_prompt_block
+            or context_data.get("auth_role_prompt_block", ""),
             "chat_scene": self.parameters.chat_scene
             or "你正在一个QQ群里聊天，你需要理解整个群的聊天动态和话题走向，并做出自然的回应。",
         }
 
+    def _prepare_normal_params(self, context_data: dict[str, Any]) -> dict[str, Any]:
+        """准备Normal模式的参数"""
+        return {
+            **context_data,
+            "expression_habits_block": context_data.get("expression_habits_block", ""),
+            "tool_info_block": context_data.get("tool_info_block", ""),
+            "knowledge_prompt": context_data.get("knowledge_prompt", ""),
+            "memory_block": context_data.get("memory_block", ""),
+            "relation_info_block": context_data.get("relation_info_block", ""),
+            "extra_info_block": self.parameters.extra_info_block or context_data.get("extra_info_block", ""),
+            "cross_context_block": context_data.get("cross_context_block", ""),
+            "identity": self.parameters.identity_block or context_data.get("identity", ""),
+            "action_descriptions": self.parameters.action_descriptions or context_data.get("action_descriptions", ""),
+            "schedule_block": self.parameters.schedule_block or context_data.get("schedule_block", ""),
+            "time_block": context_data.get("time_block", ""),
+            "chat_info": context_data.get("chat_info", ""),
+            "reply_target_block": context_data.get("reply_target_block", ""),
+            "config_expression_style": global_config.personality.reply_style,
+            "mood_state": self.parameters.mood_prompt or context_data.get("mood_state", ""),
+            "keywords_reaction_prompt": self.parameters.keywords_reaction_prompt
+            or context_data.get("keywords_reaction_prompt", ""),
+            "moderation_prompt": self.parameters.moderation_prompt_block or context_data.get("moderation_prompt", ""),
+            "safety_guidelines_block": self.parameters.safety_guidelines_block
+            or context_data.get("safety_guidelines_block", ""),
+            "chat_scene": self.parameters.chat_scene
+            or "你正在一个QQ群里聊天，你需要理解整个群的聊天动态和话题走向，并做出自然的回应。",
+        }
 
     def _prepare_default_params(self, context_data: dict[str, Any]) -> dict[str, Any]:
         """准备默认模式的参数"""
@@ -916,6 +871,8 @@ class Prompt:
             "moderation_prompt": self.parameters.moderation_prompt_block or context_data.get("moderation_prompt", ""),
             "safety_guidelines_block": self.parameters.safety_guidelines_block
             or context_data.get("safety_guidelines_block", ""),
+            "auth_role_prompt_block": self.parameters.auth_role_prompt_block
+            or context_data.get("auth_role_prompt_block", ""),
             "bot_name": self.parameters.bot_name,
             "bot_nickname": self.parameters.bot_nickname,
         }
