@@ -106,10 +106,13 @@ class PromptBuilder:
     async def build_expression_habits(chat_stream: ChatStream, chat_history, target):
         style_habits = []
 
-        # 使用从处理器传来的选中表达方式
-        # LLM模式：调用LLM选择5-10个，然后随机选5个
-        selected_expressions ,_ = await expression_selector.select_suitable_expressions_llm(
-            chat_stream.stream_id, chat_history, max_num=12, target_message=target
+        # 使用统一的表达方式选择入口（支持classic和exp_model模式）
+        selected_expressions = await expression_selector.select_suitable_expressions(
+            chat_id=chat_stream.stream_id,
+            chat_history=chat_history,
+            target_message=target,
+            max_num=12,
+            min_num=5
         )
 
         if selected_expressions:
