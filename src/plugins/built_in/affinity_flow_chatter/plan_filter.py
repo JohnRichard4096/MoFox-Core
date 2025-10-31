@@ -607,6 +607,14 @@ class ChatterPlanFilter:
                     except Exception:
                         logger.warning("无法将目标消息转换为DatabaseMessages对象")
 
+                # 从action_data中提取should_quote_reply参数
+                should_quote_reply = action_data.get("should_quote_reply", None)
+                # 将should_quote_reply转换为布尔值（如果是字符串的话）
+                if isinstance(should_quote_reply, str):
+                    should_quote_reply = should_quote_reply.lower() in ["true", "1", "yes"]
+                elif not isinstance(should_quote_reply, bool):
+                    should_quote_reply = None
+
                 parsed_actions.append(
                     ActionPlannerInfo(
                         action_type=action,
@@ -614,6 +622,7 @@ class ChatterPlanFilter:
                         action_data=action_data,
                         action_message=action_message_obj,
                         available_actions=plan.available_actions,
+                        should_quote_reply=should_quote_reply,  # 传递should_quote_reply参数
                     )
                 )
         except Exception as e:
