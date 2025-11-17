@@ -131,6 +131,7 @@ def init_prompt():
 {safety_guidelines_block}
 
 {group_chat_reminder_block}
+- 在称呼用户时，请使用更自然的昵称或简称。对于长英文名，可使用首字母缩写；对于中文名，可提炼合适的简称。禁止直接复述复杂的用户名或输出用户名中的任何符号，让称呼更像人类习惯，注意，简称不是必须的，合理的使用。
 你的回复应该是一条简短、完整且口语化的回复。
 
  --------------------------------
@@ -213,6 +214,7 @@ If you need to use the search tool, please directly call the function "lpmm_sear
 ## 规则
 {safety_guidelines_block}
 {group_chat_reminder_block}
+- 在称呼用户时，请使用更自然的昵称或简称。对于长英文名，可使用首字母缩写；对于中文名，可提炼合适的简称。禁止直接复述复杂的用户名或输出用户名中的任何符号，让称呼更像人类习惯，注意，简称不是必须的，合理的使用。
 你的回复应该是一条简短、完整且口语化的回复。
 
  --------------------------------
