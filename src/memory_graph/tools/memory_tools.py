@@ -16,7 +16,6 @@ from src.memory_graph.storage.graph_store import GraphStore
 from src.memory_graph.storage.persistence import PersistenceManager
 from src.memory_graph.storage.vector_store import VectorStore
 from src.memory_graph.utils.embeddings import EmbeddingGenerator
-from src.memory_graph.utils.graph_expansion import expand_memories_with_semantic_filter
 from src.memory_graph.utils.path_expansion import PathExpansionConfig, PathScoreExpansion
 
 logger = get_logger(__name__)
@@ -647,32 +646,7 @@ class MemoryTools:
 
                         except Exception as e:
                             logger.error(f"路径扩展失败: {e}", exc_info=True)
-                            logger.info("回退到传统图扩展算法")
-                            # 继续执行下面的传统图扩展
-
-                    # 传统图扩展（仅在未启用路径扩展或路径扩展失败时执行）
-                    if not use_path_expansion or expanded_memory_scores == {}:
-                        logger.info(f"开始传统图扩展: 初始记忆{len(initial_memory_ids)}个, 深度={expand_depth}")
-
-                        try:
-                            # 使用共享的图扩展工具函数
-                            expanded_results = await expand_memories_with_semantic_filter(
-                                graph_store=self.graph_store,
-                                vector_store=self.vector_store,
-                                initial_memory_ids=list(initial_memory_ids),
-                                query_embedding=query_embedding,
-                                max_depth=expand_depth,
-                                semantic_threshold=self.expand_semantic_threshold,
-                                max_expanded=top_k * 2
-                            )
-
-                            # 合并扩展结果
-                            expanded_memory_scores.update(dict(expanded_results))
-
-                            logger.info(f"传统图扩展完成: 新增{len(expanded_memory_scores)}个相关记忆")
-
-                        except Exception as e:
-                            logger.warning(f"传统图扩展失败: {e}")
+                            # 路径扩展失败，不再回退到旧的图扩展算法
 
             # 4. 合并初始记忆和扩展记忆
             all_memory_ids = set(initial_memory_ids) | set(expanded_memory_scores.keys())

@@ -700,6 +700,89 @@ class DefaultReplyer:
         # 只有当完全没有任何记忆时才返回空字符串
         return memory_str if has_any_memory else ""
 
+    async def build_three_tier_memory_block(self, chat_history: str, target: str) -> str:
+        """构建三层记忆块（感知记忆 + 短期记忆 + 长期记忆）
+
+        Args:
+            chat_history: 聊天历史记录
+            target: 目标消息内容
+
+        Returns:
+            str: 三层记忆信息字符串
+        """
+        # 检查是否启用三层记忆系统
+        if not (global_config.three_tier_memory and global_config.three_tier_memory.enable):
+            return ""
+
+        try:
+            from src.memory_graph.three_tier.manager_singleton import get_unified_memory_manager
+
+            unified_manager = get_unified_memory_manager()
+            if not unified_manager:
+                logger.debug("[三层记忆] 管理器未初始化")
+                return ""
+
+            # 使用统一管理器的智能检索（Judge模型决策）
+            search_result = await unified_manager.search_memories(
+                query_text=target,
+                use_judge=True,
+            )
+
+            if not search_result:
+                logger.debug("[三层记忆] 未找到相关记忆")
+                return ""
+
+            # 分类记忆块
+            perceptual_blocks = search_result.get("perceptual_blocks", [])
+            short_term_memories = search_result.get("short_term_memories", [])
+            long_term_memories = search_result.get("long_term_memories", [])
+
+            memory_parts = ["### 🔮 三层记忆系统 (Three-Tier Memory)", ""]
+
+            # 添加感知记忆（最近的消息块）
+            if perceptual_blocks:
+                memory_parts.append("#### 🌊 感知记忆 (Perceptual Memory)")
+                for block in perceptual_blocks[:2]:  # 最多显示2个块
+                    # MemoryBlock 对象有 messages 属性（列表）
+                    messages = block.messages if hasattr(block, 'messages') else []
+                    if messages:
+                        block_content = " → ".join([f"{msg.get('sender_name', msg.get('sender_id', ''))}: {msg.get('content', '')[:30]}" for msg in messages[:3]])
+                        memory_parts.append(f"- {block_content}")
+                memory_parts.append("")
+
+            # 添加短期记忆（结构化活跃记忆）
+            if short_term_memories:
+                memory_parts.append("#### 💭 短期记忆 (Short-Term Memory)")
+                for mem in short_term_memories[:3]:  # 最多显示3条
+                    # ShortTermMemory 对象有属性而非字典
+                    if hasattr(mem, 'subject') and hasattr(mem, 'topic') and hasattr(mem, 'object'):
+                        subject = mem.subject or ""
+                        topic = mem.topic or ""
+                        obj = mem.object or ""
+                        content = f"{subject} {topic} {obj}" if all([subject, topic, obj]) else (mem.content if hasattr(mem, 'content') else str(mem))
+                    else:
+                        content = mem.content if hasattr(mem, 'content') else str(mem)
+                    memory_parts.append(f"- {content}")
+                memory_parts.append("")
+
+            # 添加长期记忆（图谱记忆）
+            if long_term_memories:
+                memory_parts.append("#### 🧠 长期记忆 (Long-Term Memory)")
+                for mem in long_term_memories[:3]:  # 最多显示3条
+                    # Memory 对象有 content 属性
+                    content = mem.content if hasattr(mem, 'content') else str(mem)
+                    memory_parts.append(f"- {content}")
+                memory_parts.append("")
+
+            total_count = len(perceptual_blocks) + len(short_term_memories) + len(long_term_memories)
+            logger.info(f"[三层记忆] 检索到 {total_count} 条记忆 (感知:{len(perceptual_blocks)}, 短期:{len(short_term_memories)}, 长期:{len(long_term_memories)})")
+
+            return "\n".join(memory_parts) if len(memory_parts) > 2 else ""
+
+        except Exception as e:
+            logger.error(f"[三层记忆] 检索失败: {e}", exc_info=True)
+            return ""
+
     async def build_tool_info(self, chat_history: str, sender: str, target: str, enable_tool: bool = True) -> str:
         """构建工具信息块
 
@@ -1322,6 +1405,9 @@ class DefaultReplyer:
             "memory_block": asyncio.create_task(
                 self._time_and_run_task(self.build_memory_block(chat_talking_prompt_short, target), "memory_block")
             ),
+            "three_tier_memory": asyncio.create_task(
+                self._time_and_run_task(self.build_three_tier_memory_block(chat_talking_prompt_short, target), "three_tier_memory")
+            ),
             "tool_info": asyncio.create_task(
                 self._time_and_run_task(
                     self.build_tool_info(chat_talking_prompt_short, sender, target, enable_tool=enable_tool),
@@ -1355,6 +1441,7 @@ class DefaultReplyer:
                     "expression_habits": "",
                     "relation_info": "",
                     "memory_block": "",
+                    "three_tier_memory": "",
                     "tool_info": "",
                     "prompt_info": "",
                     "cross_context": "",
@@ -1378,6 +1465,7 @@ class DefaultReplyer:
             "expression_habits": "选取表达方式",
             "relation_info": "感受关系",
             "memory_block": "回忆",
+            "three_tier_memory": "三层记忆检索",
             "tool_info": "使用工具",
             "prompt_info": "获取知识",
         }
@@ -1396,17 +1484,30 @@ class DefaultReplyer:
         expression_habits_block = results_dict["expression_habits"]
         relation_info = results_dict["relation_info"]
         memory_block = results_dict["memory_block"]
+        three_tier_memory_block = results_dict["three_tier_memory"]
         tool_info = results_dict["tool_info"]
         prompt_info = results_dict["prompt_info"]
         cross_context_block = results_dict["cross_context"]
         notice_block = results_dict["notice_block"]
+
+        # 合并三层记忆和原记忆图记忆
+        # 如果三层记忆系统启用且有内容，优先使用三层记忆，否则使用原记忆图
+        if three_tier_memory_block:
+            # 三层记忆系统启用，使用新系统的结果
+            combined_memory_block = three_tier_memory_block
+            if memory_block:
+                # 如果原记忆图也有内容，附加到后面
+                combined_memory_block += "\n" + memory_block
+        else:
+            # 三层记忆系统未启用或无内容，使用原记忆图
+            combined_memory_block = memory_block
 
         # 检查是否为视频分析结果，并注入引导语
         if target and ("[视频内容]" in target or "好的，我将根据您提供的" in target):
             video_prompt_injection = (
                 "\n请注意，以上内容是你刚刚观看的视频，请以第一人称分享你的观后感，而不是在分析一份报告。"
             )
-            memory_block += video_prompt_injection
+            combined_memory_block += video_prompt_injection
 
         keywords_reaction_prompt = await self.build_keywords_reaction_prompt(target)
 
@@ -1537,7 +1638,7 @@ class DefaultReplyer:
             # 传递已构建的参数
             expression_habits_block=expression_habits_block,
             relation_info_block=relation_info,
-            memory_block=memory_block,
+            memory_block=combined_memory_block,  # 使用合并后的记忆块
             tool_info_block=tool_info,
             knowledge_prompt=prompt_info,
             cross_context_block=cross_context_block,

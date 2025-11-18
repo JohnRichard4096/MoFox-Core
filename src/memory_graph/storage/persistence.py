@@ -24,8 +24,17 @@ logger = get_logger(__name__)
 # Windows 平台检测
 IS_WINDOWS = sys.platform == "win32"
 
-# Windows 平台检测
-IS_WINDOWS = sys.platform == "win32"
+# 全局文件锁字典（按文件路径）
+_GLOBAL_FILE_LOCKS: dict[str, asyncio.Lock] = {}
+_LOCKS_LOCK = asyncio.Lock()  # 保护锁字典的锁
+
+
+async def _get_file_lock(file_path: str) -> asyncio.Lock:
+    """获取指定文件的全局锁"""
+    async with _LOCKS_LOCK:
+        if file_path not in _GLOBAL_FILE_LOCKS:
+            _GLOBAL_FILE_LOCKS[file_path] = asyncio.Lock()
+        return _GLOBAL_FILE_LOCKS[file_path]
 
 
 async def safe_atomic_write(temp_path: Path, target_path: Path, max_retries: int = 5) -> None:
@@ -170,7 +179,10 @@ class PersistenceManager:
         Args:
             graph_store: 图存储对象
         """
-        async with self._file_lock:  # 使用文件锁防止并发访问
+        # 使用全局文件锁防止多个系统同时写入同一文件
+        file_lock = await _get_file_lock(str(self.graph_file.absolute()))
+        
+        async with file_lock:
             try:
                 # 转换为字典
                 data = graph_store.to_dict()
@@ -213,7 +225,10 @@ class PersistenceManager:
             logger.info("图数据文件不存在，返回空图")
             return None
 
-        async with self._file_lock:  # 使用文件锁防止并发访问
+        # 使用全局文件锁防止多个系统同时读写同一文件
+        file_lock = await _get_file_lock(str(self.graph_file.absolute()))
+        
+        async with file_lock:
             try:
                 # 读取文件，添加重试机制处理可能的文件锁定
                 data = None

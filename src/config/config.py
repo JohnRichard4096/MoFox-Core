@@ -39,6 +39,7 @@ from src.config.official_configs import (
     ReactionConfig,
     ResponsePostProcessConfig,
     ResponseSplitterConfig,
+    ThreeTierMemoryConfig,
     ToolConfig,
     VideoAnalysisConfig,
     VoiceConfig,
@@ -64,7 +65,7 @@ TEMPLATE_DIR = os.path.join(PROJECT_ROOT, "template")
 
 # 考虑到，实际上配置文件中的mai_version是不会自动更新的,所以采用硬编码
 # 对该字段的更新，请严格参照语义化版本规范：https://semver.org/lang/zh-CN/
-MMC_VERSION = "0.12.0"
+MMC_VERSION = "0.13.0-alpha"
 
 
 def get_key_comment(toml_table, key):
@@ -381,6 +382,7 @@ class Config(ValidatedConfigBase):
     emoji: EmojiConfig = Field(..., description="表情配置")
     expression: ExpressionConfig = Field(..., description="表达配置")
     memory: MemoryConfig | None = Field(default=None, description="记忆配置")
+    three_tier_memory: ThreeTierMemoryConfig | None = Field(default=None, description="三层记忆系统配置")
     mood: MoodConfig = Field(..., description="情绪配置")
     reaction: ReactionConfig = Field(default_factory=ReactionConfig, description="反应规则配置")
     chinese_typo: ChineseTypoConfig = Field(..., description="中文错别字配置")

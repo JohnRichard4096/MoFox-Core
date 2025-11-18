@@ -25,7 +25,6 @@ from src.memory_graph.storage.persistence import PersistenceManager
 from src.memory_graph.storage.vector_store import VectorStore
 from src.memory_graph.tools.memory_tools import MemoryTools
 from src.memory_graph.utils.embeddings import EmbeddingGenerator
-from src.memory_graph.utils.graph_expansion import expand_memories_with_semantic_filter as _expand_graph
 from src.memory_graph.utils.similarity import cosine_similarity
 
 if TYPE_CHECKING:
@@ -868,39 +867,6 @@ class MemoryManager:
                             related_ids.add(mem_id)
 
         return list(related_ids)
-
-    async def expand_memories_with_semantic_filter(
-        self,
-        initial_memory_ids: list[str],
-        query_embedding: "np.ndarray",
-        max_depth: int = 2,
-        semantic_threshold: float = 0.5,
-        max_expanded: int = 20
-    ) -> list[tuple[str, float]]:
-        """
-        从初始记忆集合出发，沿图结构扩展，并用语义相似度过滤
-
-        这个方法解决了纯向量搜索可能遗漏的"语义相关且图结构相关"的记忆。
-
-        Args:
-            initial_memory_ids: 初始记忆ID集合（由向量搜索得到）
-            query_embedding: 查询向量
-            max_depth: 最大扩展深度（1-3推荐）
-            semantic_threshold: 语义相似度阈值（0.5推荐）
-            max_expanded: 最多扩展多少个记忆
-
-        Returns:
-            List[(memory_id, relevance_score)] 按相关度排序
-        """
-        return await _expand_graph(
-            graph_store=self.graph_store,
-            vector_store=self.vector_store,
-            initial_memory_ids=initial_memory_ids,
-            query_embedding=query_embedding,
-            max_depth=max_depth,
-            semantic_threshold=semantic_threshold,
-            max_expanded=max_expanded,
-        )
 
     async def forget_memory(self, memory_id: str, cleanup_orphans: bool = True) -> bool:
         """

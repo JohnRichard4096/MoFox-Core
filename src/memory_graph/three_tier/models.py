@@ -1,0 +1,369 @@
+"""
+三层记忆系统的核心数据模型
+
+定义感知记忆块、短期记忆、图操作语言等数据结构
+"""
+
+from __future__ import annotations
+
+import uuid
+from dataclasses import dataclass, field
+from datetime import datetime
+from enum import Enum
+from typing import Any
+
+import numpy as np
+
+
+class MemoryTier(Enum):
+    """记忆层级枚举"""
+
+    PERCEPTUAL = "perceptual"  # 感知记忆层
+    SHORT_TERM = "short_term"  # 短期记忆层
+    LONG_TERM = "long_term"  # 长期记忆层
+
+
+class GraphOperationType(Enum):
+    """图操作类型枚举"""
+
+    CREATE_NODE = "create_node"  # 创建节点
+    UPDATE_NODE = "update_node"  # 更新节点
+    DELETE_NODE = "delete_node"  # 删除节点
+    MERGE_NODES = "merge_nodes"  # 合并节点
+    CREATE_EDGE = "create_edge"  # 创建边
+    UPDATE_EDGE = "update_edge"  # 更新边
+    DELETE_EDGE = "delete_edge"  # 删除边
+    CREATE_MEMORY = "create_memory"  # 创建记忆
+    UPDATE_MEMORY = "update_memory"  # 更新记忆
+    DELETE_MEMORY = "delete_memory"  # 删除记忆
+    MERGE_MEMORIES = "merge_memories"  # 合并记忆
+
+
+class ShortTermOperation(Enum):
+    """短期记忆操作类型枚举"""
+
+    MERGE = "merge"  # 合并到现有记忆
+    UPDATE = "update"  # 更新现有记忆
+    CREATE_NEW = "create_new"  # 创建新记忆
+    DISCARD = "discard"  # 丢弃（低价值）
+    KEEP_SEPARATE = "keep_separate"  # 保持独立（暂不合并）
+
+
+@dataclass
+class MemoryBlock:
+    """
+    感知记忆块
+
+    表示 n 条消息组成的一个语义单元，是感知记忆的基本单位。
+    """
+
+    id: str  # 记忆块唯一ID
+    messages: list[dict[str, Any]]  # 原始消息列表（包含消息内容、发送者、时间等）
+    combined_text: str  # 合并后的文本（用于生成向量）
+    embedding: np.ndarray | None = None  # 整个块的向量表示
+    created_at: datetime = field(default_factory=datetime.now)
+    recall_count: int = 0  # 被召回次数（用于判断是否激活）
+    last_recalled: datetime | None = None  # 最后一次被召回的时间
+    position_in_stack: int = 0  # 在记忆堆中的位置（0=最顶层）
+    metadata: dict[str, Any] = field(default_factory=dict)  # 额外元数据
+
+    def __post_init__(self):
+        """后初始化处理"""
+        if not self.id:
+            self.id = f"block_{uuid.uuid4().hex[:12]}"
+
+    def to_dict(self) -> dict[str, Any]:
+        """转换为字典（用于序列化）"""
+        return {
+            "id": self.id,
+            "messages": self.messages,
+            "combined_text": self.combined_text,
+            "created_at": self.created_at.isoformat(),
+            "recall_count": self.recall_count,
+            "last_recalled": self.last_recalled.isoformat() if self.last_recalled else None,
+            "position_in_stack": self.position_in_stack,
+            "metadata": self.metadata,
+        }
+
+    @classmethod
+    def from_dict(cls, data: dict[str, Any]) -> MemoryBlock:
+        """从字典创建记忆块"""
+        return cls(
+            id=data["id"],
+            messages=data["messages"],
+            combined_text=data["combined_text"],
+            embedding=None,  # 向量数据需要单独加载
+            created_at=datetime.fromisoformat(data["created_at"]),
+            recall_count=data.get("recall_count", 0),
+            last_recalled=datetime.fromisoformat(data["last_recalled"]) if data.get("last_recalled") else None,
+            position_in_stack=data.get("position_in_stack", 0),
+            metadata=data.get("metadata", {}),
+        )
+
+    def increment_recall(self) -> None:
+        """增加召回计数"""
+        self.recall_count += 1
+        self.last_recalled = datetime.now()
+
+    def __str__(self) -> str:
+        return f"MemoryBlock({self.id[:8]}, messages={len(self.messages)}, recalls={self.recall_count})"
+
+
+@dataclass
+class PerceptualMemory:
+    """
+    感知记忆（记忆堆的完整状态）
+
+    全局单例，管理所有感知记忆块
+    """
+
+    blocks: list[MemoryBlock] = field(default_factory=list)  # 记忆块列表（有序，新的在前）
+    max_blocks: int = 50  # 记忆堆最大容量
+    block_size: int = 5  # 每个块包含的消息数量
+    pending_messages: list[dict[str, Any]] = field(default_factory=list)  # 等待组块的消息缓存
+    created_at: datetime = field(default_factory=datetime.now)
+    metadata: dict[str, Any] = field(default_factory=dict)  # 全局元数据
+
+    def to_dict(self) -> dict[str, Any]:
+        """转换为字典（用于序列化）"""
+        return {
+            "blocks": [block.to_dict() for block in self.blocks],
+            "max_blocks": self.max_blocks,
+            "block_size": self.block_size,
+            "pending_messages": self.pending_messages,
+            "created_at": self.created_at.isoformat(),
+            "metadata": self.metadata,
+        }
+
+    @classmethod
+    def from_dict(cls, data: dict[str, Any]) -> PerceptualMemory:
+        """从字典创建感知记忆"""
+        return cls(
+            blocks=[MemoryBlock.from_dict(b) for b in data.get("blocks", [])],
+            max_blocks=data.get("max_blocks", 50),
+            block_size=data.get("block_size", 5),
+            pending_messages=data.get("pending_messages", []),
+            created_at=datetime.fromisoformat(data["created_at"]),
+            metadata=data.get("metadata", {}),
+        )
+
+
+@dataclass
+class ShortTermMemory:
+    """
+    短期记忆
+
+    结构化的活跃记忆，介于感知记忆和长期记忆之间。
+    使用与长期记忆相同的 Memory 结构，但不包含图关系。
+    """
+
+    id: str  # 短期记忆唯一ID
+    content: str  # 记忆的文本内容（LLM 结构化后的描述）
+    embedding: np.ndarray | None = None  # 向量表示
+    importance: float = 0.5  # 重要性评分 [0-1]
+    source_block_ids: list[str] = field(default_factory=list)  # 来源感知记忆块ID列表
+    created_at: datetime = field(default_factory=datetime.now)
+    last_accessed: datetime = field(default_factory=datetime.now)
+    access_count: int = 0  # 访问次数
+    metadata: dict[str, Any] = field(default_factory=dict)  # 额外元数据
+
+    # 记忆结构化字段（与长期记忆 Memory 兼容）
+    subject: str | None = None  # 主体
+    topic: str | None = None  # 主题
+    object: str | None = None  # 客体
+    memory_type: str | None = None  # 记忆类型
+    attributes: dict[str, str] = field(default_factory=dict)  # 属性
+
+    def __post_init__(self):
+        """后初始化处理"""
+        if not self.id:
+            self.id = f"stm_{uuid.uuid4().hex[:12]}"
+        # 确保重要性在有效范围内
+        self.importance = max(0.0, min(1.0, self.importance))
+
+    def to_dict(self) -> dict[str, Any]:
+        """转换为字典（用于序列化）"""
+        return {
+            "id": self.id,
+            "content": self.content,
+            "importance": self.importance,
+            "source_block_ids": self.source_block_ids,
+            "created_at": self.created_at.isoformat(),
+            "last_accessed": self.last_accessed.isoformat(),
+            "access_count": self.access_count,
+            "metadata": self.metadata,
+            "subject": self.subject,
+            "topic": self.topic,
+            "object": self.object,
+            "memory_type": self.memory_type,
+            "attributes": self.attributes,
+        }
+
+    @classmethod
+    def from_dict(cls, data: dict[str, Any]) -> ShortTermMemory:
+        """从字典创建短期记忆"""
+        return cls(
+            id=data["id"],
+            content=data["content"],
+            embedding=None,  # 向量数据需要单独加载
+            importance=data.get("importance", 0.5),
+            source_block_ids=data.get("source_block_ids", []),
+            created_at=datetime.fromisoformat(data["created_at"]),
+            last_accessed=datetime.fromisoformat(data.get("last_accessed", data["created_at"])),
+            access_count=data.get("access_count", 0),
+            metadata=data.get("metadata", {}),
+            subject=data.get("subject"),
+            topic=data.get("topic"),
+            object=data.get("object"),
+            memory_type=data.get("memory_type"),
+            attributes=data.get("attributes", {}),
+        )
+
+    def update_access(self) -> None:
+        """更新访问记录"""
+        self.last_accessed = datetime.now()
+        self.access_count += 1
+
+    def __str__(self) -> str:
+        return f"ShortTermMemory({self.id[:8]}, content={self.content[:30]}..., importance={self.importance:.2f})"
+
+
+@dataclass
+class GraphOperation:
+    """
+    图操作指令
+
+    表示一个对长期记忆图的原子操作，由 LLM 生成。
+    """
+
+    operation_type: GraphOperationType  # 操作类型
+    target_id: str | None = None  # 目标对象ID（节点/边/记忆ID）
+    target_ids: list[str] = field(default_factory=list)  # 多个目标ID（用于合并操作）
+    parameters: dict[str, Any] = field(default_factory=dict)  # 操作参数
+    reason: str = ""  # 操作原因（LLM 的推理过程）
+    confidence: float = 1.0  # 操作置信度 [0-1]
+
+    def __post_init__(self):
+        """后初始化处理"""
+        self.confidence = max(0.0, min(1.0, self.confidence))
+
+    def to_dict(self) -> dict[str, Any]:
+        """转换为字典"""
+        return {
+            "operation_type": self.operation_type.value,
+            "target_id": self.target_id,
+            "target_ids": self.target_ids,
+            "parameters": self.parameters,
+            "reason": self.reason,
+            "confidence": self.confidence,
+        }
+
+    @classmethod
+    def from_dict(cls, data: dict[str, Any]) -> GraphOperation:
+        """从字典创建操作"""
+        return cls(
+            operation_type=GraphOperationType(data["operation_type"]),
+            target_id=data.get("target_id"),
+            target_ids=data.get("target_ids", []),
+            parameters=data.get("parameters", {}),
+            reason=data.get("reason", ""),
+            confidence=data.get("confidence", 1.0),
+        )
+
+    def __str__(self) -> str:
+        return f"GraphOperation({self.operation_type.value}, target={self.target_id}, confidence={self.confidence:.2f})"
+
+
+@dataclass
+class JudgeDecision:
+    """
+    裁判模型决策结果
+
+    用于判断检索到的记忆是否充足
+    """
+
+    is_sufficient: bool  # 是否充足
+    confidence: float = 0.5  # 置信度 [0-1]
+    reasoning: str = ""  # 推理过程
+    additional_queries: list[str] = field(default_factory=list)  # 额外需要检索的 query
+    missing_aspects: list[str] = field(default_factory=list)  # 缺失的信息维度
+
+    def __post_init__(self):
+        """后初始化处理"""
+        self.confidence = max(0.0, min(1.0, self.confidence))
+
+    def to_dict(self) -> dict[str, Any]:
+        """转换为字典"""
+        return {
+            "is_sufficient": self.is_sufficient,
+            "confidence": self.confidence,
+            "reasoning": self.reasoning,
+            "additional_queries": self.additional_queries,
+            "missing_aspects": self.missing_aspects,
+        }
+
+    @classmethod
+    def from_dict(cls, data: dict[str, Any]) -> JudgeDecision:
+        """从字典创建决策"""
+        return cls(
+            is_sufficient=data["is_sufficient"],
+            confidence=data.get("confidence", 0.5),
+            reasoning=data.get("reasoning", ""),
+            additional_queries=data.get("additional_queries", []),
+            missing_aspects=data.get("missing_aspects", []),
+        )
+
+    def __str__(self) -> str:
+        status = "充足" if self.is_sufficient else "不足"
+        return f"JudgeDecision({status}, confidence={self.confidence:.2f}, extra_queries={len(self.additional_queries)})"
+
+
+@dataclass
+class ShortTermDecision:
+    """
+    短期记忆决策结果
+
+    LLM 对新短期记忆的处理决策
+    """
+
+    operation: ShortTermOperation  # 操作类型
+    target_memory_id: str | None = None  # 目标记忆ID（用于 MERGE/UPDATE）
+    merged_content: str | None = None  # 合并后的内容
+    reasoning: str = ""  # 推理过程
+    confidence: float = 1.0  # 置信度 [0-1]
+    updated_importance: float | None = None  # 更新后的重要性
+    updated_metadata: dict[str, Any] = field(default_factory=dict)  # 更新后的元数据
+
+    def __post_init__(self):
+        """后初始化处理"""
+        self.confidence = max(0.0, min(1.0, self.confidence))
+        if self.updated_importance is not None:
+            self.updated_importance = max(0.0, min(1.0, self.updated_importance))
+
+    def to_dict(self) -> dict[str, Any]:
+        """转换为字典"""
+        return {
+            "operation": self.operation.value,
+            "target_memory_id": self.target_memory_id,
+            "merged_content": self.merged_content,
+            "reasoning": self.reasoning,
+            "confidence": self.confidence,
+            "updated_importance": self.updated_importance,
+            "updated_metadata": self.updated_metadata,
+        }
+
+    @classmethod
+    def from_dict(cls, data: dict[str, Any]) -> ShortTermDecision:
+        """从字典创建决策"""
+        return cls(
+            operation=ShortTermOperation(data["operation"]),
+            target_memory_id=data.get("target_memory_id"),
+            merged_content=data.get("merged_content"),
+            reasoning=data.get("reasoning", ""),
+            confidence=data.get("confidence", 1.0),
+            updated_importance=data.get("updated_importance"),
+            updated_metadata=data.get("updated_metadata", {}),
+        )
+
+    def __str__(self) -> str:
+        return f"ShortTermDecision({self.operation.value}, target={self.target_memory_id}, confidence={self.confidence:.2f})"

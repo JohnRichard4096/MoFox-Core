@@ -1,5 +1,5 @@
 [inner]
-version = "7.7.4"
+version = "7.8.0"
 
 #----以下是给开发人员阅读的，如果你只是部署了MoFox-Bot，不需要阅读----
 #如果你想要修改配置文件，请递增version的值
@@ -311,6 +311,38 @@ path_expansion_recency_weight = 0.20 # 时效性在最终评分中的权重
 # === 性能配置 ===
 max_memory_nodes_per_memory = 10 # 每条记忆最多包含的节点数
 max_related_memories = 5 # 激活传播时最多影响的相关记忆数
+
+# ==================== 三层记忆系统配置 (Three-Tier Memory System) ====================
+# 受人脑记忆机制启发的分层记忆架构：
+# 1. 感知记忆层 (Perceptual Memory) - 消息块的短期缓存
+# 2. 短期记忆层 (Short-term Memory) - 结构化的活跃记忆
+# 3. 长期记忆层 (Long-term Memory) - 持久化的图结构记忆
+[three_tier_memory]
+enable = false # 是否启用三层记忆系统（实验性功能，建议在测试环境先试用）
+data_dir = "data/memory_graph/three_tier" # 数据存储目录
+
+# --- 感知记忆层配置 ---
+perceptual_max_blocks = 50 # 记忆堆最大容量（全局，不区分聊天流）
+perceptual_block_size = 5 # 每个记忆块包含的消息数量
+perceptual_similarity_threshold = 0.55 # 相似度阈值（0-1）
+perceptual_topk = 3 # TopK召回数量
+activation_threshold = 3 # 激活阈值（召回次数→短期）
+
+# --- 短期记忆层配置 ---
+short_term_max_memories = 30 # 短期记忆最大数量
+short_term_transfer_threshold = 0.6 # 转移到长期记忆的重要性阈值（0.0-1.0）
+short_term_search_top_k = 5 # 搜索时返回的最大数量
+short_term_decay_factor = 0.98 # 衰减因子
+
+# --- 长期记忆层配置 ---
+long_term_batch_size = 10 # 批量转移大小
+long_term_decay_factor = 0.95 # 衰减因子（比短期记忆慢）
+long_term_auto_transfer_interval = 600 # 自动转移间隔（秒）
+
+# --- Judge模型配置 ---
+judge_model_name = "utils_small" # 用于决策的LLM模型
+judge_temperature = 0.1 # Judge模型的温度参数
+enable_judge_retrieval = true # 启用智能检索判断
 
 [voice]
 enable_asr = true # 是否启用语音识别，启用后MoFox-Bot可以识别语音消息，启用该功能需要配置语音识别模型[model.voice]

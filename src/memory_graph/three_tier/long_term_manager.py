@@ -1,0 +1,667 @@
+"""
+长期记忆层管理器 (Long-term Memory Manager)
+
+负责管理长期记忆图：
+- 短期记忆到长期记忆的转移
+- 图操作语言的执行
+- 激活度衰减优化（长期记忆衰减更慢）
+"""
+
+import asyncio
+import json
+import re
+from datetime import datetime, timedelta
+from pathlib import Path
+from typing import Any
+
+from src.common.logger import get_logger
+from src.memory_graph.manager import MemoryManager
+from src.memory_graph.models import Memory, MemoryType, NodeType
+from src.memory_graph.three_tier.models import GraphOperation, GraphOperationType, ShortTermMemory
+
+logger = get_logger(__name__)
+
+
+class LongTermMemoryManager:
+    """
+    长期记忆层管理器
+
+    基于现有的 MemoryManager，扩展支持：
+    - 短期记忆的批量转移
+    - 图操作语言的解析和执行
+    - 优化的激活度衰减策略
+    """
+
+    def __init__(
+        self,
+        memory_manager: MemoryManager,
+        batch_size: int = 10,
+        search_top_k: int = 5,
+        llm_temperature: float = 0.2,
+        long_term_decay_factor: float = 0.95,
+    ):
+        """
+        初始化长期记忆层管理器
+
+        Args:
+            memory_manager: 现有的 MemoryManager 实例
+            batch_size: 批量处理的短期记忆数量
+            search_top_k: 检索相似记忆的数量
+            llm_temperature: LLM 决策的温度参数
+            long_term_decay_factor: 长期记忆的衰减因子（比短期记忆慢）
+        """
+        self.memory_manager = memory_manager
+        self.batch_size = batch_size
+        self.search_top_k = search_top_k
+        self.llm_temperature = llm_temperature
+        self.long_term_decay_factor = long_term_decay_factor
+
+        # 状态
+        self._initialized = False
+
+        logger.info(
+            f"长期记忆管理器已创建 (batch_size={batch_size}, "
+            f"search_top_k={search_top_k}, decay_factor={long_term_decay_factor:.2f})"
+        )
+
+    async def initialize(self) -> None:
+        """初始化管理器"""
+        if self._initialized:
+            logger.warning("长期记忆管理器已经初始化")
+            return
+
+        try:
+            logger.info("开始初始化长期记忆管理器...")
+
+            # 确保底层 MemoryManager 已初始化
+            if not self.memory_manager._initialized:
+                await self.memory_manager.initialize()
+
+            self._initialized = True
+            logger.info("✅ 长期记忆管理器初始化完成")
+
+        except Exception as e:
+            logger.error(f"长期记忆管理器初始化失败: {e}", exc_info=True)
+            raise
+
+    async def transfer_from_short_term(
+        self, short_term_memories: list[ShortTermMemory]
+    ) -> dict[str, Any]:
+        """
+        将短期记忆批量转移到长期记忆
+
+        流程：
+        1. 分批处理短期记忆
+        2. 对每条短期记忆，在长期记忆中检索相似记忆
+        3. 将短期记忆和候选长期记忆发送给 LLM 决策
+        4. 解析并执行图操作指令
+        5. 保存更新
+
+        Args:
+            short_term_memories: 待转移的短期记忆列表
+
+        Returns:
+            转移结果统计
+        """
+        if not self._initialized:
+            await self.initialize()
+
+        try:
+            logger.info(f"开始转移 {len(short_term_memories)} 条短期记忆到长期记忆...")
+
+            result = {
+                "processed_count": 0,
+                "created_count": 0,
+                "updated_count": 0,
+                "merged_count": 0,
+                "failed_count": 0,
+                "transferred_memory_ids": [],
+            }
+
+            # 分批处理
+            for batch_start in range(0, len(short_term_memories), self.batch_size):
+                batch_end = min(batch_start + self.batch_size, len(short_term_memories))
+                batch = short_term_memories[batch_start:batch_end]
+
+                logger.info(
+                    f"处理批次 {batch_start // self.batch_size + 1}/"
+                    f"{(len(short_term_memories) - 1) // self.batch_size + 1} "
+                    f"({len(batch)} 条记忆)"
+                )
+
+                # 处理当前批次
+                batch_result = await self._process_batch(batch)
+
+                # 汇总结果
+                result["processed_count"] += batch_result["processed_count"]
+                result["created_count"] += batch_result["created_count"]
+                result["updated_count"] += batch_result["updated_count"]
+                result["merged_count"] += batch_result["merged_count"]
+                result["failed_count"] += batch_result["failed_count"]
+                result["transferred_memory_ids"].extend(batch_result["transferred_memory_ids"])
+
+                # 让出控制权
+                await asyncio.sleep(0.01)
+
+            logger.info(f"✅ 短期记忆转移完成: {result}")
+            return result
+
+        except Exception as e:
+            logger.error(f"转移短期记忆失败: {e}", exc_info=True)
+            return {"error": str(e), "processed_count": 0}
+
+    async def _process_batch(self, batch: list[ShortTermMemory]) -> dict[str, Any]:
+        """
+        处理一批短期记忆
+
+        Args:
+            batch: 短期记忆批次
+
+        Returns:
+            批次处理结果
+        """
+        result = {
+            "processed_count": 0,
+            "created_count": 0,
+            "updated_count": 0,
+            "merged_count": 0,
+            "failed_count": 0,
+            "transferred_memory_ids": [],
+        }
+
+        for stm in batch:
+            try:
+                # 步骤1: 在长期记忆中检索相似记忆
+                similar_memories = await self._search_similar_long_term_memories(stm)
+
+                # 步骤2: LLM 决策如何更新图结构
+                operations = await self._decide_graph_operations(stm, similar_memories)
+
+                # 步骤3: 执行图操作
+                success = await self._execute_graph_operations(operations, stm)
+
+                if success:
+                    result["processed_count"] += 1
+                    result["transferred_memory_ids"].append(stm.id)
+
+                    # 统计操作类型
+                    for op in operations:
+                        if op.operation_type == GraphOperationType.CREATE_MEMORY:
+                            result["created_count"] += 1
+                        elif op.operation_type == GraphOperationType.UPDATE_MEMORY:
+                            result["updated_count"] += 1
+                        elif op.operation_type == GraphOperationType.MERGE_MEMORIES:
+                            result["merged_count"] += 1
+                else:
+                    result["failed_count"] += 1
+
+            except Exception as e:
+                logger.error(f"处理短期记忆 {stm.id} 失败: {e}", exc_info=True)
+                result["failed_count"] += 1
+
+        return result
+
+    async def _search_similar_long_term_memories(
+        self, stm: ShortTermMemory
+    ) -> list[Memory]:
+        """
+        在长期记忆中检索与短期记忆相似的记忆
+
+        Args:
+            stm: 短期记忆
+
+        Returns:
+            相似的长期记忆列表
+        """
+        try:
+            # 使用短期记忆的内容进行检索
+            memories = await self.memory_manager.search_memories(
+                query=stm.content,
+                top_k=self.search_top_k,
+                include_forgotten=False,
+                use_multi_query=False,  # 不使用多查询，避免过度扩展
+            )
+
+            logger.debug(f"为短期记忆 {stm.id} 找到 {len(memories)} 个相似长期记忆")
+            return memories
+
+        except Exception as e:
+            logger.error(f"检索相似长期记忆失败: {e}", exc_info=True)
+            return []
+
+    async def _decide_graph_operations(
+        self, stm: ShortTermMemory, similar_memories: list[Memory]
+    ) -> list[GraphOperation]:
+        """
+        使用 LLM 决策如何更新图结构
+
+        Args:
+            stm: 短期记忆
+            similar_memories: 相似的长期记忆列表
+
+        Returns:
+            图操作指令列表
+        """
+        try:
+            from src.config.config import model_config
+            from src.llm_models.utils_model import LLMRequest
+
+            # 构建提示词
+            prompt = self._build_graph_operation_prompt(stm, similar_memories)
+
+            # 调用 LLM
+            llm = LLMRequest(
+                model_set=model_config.model_task_config.utils_small,
+                request_type="long_term_memory.graph_operations",
+            )
+
+            response, _ = await llm.generate_response_async(
+                prompt,
+                temperature=self.llm_temperature,
+                max_tokens=2000,
+            )
+
+            # 解析图操作指令
+            operations = self._parse_graph_operations(response)
+
+            logger.info(f"LLM 生成 {len(operations)} 个图操作指令")
+            return operations
+
+        except Exception as e:
+            logger.error(f"LLM 决策图操作失败: {e}", exc_info=True)
+            # 默认创建新记忆
+            return [
+                GraphOperation(
+                    operation_type=GraphOperationType.CREATE_MEMORY,
+                    parameters={
+                        "subject": stm.subject or "未知",
+                        "topic": stm.topic or stm.content[:50],
+                        "object": stm.object,
+                        "memory_type": stm.memory_type or "fact",
+                        "importance": stm.importance,
+                        "attributes": stm.attributes,
+                    },
+                    reason=f"LLM 决策失败，默认创建新记忆: {e}",
+                    confidence=0.5,
+                )
+            ]
+
+    def _build_graph_operation_prompt(
+        self, stm: ShortTermMemory, similar_memories: list[Memory]
+    ) -> str:
+        """构建图操作的 LLM 提示词"""
+
+        # 格式化短期记忆
+        stm_desc = f"""
+**待转移的短期记忆：**
+- 内容: {stm.content}
+- 主体: {stm.subject or '未指定'}
+- 主题: {stm.topic or '未指定'}
+- 客体: {stm.object or '未指定'}
+- 类型: {stm.memory_type or '未指定'}
+- 重要性: {stm.importance:.2f}
+- 属性: {json.dumps(stm.attributes, ensure_ascii=False)}
+"""
+
+        # 格式化相似的长期记忆
+        similar_desc = ""
+        if similar_memories:
+            similar_lines = []
+            for i, mem in enumerate(similar_memories):
+                subject_node = mem.get_subject_node()
+                mem_text = mem.to_text()
+                similar_lines.append(
+                    f"{i + 1}. [ID: {mem.id}] {mem_text}\n"
+                    f"   - 重要性: {mem.importance:.2f}\n"
+                    f"   - 激活度: {mem.activation:.2f}\n"
+                    f"   - 节点数: {len(mem.nodes)}"
+                )
+            similar_desc = "\n\n".join(similar_lines)
+        else:
+            similar_desc = "（未找到相似记忆）"
+
+        prompt = f"""你是一个记忆图结构管理专家。现在需要将一条短期记忆转移到长期记忆图中。
+
+{stm_desc}
+
+**候选的相似长期记忆：**
+{similar_desc}
+
+**图操作语言说明：**
+
+你可以使用以下操作指令来精确控制记忆图的更新：
+
+1. **CREATE_MEMORY** - 创建新记忆
+   参数: subject, topic, object, memory_type, importance, attributes
+
+2. **UPDATE_MEMORY** - 更新现有记忆
+   参数: memory_id, updated_fields (包含要更新的字段)
+
+3. **MERGE_MEMORIES** - 合并多个记忆
+   参数: source_memory_ids (要合并的记忆ID列表), merged_content, merged_importance
+
+4. **CREATE_NODE** - 创建新节点
+   参数: content, node_type, memory_id (所属记忆ID)
+
+5. **UPDATE_NODE** - 更新节点
+   参数: node_id, updated_content
+
+6. **MERGE_NODES** - 合并节点
+   参数: source_node_ids, merged_content
+
+7. **CREATE_EDGE** - 创建边
+   参数: source_node_id, target_node_id, relation, edge_type, importance
+
+8. **UPDATE_EDGE** - 更新边
+   参数: edge_id, updated_relation, updated_importance
+
+9. **DELETE_EDGE** - 删除边
+   参数: edge_id
+
+**任务要求：**
+1. 分析短期记忆与候选长期记忆的关系
+2. 决定最佳的图更新策略：
+   - 如果没有相似记忆或差异较大 → CREATE_MEMORY
+   - 如果有高度相似记忆 → UPDATE_MEMORY 或 MERGE_MEMORIES
+   - 如果需要补充信息 → CREATE_NODE + CREATE_EDGE
+3. 生成具体的图操作指令列表
+4. 确保操作的逻辑性和连贯性
+
+**输出格式（JSON数组）：**
+```json
+[
+  {{
+    "operation_type": "CREATE_MEMORY/UPDATE_MEMORY/MERGE_MEMORIES/...",
+    "target_id": "目标记忆/节点/边的ID（如适用）",
+    "parameters": {{
+      "参数名": "参数值",
+      ...
+    }},
+    "reason": "操作原因和推理过程",
+    "confidence": 0.85
+  }},
+  ...
+]
+```
+
+请输出JSON数组："""
+
+        return prompt
+
+    def _parse_graph_operations(self, response: str) -> list[GraphOperation]:
+        """解析 LLM 生成的图操作指令"""
+        try:
+            # 提取 JSON
+            json_match = re.search(r"```json\s*(.*?)\s*```", response, re.DOTALL)
+            if json_match:
+                json_str = json_match.group(1)
+            else:
+                json_str = response.strip()
+
+            # 移除注释
+            json_str = re.sub(r"//.*", "", json_str)
+            json_str = re.sub(r"/\*.*?\*/", "", json_str, flags=re.DOTALL)
+
+            # 解析
+            data = json.loads(json_str)
+
+            # 转换为 GraphOperation 对象
+            operations = []
+            for item in data:
+                try:
+                    op = GraphOperation(
+                        operation_type=GraphOperationType(item["operation_type"]),
+                        target_id=item.get("target_id"),
+                        parameters=item.get("parameters", {}),
+                        reason=item.get("reason", ""),
+                        confidence=item.get("confidence", 1.0),
+                    )
+                    operations.append(op)
+                except (KeyError, ValueError) as e:
+                    logger.warning(f"解析图操作失败: {e}, 项目: {item}")
+                    continue
+
+            return operations
+
+        except json.JSONDecodeError as e:
+            logger.error(f"JSON 解析失败: {e}, 响应: {response[:200]}")
+            return []
+
+    async def _execute_graph_operations(
+        self, operations: list[GraphOperation], source_stm: ShortTermMemory
+    ) -> bool:
+        """
+        执行图操作指令
+
+        Args:
+            operations: 图操作指令列表
+            source_stm: 源短期记忆
+
+        Returns:
+            是否执行成功
+        """
+        if not operations:
+            logger.warning("没有图操作指令，跳过执行")
+            return False
+
+        try:
+            success_count = 0
+
+            for op in operations:
+                try:
+                    if op.operation_type == GraphOperationType.CREATE_MEMORY:
+                        await self._execute_create_memory(op, source_stm)
+                        success_count += 1
+
+                    elif op.operation_type == GraphOperationType.UPDATE_MEMORY:
+                        await self._execute_update_memory(op)
+                        success_count += 1
+
+                    elif op.operation_type == GraphOperationType.MERGE_MEMORIES:
+                        await self._execute_merge_memories(op, source_stm)
+                        success_count += 1
+
+                    elif op.operation_type == GraphOperationType.CREATE_NODE:
+                        await self._execute_create_node(op)
+                        success_count += 1
+
+                    elif op.operation_type == GraphOperationType.CREATE_EDGE:
+                        await self._execute_create_edge(op)
+                        success_count += 1
+
+                    else:
+                        logger.warning(f"未实现的操作类型: {op.operation_type}")
+
+                except Exception as e:
+                    logger.error(f"执行图操作失败: {op}, 错误: {e}", exc_info=True)
+
+            logger.info(f"执行了 {success_count}/{len(operations)} 个图操作")
+            return success_count > 0
+
+        except Exception as e:
+            logger.error(f"执行图操作失败: {e}", exc_info=True)
+            return False
+
+    async def _execute_create_memory(
+        self, op: GraphOperation, source_stm: ShortTermMemory
+    ) -> None:
+        """执行创建记忆操作"""
+        params = op.parameters
+
+        memory = await self.memory_manager.create_memory(
+            subject=params.get("subject", source_stm.subject or "未知"),
+            memory_type=params.get("memory_type", source_stm.memory_type or "fact"),
+            topic=params.get("topic", source_stm.topic or source_stm.content[:50]),
+            object=params.get("object", source_stm.object),
+            attributes=params.get("attributes", source_stm.attributes),
+            importance=params.get("importance", source_stm.importance),
+        )
+
+        if memory:
+            # 标记为从短期记忆转移而来
+            memory.metadata["transferred_from_stm"] = source_stm.id
+            memory.metadata["transfer_time"] = datetime.now().isoformat()
+
+            logger.info(f"✅ 创建长期记忆: {memory.id} (来自短期记忆 {source_stm.id})")
+        else:
+            logger.error(f"创建长期记忆失败: {op}")
+
+    async def _execute_update_memory(self, op: GraphOperation) -> None:
+        """执行更新记忆操作"""
+        memory_id = op.target_id
+        updates = op.parameters.get("updated_fields", {})
+
+        success = await self.memory_manager.update_memory(memory_id, **updates)
+
+        if success:
+            logger.info(f"✅ 更新长期记忆: {memory_id}")
+        else:
+            logger.error(f"更新长期记忆失败: {memory_id}")
+
+    async def _execute_merge_memories(
+        self, op: GraphOperation, source_stm: ShortTermMemory
+    ) -> None:
+        """执行合并记忆操作"""
+        source_ids = op.parameters.get("source_memory_ids", [])
+        merged_content = op.parameters.get("merged_content", "")
+        merged_importance = op.parameters.get("merged_importance", source_stm.importance)
+
+        if not source_ids:
+            logger.warning("合并操作缺少源记忆ID，跳过")
+            return
+
+        # 简化实现：更新第一个记忆，删除其他记忆
+        target_id = source_ids[0]
+        success = await self.memory_manager.update_memory(
+            target_id,
+            metadata={
+                "merged_content": merged_content,
+                "merged_from": source_ids[1:],
+                "merged_from_stm": source_stm.id,
+            },
+            importance=merged_importance,
+        )
+
+        if success:
+            # 删除其他记忆
+            for mem_id in source_ids[1:]:
+                await self.memory_manager.delete_memory(mem_id)
+
+            logger.info(f"✅ 合并记忆: {source_ids} → {target_id}")
+        else:
+            logger.error(f"合并记忆失败: {source_ids}")
+
+    async def _execute_create_node(self, op: GraphOperation) -> None:
+        """执行创建节点操作"""
+        # 注意：当前 MemoryManager 不直接支持单独创建节点
+        # 这里记录操作，实际执行需要扩展 MemoryManager API
+        logger.info(f"创建节点操作（待实现）: {op.parameters}")
+
+    async def _execute_create_edge(self, op: GraphOperation) -> None:
+        """执行创建边操作"""
+        # 注意：当前 MemoryManager 不直接支持单独创建边
+        # 这里记录操作，实际执行需要扩展 MemoryManager API
+        logger.info(f"创建边操作（待实现）: {op.parameters}")
+
+    async def apply_long_term_decay(self) -> dict[str, Any]:
+        """
+        应用长期记忆的激活度衰减
+
+        长期记忆的衰减比短期记忆慢，使用更高的衰减因子。
+
+        Returns:
+            衰减结果统计
+        """
+        if not self._initialized:
+            await self.initialize()
+
+        try:
+            logger.info("开始应用长期记忆激活度衰减...")
+
+            all_memories = self.memory_manager.graph_store.get_all_memories()
+            decayed_count = 0
+
+            for memory in all_memories:
+                # 跳过已遗忘的记忆
+                if memory.metadata.get("forgotten", False):
+                    continue
+
+                # 计算衰减
+                activation_info = memory.metadata.get("activation", {})
+                last_access = activation_info.get("last_access")
+
+                if last_access:
+                    try:
+                        last_access_dt = datetime.fromisoformat(last_access)
+                        days_passed = (datetime.now() - last_access_dt).days
+
+                        if days_passed > 0:
+                            # 使用长期记忆的衰减因子
+                            base_activation = activation_info.get("level", memory.activation)
+                            new_activation = base_activation * (self.long_term_decay_factor ** days_passed)
+
+                            # 更新激活度
+                            memory.activation = new_activation
+                            activation_info["level"] = new_activation
+                            memory.metadata["activation"] = activation_info
+
+                            decayed_count += 1
+
+                    except (ValueError, TypeError) as e:
+                        logger.warning(f"解析时间失败: {e}")
+
+            # 保存更新
+            await self.memory_manager.persistence.save_graph_store(
+                self.memory_manager.graph_store
+            )
+
+            logger.info(f"✅ 长期记忆衰减完成: {decayed_count} 条记忆已更新")
+            return {"decayed_count": decayed_count, "total_memories": len(all_memories)}
+
+        except Exception as e:
+            logger.error(f"应用长期记忆衰减失败: {e}", exc_info=True)
+            return {"error": str(e), "decayed_count": 0}
+
+    def get_statistics(self) -> dict[str, Any]:
+        """获取长期记忆层统计信息"""
+        if not self._initialized or not self.memory_manager.graph_store:
+            return {}
+
+        stats = self.memory_manager.get_statistics()
+        stats["decay_factor"] = self.long_term_decay_factor
+        stats["batch_size"] = self.batch_size
+
+        return stats
+
+    async def shutdown(self) -> None:
+        """关闭管理器"""
+        if not self._initialized:
+            return
+
+        try:
+            logger.info("正在关闭长期记忆管理器...")
+
+            # 长期记忆的保存由 MemoryManager 负责
+
+            self._initialized = False
+            logger.info("✅ 长期记忆管理器已关闭")
+
+        except Exception as e:
+            logger.error(f"关闭长期记忆管理器失败: {e}", exc_info=True)
+
+
+# 全局单例
+_long_term_manager_instance: LongTermMemoryManager | None = None
+
+
+def get_long_term_manager() -> LongTermMemoryManager:
+    """获取长期记忆管理器单例（需要先初始化记忆图系统）"""
+    global _long_term_manager_instance
+    if _long_term_manager_instance is None:
+        from src.memory_graph.manager_singleton import get_memory_manager
+
+        memory_manager = get_memory_manager()
+        if memory_manager is None:
+            raise RuntimeError("记忆图系统未初始化，无法创建长期记忆管理器")
+        _long_term_manager_instance = LongTermMemoryManager(memory_manager)
+    return _long_term_manager_instance

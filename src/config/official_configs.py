@@ -498,6 +498,36 @@ class MoodConfig(ValidatedConfigBase):
     mood_update_threshold: float = Field(default=1.0, description="情绪更新阈值")
 
 
+class ThreeTierMemoryConfig(ValidatedConfigBase):
+    """三层记忆系统配置类"""
+
+    enable: bool = Field(default=False, description="启用三层记忆系统（实验性功能）")
+    data_dir: str = Field(default="data/memory_graph/three_tier", description="数据存储目录")
+
+    # 感知记忆层配置
+    perceptual_max_blocks: int = Field(default=50, description="记忆堆最大容量（全局）")
+    perceptual_block_size: int = Field(default=5, description="每个记忆块包含的消息数量")
+    perceptual_similarity_threshold: float = Field(default=0.55, description="相似度阈值（0-1）")
+    perceptual_topk: int = Field(default=3, description="TopK召回数量")
+    activation_threshold: int = Field(default=3, description="激活阈值（召回次数→短期）")
+
+    # 短期记忆层配置
+    short_term_max_memories: int = Field(default=30, description="短期记忆最大数量")
+    short_term_transfer_threshold: float = Field(default=0.6, description="转移到长期记忆的重要性阈值")
+    short_term_search_top_k: int = Field(default=5, description="搜索时返回的最大数量")
+    short_term_decay_factor: float = Field(default=0.98, description="衰减因子")
+
+    # 长期记忆层配置
+    long_term_batch_size: int = Field(default=10, description="批量转移大小")
+    long_term_decay_factor: float = Field(default=0.95, description="衰减因子")
+    long_term_auto_transfer_interval: int = Field(default=600, description="自动转移间隔（秒）")
+
+    # Judge模型配置
+    judge_model_name: str = Field(default="utils_small", description="用于决策的LLM模型")
+    judge_temperature: float = Field(default=0.1, description="Judge模型的温度参数")
+    enable_judge_retrieval: bool = Field(default=True, description="启用智能检索判断")
+
+
 class ReactionRuleConfig(ValidatedConfigBase):
     """反应规则配置类"""
 

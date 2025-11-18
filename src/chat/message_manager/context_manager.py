@@ -22,6 +22,23 @@ logger = get_logger("context_manager")
 # 全局背景任务集合（用于异步初始化等后台任务）
 _background_tasks = set()
 
+# 三层记忆系统的延迟导入（避免循环依赖）
+_unified_memory_manager = None
+
+
+def _get_unified_memory_manager():
+    """获取统一记忆管理器（延迟导入）"""
+    global _unified_memory_manager
+    if _unified_memory_manager is None:
+        try:
+            from src.memory_graph.three_tier.manager_singleton import get_unified_memory_manager
+
+            _unified_memory_manager = get_unified_memory_manager()
+        except Exception as e:
+            logger.warning(f"获取统一记忆管理器失败（可能未启用）: {e}")
+            _unified_memory_manager = False  # 标记为禁用，避免重复尝试
+    return _unified_memory_manager if _unified_memory_manager is not False else None
+
 
 class SingleStreamContextManager:
     """单流上下文管理器 - 每个实例只管理一个 stream 的上下文"""
@@ -93,6 +110,27 @@ class SingleStreamContextManager:
                         logger.debug(f"消息直接添加到StreamContext未读列表: stream={self.stream_id}")
                 else:
                     logger.debug(f"消息添加到StreamContext（缓存禁用）: {self.stream_id}")
+
+                # 三层记忆系统集成：将消息添加到感知记忆层
+                try:
+                    if global_config.three_tier_memory and global_config.three_tier_memory.enable:
+                        unified_manager = _get_unified_memory_manager()
+                        if unified_manager:
+                            # 构建消息字典
+                            message_dict = {
+                                "message_id": str(message.message_id),
+                                "sender_id": message.user_info.user_id,
+                                "sender_name": message.user_info.user_nickname,
+                                "content": message.processed_plain_text or message.display_message or "",
+                                "timestamp": message.time,
+                                "platform": message.chat_info.platform,
+                                "stream_id": self.stream_id,
+                            }
+                            await unified_manager.add_message(message_dict)
+                            logger.debug(f"消息已添加到三层记忆系统: {message.message_id}")
+                except Exception as e:
+                    # 记忆系统错误不应影响主流程
+                    logger.error(f"添加消息到三层记忆系统失败: {e}", exc_info=True)
 
                 return True
             else:

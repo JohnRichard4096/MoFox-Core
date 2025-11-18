@@ -247,6 +247,16 @@ class MainSystem:
             logger.error(f"准备停止消息重组器时出错: {e}")
 
         # 停止增强记忆系统
+        # 停止三层记忆系统
+        try:
+            from src.memory_graph.three_tier.manager_singleton import get_unified_memory_manager, shutdown_unified_memory_manager
+
+            if get_unified_memory_manager():
+                cleanup_tasks.append(("三层记忆系统", shutdown_unified_memory_manager()))
+                logger.info("准备停止三层记忆系统...")
+        except Exception as e:
+            logger.error(f"准备停止三层记忆系统时出错: {e}")
+
         # 停止统一调度器
         try:
             from src.plugin_system.apis.unified_scheduler import shutdown_scheduler
@@ -466,6 +476,18 @@ MoFox_Bot(第三方修改版)
             await self._safe_init("记忆图系统", initialize_memory_manager)()
         except Exception as e:
             logger.error(f"记忆图系统初始化失败: {e}")
+
+        # 初始化三层记忆系统（如果启用）
+        try:
+            if global_config.three_tier_memory and global_config.three_tier_memory.enable:
+                from src.memory_graph.three_tier.manager_singleton import initialize_unified_memory_manager
+                logger.info("三层记忆系统已启用，正在初始化...")
+                await initialize_unified_memory_manager()
+                logger.info("三层记忆系统初始化成功")
+            else:
+                logger.debug("三层记忆系统未启用（配置中禁用）")
+        except Exception as e:
+            logger.error(f"三层记忆系统初始化失败: {e}", exc_info=True)
 
         # 初始化消息兴趣值计算组件
         await self._initialize_interest_calculator()
