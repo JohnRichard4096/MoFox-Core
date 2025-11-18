@@ -16,10 +16,10 @@ from typing import Any
 
 from src.common.logger import get_logger
 from src.memory_graph.manager import MemoryManager
-from src.memory_graph.three_tier.long_term_manager import LongTermMemoryManager
-from src.memory_graph.three_tier.models import JudgeDecision, MemoryBlock, ShortTermMemory
-from src.memory_graph.three_tier.perceptual_manager import PerceptualMemoryManager
-from src.memory_graph.three_tier.short_term_manager import ShortTermMemoryManager
+from src.memory_graph.long_term_manager import LongTermMemoryManager
+from src.memory_graph.models import JudgeDecision, MemoryBlock, ShortTermMemory
+from src.memory_graph.perceptual_manager import PerceptualMemoryManager
+from src.memory_graph.short_term_manager import ShortTermMemoryManager
 
 logger = get_logger(__name__)
 

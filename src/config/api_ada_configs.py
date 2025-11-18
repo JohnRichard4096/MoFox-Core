@@ -148,6 +148,12 @@ class ModelTaskConfig(ValidatedConfigBase):
     relationship_tracker: TaskConfig = Field(..., description="关系追踪模型配置")
     # 处理配置文件中命名不一致的问题
     utils_video: TaskConfig = Field(..., description="视频分析模型配置（兼容配置文件中的命名）")
+    
+    # 记忆系统专用模型配置
+    memory_short_term_builder: TaskConfig = Field(..., description="短期记忆构建模型配置（感知→短期格式化）")
+    memory_short_term_decider: TaskConfig = Field(..., description="短期记忆决策模型配置（合并/更新/新建/丢弃）")
+    memory_long_term_builder: TaskConfig = Field(..., description="长期记忆构建模型配置（短期→长期图结构）")
+    memory_judge: TaskConfig = Field(..., description="记忆检索裁判模型配置（判断检索是否充足）")
 
     @property
     def video_analysis(self) -> TaskConfig:

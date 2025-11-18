@@ -1134,47 +1134,47 @@ class MemoryManager:
         max_batch_size: int = 50,
     ) -> dict[str, Any]:
         """
-        整理记忆：直接合并去重相似记忆（不创建新边）
-
-        性能优化版本：
-        1. 使用 asyncio.create_task 在后台执行，避免阻塞主流程
-        2. 向量计算批量处理，减少重复计算
-        3. 延迟保存，批量写入数据库
-        4. 更频繁的协作式多任务让出
+        简化的记忆整理：仅检查需要遗忘的记忆并清理孤立节点和边
+        
+        功能：
+        1. 检查需要遗忘的记忆（低激活度）
+        2. 清理孤立节点和边
+        
+        注意：记忆的创建、合并、关联等操作已由三级记忆系统自动处理
 
         Args:
-            similarity_threshold: 相似度阈值（默认0.85，建议提高到0.9减少误判）
-            time_window_hours: 时间窗口（小时）
-            max_batch_size: 单次最多处理的记忆数量
+            similarity_threshold: （已废弃，保留参数兼容性）
+            time_window_hours: （已废弃，保留参数兼容性）
+            max_batch_size: （已废弃，保留参数兼容性）
 
         Returns:
-            整理结果（如果是异步执行，返回启动状态）
+            整理结果
         """
         if not self._initialized:
             await self.initialize()
 
         try:
-            logger.info(f"🚀 启动记忆整理任务 (similarity_threshold={similarity_threshold}, time_window={time_window_hours}h, max_batch={max_batch_size})...")
+            logger.info("🧹 开始记忆整理：检查遗忘 + 清理孤立节点...")
 
-            # 创建后台任务执行整理
-            task = asyncio.create_task(
-                self._consolidate_memories_background(
-                    similarity_threshold=similarity_threshold,
-                    time_window_hours=time_window_hours,
-                    max_batch_size=max_batch_size
-                )
-            )
+            # 步骤1: 自动遗忘低激活度的记忆
+            forgotten_count = await self.auto_forget()
 
-            # 返回任务启动状态，不等待完成
-            return {
-                "task_started": True,
-                "task_id": id(task),
-                "message": "记忆整理任务已在后台启动"
+            # 步骤2: 清理孤立节点和边（auto_forget内部已执行，这里再次确保）
+            orphan_nodes, orphan_edges = await self._cleanup_orphan_nodes_and_edges()
+
+            result = {
+                "forgotten_count": forgotten_count,
+                "orphan_nodes_cleaned": orphan_nodes,
+                "orphan_edges_cleaned": orphan_edges,
+                "message": "记忆整理完成（仅遗忘和清理孤立节点）"
             }
 
+            logger.info(f"✅ 记忆整理完成: {result}")
+            return result
+
         except Exception as e:
-            logger.error(f"启动记忆整理任务失败: {e}", exc_info=True)
-            return {"error": str(e), "task_started": False}
+            logger.error(f"记忆整理失败: {e}", exc_info=True)
+            return {"error": str(e), "forgotten_count": 0}
 
     async def _consolidate_memories_background(
         self,
@@ -1183,294 +1183,30 @@ class MemoryManager:
         max_batch_size: int,
     ) -> None:
         """
-        后台执行记忆整理的具体实现 (完整版)
-
-        流程：
-        1. 获取时间窗口内的记忆
-        2. 重要性过滤
-        3. 向量检索关联记忆
-        4. 分批交给LLM分析关系
-        5. 统一更新记忆数据
-
-        这个方法会在独立任务中运行，不阻塞主流程
+        后台整理任务（已简化为调用consolidate_memories）
+        
+        保留此方法用于向后兼容
         """
-        try:
-            result = {
-                "merged_count": 0,
-                "checked_count": 0,
-                "skipped_count": 0,
-                "linked_count": 0,
-                "importance_filtered": 0,
-            }
+        await self.consolidate_memories(
+            similarity_threshold=similarity_threshold,
+            time_window_hours=time_window_hours,
+            max_batch_size=max_batch_size
+        )
 
-            # ===== 步骤1: 获取时间窗口内的记忆 =====
-            cutoff_time = datetime.now() - timedelta(hours=time_window_hours)
-            all_memories = self.graph_store.get_all_memories()
+    # ==================== 以下方法已废弃 ====================
+    # 旧的记忆整理逻辑（去重、自动关联等）已由三级记忆系统取代
+    # 保留方法签名用于向后兼容，但不再执行复杂操作
 
-            recent_memories = [
-                mem for mem in all_memories
-                if mem.created_at >= cutoff_time and not mem.metadata.get("forgotten", False)
-            ]
-
-            if not recent_memories:
-                logger.info("✅ 记忆整理完成: 没有需要整理的记忆")
-                return
-
-            logger.info(f"📋 步骤1: 找到 {len(recent_memories)} 条时间窗口内的记忆")
-
-            # ===== 步骤2: 重要性过滤 =====
-            min_importance_for_consolidation = getattr(self.config, "consolidation_min_importance", 0.3)
-            important_memories = [
-                mem for mem in recent_memories
-                if mem.importance >= min_importance_for_consolidation
-            ]
-
-            result["importance_filtered"] = len(recent_memories) - len(important_memories)
-            logger.info(
-                f"📊 步骤2: 重要性过滤 (阈值={min_importance_for_consolidation:.2f}): "
-                f"{len(recent_memories)} → {len(important_memories)} 条记忆"
-            )
-
-            if not important_memories:
-                logger.info("✅ 记忆整理完成: 没有重要的记忆需要整理")
-                return
-
-            # 限制批量处理数量
-            if len(important_memories) > max_batch_size:
-                logger.info(f"📊 记忆数量 {len(important_memories)} 超过批量限制 {max_batch_size}，仅处理最新的 {max_batch_size} 条")
-                important_memories = sorted(important_memories, key=lambda m: m.created_at, reverse=True)[:max_batch_size]
-                result["skipped_count"] = len(important_memories) - max_batch_size
-
-            result["checked_count"] = len(important_memories)
-
-            # ===== 步骤3: 去重（相似记忆合并）=====
-            # 按记忆类型分组，减少跨类型比较
-            memories_by_type: dict[str, list[Memory]] = {}
-            for mem in important_memories:
-                mem_type = mem.metadata.get("memory_type", "")
-                if mem_type not in memories_by_type:
-                    memories_by_type[mem_type] = []
-                memories_by_type[mem_type].append(mem)
-
-            # 记录需要删除的记忆，延迟批量删除
-            to_delete: list[tuple[Memory, str]] = []  # (memory, reason)
-            deleted_ids = set()
-
-            # 对每个类型的记忆进行相似度检测（去重）
-            logger.info("📍 步骤3: 开始相似记忆去重...")
-            for mem_type, memories in memories_by_type.items():
-                if len(memories) < 2:
-                    continue
-
-                logger.debug(f"🔍 检查类型 '{mem_type}' 的 {len(memories)} 条记忆")
-
-                # 预提取所有主题节点的嵌入向量
-                embeddings_map: dict[str, "np.ndarray"] = {}
-                valid_memories = []
-
-                for mem in memories:
-                    topic_node = next((n for n in mem.nodes if n.node_type == NodeType.TOPIC), None)
-                    if topic_node and topic_node.embedding is not None:
-                        embeddings_map[mem.id] = topic_node.embedding
-                        valid_memories.append(mem)
-
-                # 批量计算相似度矩阵（比逐个计算更高效）
-                for i in range(len(valid_memories)):
-                    # 更频繁的协作式多任务让出
-                    if i % 5 == 0:
-                        await asyncio.sleep(0.001)  # 1ms让出
-
-                    mem_i = valid_memories[i]
-                    if mem_i.id in deleted_ids:
-                        continue
-
-                    for j in range(i + 1, len(valid_memories)):
-                        if valid_memories[j].id in deleted_ids:
-                            continue
-
-                        mem_j = valid_memories[j]
-
-                        # 快速向量相似度计算
-                        embedding_i = embeddings_map[mem_i.id]
-                        embedding_j = embeddings_map[mem_j.id]
-
-                        # 优化的余弦相似度计算
-                        similarity = cosine_similarity(embedding_i, embedding_j)
-
-                        if similarity >= similarity_threshold:
-                            # 决定保留哪个记忆
-                            if mem_i.importance >= mem_j.importance:
-                                keep_mem, remove_mem = mem_i, mem_j
-                            else:
-                                keep_mem, remove_mem = mem_j, mem_i
-
-                            logger.debug(
-                                f"🔄 标记相似记忆 (similarity={similarity:.3f}): "
-                                f"保留 {keep_mem.id[:8]}, 删除 {remove_mem.id[:8]}"
-                            )
-
-                            # 增强保留记忆的重要性
-                            keep_mem.importance = min(1.0, keep_mem.importance + 0.05)
-
-                            # 累加访问次数
-                            if hasattr(keep_mem, "access_count") and hasattr(remove_mem, "access_count"):
-                                keep_mem.access_count += remove_mem.access_count
-
-                            # 标记为待删除（不立即删除）
-                            to_delete.append((remove_mem, f"与记忆 {keep_mem.id[:8]} 相似度 {similarity:.3f}"))
-                            deleted_ids.add(remove_mem.id)
-                            result["merged_count"] += 1
-
-                # 每处理完一个类型就让出控制权
-                await asyncio.sleep(0.005)  # 5ms让出
-
-            # 批量删除标记的记忆
-            if to_delete:
-                logger.info(f"🗑️ 批量删除 {len(to_delete)} 条相似记忆")
-
-                for memory, reason in to_delete:
-                    try:
-                        # 从向量存储删除节点
-                        for node in memory.nodes:
-                            if node.embedding is not None:
-                                await self.vector_store.delete_node(node.id)
-
-                        # 从图存储删除记忆
-                        self.graph_store.remove_memory(memory.id)
-
-                    except Exception as e:
-                        logger.warning(f"删除记忆 {memory.id[:8]} 失败: {e}")
-
-                # 批量保存（一次性写入，减少I/O，异步执行）
-                asyncio.create_task(self._async_save_graph_store("记忆去重"))
-                logger.info("💾 去重保存任务已启动")
-
-            # ===== 步骤4: 向量检索关联记忆 + LLM分析关系 =====
-            # 过滤掉已删除的记忆
-            remaining_memories = [m for m in important_memories if m.id not in deleted_ids]
-
-            if not remaining_memories:
-                logger.info("✅ 记忆整理完成: 去重后无剩余记忆")
-                return
-
-            logger.info(f"📍 步骤4: 开始关联分析 ({len(remaining_memories)} 条记忆)...")
-
-            # 分批处理记忆关联
-            llm_batch_size = getattr(self.config, "consolidation_llm_batch_size", 10)
-            max_candidates_per_memory = getattr(self.config, "consolidation_max_candidates", 5)
-            min_confidence = getattr(self.config, "consolidation_min_confidence", 0.6)
-
-            all_new_edges = []  # 收集所有新建的边
-
-            for batch_start in range(0, len(remaining_memories), llm_batch_size):
-                batch_end = min(batch_start + llm_batch_size, len(remaining_memories))
-                batch = remaining_memories[batch_start:batch_end]
-
-                logger.debug(f"处理批次 {batch_start//llm_batch_size + 1}/{(len(remaining_memories)-1)//llm_batch_size + 1}")
-
-                for memory in batch:
-                    # 跳过已经有很多连接的记忆
-                    existing_edges = len([
-                        e for e in memory.edges
-                        if e.edge_type == EdgeType.RELATION
-                    ])
-                    if existing_edges >= 10:
-                        continue
-
-                    # 使用向量搜索找候选关联记忆
-                    candidates = await self._find_link_candidates(
-                        memory,
-                        exclude_ids={memory.id} | deleted_ids,
-                        max_results=max_candidates_per_memory
-                    )
-
-                    if not candidates:
-                        continue
-
-                    # 使用LLM分析关系
-                    relations = await self._analyze_memory_relations(
-                        source_memory=memory,
-                        candidate_memories=candidates,
-                        min_confidence=min_confidence
-                    )
-
-                    # 建立关联边
-                    for relation in relations:
-                        try:
-                            # 创建关联边
-                            edge = MemoryEdge(
-                                id=f"edge_{uuid.uuid4().hex[:12]}",
-                                source_id=memory.subject_id,
-                                target_id=relation["target_memory"].subject_id,
-                                relation=relation["relation_type"],
-                                edge_type=EdgeType.RELATION,
-                                importance=relation["confidence"],
-                                metadata={
-                                    "auto_linked": True,
-                                    "confidence": relation["confidence"],
-                                    "reasoning": relation["reasoning"],
-                                    "created_at": datetime.now().isoformat(),
-                                    "created_by": "consolidation",
-                                }
-                            )
-
-                            all_new_edges.append((memory, edge, relation))
-                            result["linked_count"] += 1
-
-                        except Exception as e:
-                            logger.warning(f"创建关联边失败: {e}")
-                            continue
-
-                # 每个批次后让出控制权
-                await asyncio.sleep(0.01)
-
-            # ===== 步骤5: 统一更新记忆数据 =====
-            if all_new_edges:
-                logger.info(f"📍 步骤5: 统一更新 {len(all_new_edges)} 条新关联边...")
-
-                for memory, edge, relation in all_new_edges:
-                    try:
-                        # 添加到图
-                        self.graph_store.graph.add_edge(
-                            edge.source_id,
-                            edge.target_id,
-                            edge_id=edge.id,
-                            relation=edge.relation,
-                            edge_type=edge.edge_type.value,
-                            importance=edge.importance,
-                            metadata=edge.metadata,
-                        )
-
-                        # 同时添加到记忆的边列表
-                        memory.edges.append(edge)
-
-                        logger.debug(
-                            f"✓ {memory.id[:8]} --[{relation['relation_type']}]--> "
-                            f"{relation['target_memory'].id[:8]} (置信度={relation['confidence']:.2f})"
-                        )
-
-                    except Exception as e:
-                        logger.warning(f"添加边到图失败: {e}")
-
-                # 批量保存更新（异步执行）
-                asyncio.create_task(self._async_save_graph_store("记忆关联边"))
-                logger.info("💾 关联边保存任务已启动")
-
-            logger.info(f"✅ 记忆整理完成: {result}")
-
-        except Exception as e:
-            logger.error(f"❌ 记忆整理失败: {e}", exc_info=True)
-
-    async def auto_link_memories(
+    async def auto_link_memories(  # 已废弃
         self,
         time_window_hours: float | None = None,
         max_candidates: int | None = None,
         min_confidence: float | None = None,
     ) -> dict[str, Any]:
         """
-        自动关联记忆
+        自动关联记忆（已废弃）
 
-        使用LLM分析记忆之间的关系，自动建立关联边。
+        该功能已由三级记忆系统取代。记忆之间的关联现在通过模型自动处理。
 
         Args:
             time_window_hours: 分析时间窗口（小时）
@@ -1478,196 +1214,35 @@ class MemoryManager:
             min_confidence: 最低置信度阈值
 
         Returns:
-            关联结果统计
+            空结果（向后兼容）
         """
-        if not self._initialized:
-            await self.initialize()
+        logger.warning("auto_link_memories 已废弃，记忆关联由三级记忆系统自动处理")
+        return {"checked_count": 0, "linked_count": 0, "deprecated": True}
 
-        # 使用配置值或参数覆盖
-        time_window_hours = time_window_hours if time_window_hours is not None else 24
-        max_candidates = max_candidates if max_candidates is not None else getattr(self.config, "auto_link_max_candidates", 10)
-        min_confidence = min_confidence if min_confidence is not None else getattr(self.config, "auto_link_min_confidence", 0.7)
-
-        try:
-            logger.info(f"开始自动关联记忆 (时间窗口={time_window_hours}h)...")
-
-            result = {
-                "checked_count": 0,
-                "linked_count": 0,
-                "relation_stats": {},  # 关系类型统计 {类型: 数量}
-                "relations": {},  # 详细关系 {source_id: [关系列表]}
-            }
-
-            # 1. 获取时间窗口内的记忆
-            time_threshold = datetime.now() - timedelta(hours=time_window_hours)
-            all_memories = self.graph_store.get_all_memories()
-
-            recent_memories = [
-                mem for mem in all_memories
-                if mem.created_at >= time_threshold
-                and not mem.metadata.get("forgotten", False)
-            ]
-
-            if len(recent_memories) < 2:
-                logger.info("记忆数量不足，跳过自动关联")
-                return result
-
-            logger.info(f"找到 {len(recent_memories)} 条待关联记忆")
-
-            # 2. 为每个记忆寻找关联候选
-            for memory in recent_memories:
-                result["checked_count"] += 1
-
-                # 跳过已经有很多连接的记忆
-                existing_edges = len([
-                    e for e in memory.edges
-                    if e.edge_type == EdgeType.RELATION
-                ])
-                if existing_edges >= 10:
-                    continue
-
-                # 3. 使用向量搜索找候选记忆
-                candidates = await self._find_link_candidates(
-                    memory,
-                    exclude_ids={memory.id},
-                    max_results=max_candidates
-                )
-
-                if not candidates:
-                    continue
-
-                # 4. 使用LLM分析关系
-                relations = await self._analyze_memory_relations(
-                    source_memory=memory,
-                    candidate_memories=candidates,
-                    min_confidence=min_confidence
-                )
-
-                # 5. 建立关联
-                for relation in relations:
-                    try:
-                        # 创建关联边
-                        edge = MemoryEdge(
-                            id=f"edge_{uuid.uuid4().hex[:12]}",
-                            source_id=memory.subject_id,
-                            target_id=relation["target_memory"].subject_id,
-                            relation=relation["relation_type"],
-                            edge_type=EdgeType.RELATION,
-                            importance=relation["confidence"],
-                            metadata={
-                                "auto_linked": True,
-                                "confidence": relation["confidence"],
-                                "reasoning": relation["reasoning"],
-                                "created_at": datetime.now().isoformat(),
-                            }
-                        )
-
-                        # 添加到图
-                        self.graph_store.graph.add_edge(
-                            edge.source_id,
-                            edge.target_id,
-                            edge_id=edge.id,
-                            relation=edge.relation,
-                            edge_type=edge.edge_type.value,
-                            importance=edge.importance,
-                            metadata=edge.metadata,
-                        )
-
-                        # 同时添加到记忆的边列表
-                        memory.edges.append(edge)
-
-                        result["linked_count"] += 1
-
-                        # 更新统计
-                        result["relation_stats"][relation["relation_type"]] = \
-                            result["relation_stats"].get(relation["relation_type"], 0) + 1
-
-                        # 记录详细关系
-                        if memory.id not in result["relations"]:
-                            result["relations"][memory.id] = []
-                        result["relations"][memory.id].append({
-                            "target_id": relation["target_memory"].id,
-                            "relation_type": relation["relation_type"],
-                            "confidence": relation["confidence"],
-                            "reasoning": relation["reasoning"],
-                        })
-
-                        logger.info(
-                            f"建立关联: {memory.id[:8]} --[{relation['relation_type']}]--> "
-                            f"{relation['target_memory'].id[:8]} "
-                            f"(置信度={relation['confidence']:.2f})"
-                        )
-
-                    except Exception as e:
-                        logger.warning(f"建立关联失败: {e}")
-                        continue
-
-            # 异步保存更新后的图数据
-            if result["linked_count"] > 0:
-                asyncio.create_task(self._async_save_graph_store("自动关联"))
-                logger.info(f"已启动保存任务: {result['linked_count']} 条自动关联边")
-
-            logger.info(f"自动关联完成: {result}")
-            return result
-
-        except Exception as e:
-            logger.error(f"自动关联失败: {e}", exc_info=True)
-            return {"error": str(e), "checked_count": 0, "linked_count": 0}
-
-    async def _find_link_candidates(
+    async def _find_link_candidates(  # 已废弃
         self,
         memory: Memory,
         exclude_ids: set[str],
         max_results: int = 5,
     ) -> list[Memory]:
         """
-        为记忆寻找关联候选
+        为记忆寻找关联候选（已废弃）
 
-        使用向量相似度 + 时间接近度找到潜在相关记忆
+        该功能已由三级记忆系统取代。
         """
-        try:
-            # 获取记忆的主题
-            topic_node = next(
-                (n for n in memory.nodes if n.node_type == NodeType.TOPIC),
-                None
-            )
+        logger.warning("_find_link_candidates 已废弃")
+        return []
 
-            if not topic_node or not topic_node.content:
-                return []
-
-            # 使用主题内容搜索相似记忆
-            candidates = await self.search_memories(
-                query=topic_node.content,
-                top_k=max_results * 2,
-                include_forgotten=False,
-            )
-
-            # 过滤：排除自己和已关联的
-            existing_targets = {
-                e.target_id for e in memory.edges
-                if e.edge_type == EdgeType.RELATION
-            }
-
-            filtered = [
-                c for c in candidates
-                if c.id not in exclude_ids
-                and c.id not in existing_targets
-            ]
-
-            return filtered[:max_results]
-
-        except Exception as e:
-            logger.warning(f"查找候选失败: {e}")
-            return []
-
-    async def _analyze_memory_relations(
+    async def _analyze_memory_relations(  # 已废弃
         self,
         source_memory: Memory,
         candidate_memories: list[Memory],
         min_confidence: float = 0.7,
     ) -> list[dict[str, Any]]:
         """
-        使用LLM分析记忆之间的关系
+        使用LLM分析记忆之间的关系（已废弃）
+
+        该功能已由三级记忆系统取代。
 
         Args:
             source_memory: 源记忆
@@ -1675,170 +1250,25 @@ class MemoryManager:
             min_confidence: 最低置信度
 
         Returns:
-            关系列表，每项包含:
-            - target_memory: 目标记忆
-            - relation_type: 关系类型
-            - confidence: 置信度
-            - reasoning: 推理过程
+            空列表（向后兼容）
         """
-        try:
-            from src.config.config import model_config
-            from src.llm_models.utils_model import LLMRequest
+        logger.warning("_analyze_memory_relations 已废弃")
+        return []
 
-            # 构建LLM请求
-            llm = LLMRequest(
-                model_set=model_config.model_task_config.utils_small,
-                request_type="memory.relation_analysis"
-            )
-
-            # 格式化记忆信息
-            source_desc = self._format_memory_for_llm(source_memory)
-            candidates_desc = "\n\n".join([
-                f"记忆{i+1}:\n{self._format_memory_for_llm(mem)}"
-                for i, mem in enumerate(candidate_memories)
-            ])
-
-            # 构建提示词
-            prompt = f"""你是一个记忆关系分析专家。请分析源记忆与候选记忆之间是否存在有意义的关系。
-
-**关系类型说明：**
-- 导致: A的发生导致了B的发生（因果关系）
-- 引用: A提到或涉及B（引用关系）
-- 相似: A和B描述相似的内容（相似关系）
-- 相反: A和B表达相反的观点（对立关系）
-- 关联: A和B存在某种关联但不属于以上类型（一般关联）
-
-**源记忆：**
-{source_desc}
-
-**候选记忆：**
-{candidates_desc}
-
-**任务要求：**
-1. 对每个候选记忆，判断是否与源记忆存在关系
-2. 如果存在关系，指定关系类型和置信度(0.0-1.0)
-3. 简要说明判断理由
-4. 只返回置信度 >= {min_confidence} 的关系
-
-**输出格式（JSON）：**
-```json
-[
-  {{
-    "candidate_id": 1,
-    "has_relation": true,
-    "relation_type": "导致",
-    "confidence": 0.85,
-    "reasoning": "记忆1是记忆源的结果"
-  }},
-  {{
-    "candidate_id": 2,
-    "has_relation": false,
-    "reasoning": "两者无明显关联"
-  }}
-]
-```
-
-请分析并输出JSON结果："""
-
-            # 调用LLM
-            response, _ = await llm.generate_response_async(
-                prompt,
-                temperature=0.3,
-                max_tokens=1000,
-            )
-
-            # 解析响应
-            import json
-            import re
-
-            # 提取JSON
-            json_match = re.search(r"```json\s*(.*?)\s*```", response, re.DOTALL)
-            if json_match:
-                json_str = json_match.group(1)
-            else:
-                json_str = response.strip()
-
-            try:
-                analysis_results = json.loads(json_str)
-            except json.JSONDecodeError:
-                logger.warning(f"LLM返回格式错误，尝试修复: {response[:200]}")
-                # 尝试简单修复
-                json_str = re.sub(r"[\r\n\t]", "", json_str)
-                analysis_results = json.loads(json_str)
-
-            # 转换为结果格式
-            relations = []
-            for result in analysis_results:
-                if not result.get("has_relation", False):
-                    continue
-
-                confidence = result.get("confidence", 0.0)
-                if confidence < min_confidence:
-                    continue
-
-                candidate_id = result.get("candidate_id", 0) - 1
-                if 0 <= candidate_id < len(candidate_memories):
-                    relations.append({
-                        "target_memory": candidate_memories[candidate_id],
-                        "relation_type": result.get("relation_type", "关联"),
-                        "confidence": confidence,
-                        "reasoning": result.get("reasoning", ""),
-                    })
-
-            logger.debug(f"LLM分析完成: 发现 {len(relations)} 个关系")
-            return relations
-
-        except Exception as e:
-            logger.error(f"LLM关系分析失败: {e}", exc_info=True)
-            return []
-
-    def _format_memory_for_llm(self, memory: Memory) -> str:
-        """格式化记忆为LLM可读的文本"""
-        try:
-            # 获取关键节点
-            subject_node = next(
-                (n for n in memory.nodes if n.node_type == NodeType.SUBJECT),
-                None
-            )
-            topic_node = next(
-                (n for n in memory.nodes if n.node_type == NodeType.TOPIC),
-                None
-            )
-            object_node = next(
-                (n for n in memory.nodes if n.node_type == NodeType.OBJECT),
-                None
-            )
-
-            parts = []
-            parts.append(f"类型: {memory.memory_type.value}")
-
-            if subject_node:
-                parts.append(f"主体: {subject_node.content}")
-
-            if topic_node:
-                parts.append(f"主题: {topic_node.content}")
-
-            if object_node:
-                parts.append(f"对象: {object_node.content}")
-
-            parts.append(f"重要性: {memory.importance:.2f}")
-            parts.append(f"时间: {memory.created_at.strftime('%Y-%m-%d %H:%M')}")
-
-            return " | ".join(parts)
-
-        except Exception as e:
-            logger.warning(f"格式化记忆失败: {e}")
-            return f"记忆ID: {memory.id}"
+    def _format_memory_for_llm(self, memory: Memory) -> str:  # 已废弃
+        """格式化记忆为LLM可读的文本（已废弃）"""
+        logger.warning("_format_memory_for_llm 已废弃")
+        return f"记忆ID: {memory.id}"
 
     async def maintenance(self) -> dict[str, Any]:
         """
-        执行维护任务（优化版本）
+        执行维护任务（简化版）
 
-        包括：
-        - 记忆整理（异步后台执行）
-        - 自动关联记忆（轻量级执行）
-        - 自动遗忘低激活度记忆
+        只包括：
+        - 简化的记忆整理（检查遗忘+清理孤立节点）
         - 保存数据
+
+        注意：记忆的创建、合并、关联等操作已由三级记忆系统自动处理
 
         Returns:
             维护结果
@@ -1847,53 +1277,28 @@ class MemoryManager:
             await self.initialize()
 
         try:
-            logger.info("🔧 开始执行记忆系统维护（优化版）...")
+            logger.info("🔧 开始执行记忆系统维护...")
 
             result = {
-                "consolidation_task": "none",
-                "linked": 0,
                 "forgotten": 0,
+                "orphan_nodes_cleaned": 0,
+                "orphan_edges_cleaned": 0,
                 "saved": False,
                 "total_time": 0,
             }
 
             start_time = datetime.now()
 
-            # 1. 记忆整理（异步后台执行，不阻塞主流程）
+            # 1. 简化的记忆整理（只检查遗忘和清理孤立节点）
             if getattr(self.config, "consolidation_enabled", False):
-                logger.info("🚀 启动异步记忆整理任务...")
-                consolidate_result = await self.consolidate_memories(
-                    similarity_threshold=getattr(self.config, "consolidation_deduplication_threshold", 0.93),
-                    time_window_hours=getattr(self.config, "consolidation_time_window_hours", 2.0),  # 统一时间窗口
-                    max_batch_size=getattr(self.config, "consolidation_max_batch_size", 30)
-                )
+                consolidate_result = await self.consolidate_memories()
+                result["forgotten"] = consolidate_result.get("forgotten_count", 0)
+                result["orphan_nodes_cleaned"] = consolidate_result.get("orphan_nodes_cleaned", 0)
+                result["orphan_edges_cleaned"] = consolidate_result.get("orphan_edges_cleaned", 0)
 
-                if consolidate_result.get("task_started"):
-                    result["consolidation_task"] = f"background_task_{consolidate_result.get('task_id', 'unknown')}"
-                    logger.info("✅ 记忆整理任务已启动到后台执行")
-                else:
-                    result["consolidation_task"] = "failed"
-                    logger.warning("❌ 记忆整理任务启动失败")
-
-            # 2. 自动关联记忆（使用统一的时间窗口）
-            if getattr(self.config, "consolidation_linking_enabled", True):
-                logger.info("🔗 执行轻量级自动关联...")
-                link_result = await self._lightweight_auto_link_memories()
-                result["linked"] = link_result.get("linked_count", 0)
-
-            # 3. 自动遗忘（快速执行）
-            if getattr(self.config, "forgetting_enabled", True):
-                logger.info("🗑️ 执行自动遗忘...")
-                forgotten_count = await self.auto_forget_memories(
-                    threshold=getattr(self.config, "forgetting_activation_threshold", 0.1)
-                )
-                result["forgotten"] = forgotten_count
-
-            # 4. 保存数据（如果记忆整理不在后台执行）
-            if result["consolidation_task"] == "none":
-                await self.persistence.save_graph_store(self.graph_store)
-                result["saved"] = True
-                logger.info("💾 数据保存完成")
+            # 2. 保存数据
+            await self.persistence.save_graph_store(self.graph_store)
+            result["saved"] = True
 
             self._last_maintenance = datetime.now()
 
@@ -1908,293 +1313,45 @@ class MemoryManager:
             logger.error(f"❌ 维护失败: {e}", exc_info=True)
             return {"error": str(e), "total_time": 0}
 
-    async def _lightweight_auto_link_memories(
+    async def _lightweight_auto_link_memories(  # 已废弃
         self,
-        time_window_hours: float | None = None,  # 从配置读取
-        max_candidates: int | None = None,  # 从配置读取
-        max_memories: int | None = None,  # 从配置读取
+        time_window_hours: float | None = None,
+        max_candidates: int | None = None,
+        max_memories: int | None = None,
     ) -> dict[str, Any]:
         """
-        智能轻量级自动关联记忆（保留LLM判断，优化性能）
+        智能轻量级自动关联记忆（已废弃）
 
-        优化策略：
-        1. 从配置读取处理参数，尊重用户设置
-        2. 使用向量相似度预筛选，仅对高相似度记忆调用LLM
-        3. 批量LLM调用，减少网络开销
-        4. 异步执行，避免阻塞
+        该功能已由三级记忆系统取代。
+
+        Args:
+            time_window_hours: 从配置读取
+            max_candidates: 从配置读取
+            max_memories: 从配置读取
+
+        Returns:
+            空结果（向后兼容）
         """
-        try:
-            result = {
-                "checked_count": 0,
-                "linked_count": 0,
-                "llm_calls": 0,
-            }
+        logger.warning("_lightweight_auto_link_memories 已废弃")
+        return {"checked_count": 0, "linked_count": 0, "deprecated": True}
 
-            # 从配置读取参数，使用统一的时间窗口
-            if time_window_hours is None:
-                time_window_hours = getattr(self.config, "consolidation_time_window_hours", 2.0)
-            if max_candidates is None:
-                max_candidates = getattr(self.config, "consolidation_linking_max_candidates", 10)
-            if max_memories is None:
-                max_memories = getattr(self.config, "consolidation_linking_max_memories", 20)
-
-            # 获取用户配置时间窗口内的记忆
-            time_threshold = datetime.now() - timedelta(hours=time_window_hours)
-            all_memories = self.graph_store.get_all_memories()
-
-            recent_memories = [
-                mem for mem in all_memories
-                if mem.created_at >= time_threshold
-                and not mem.metadata.get("forgotten", False)
-                and mem.importance >= getattr(self.config, "consolidation_linking_min_importance", 0.5)  # 从配置读取重要性阈值
-            ]
-
-            if len(recent_memories) > max_memories:
-                recent_memories = sorted(recent_memories, key=lambda m: m.created_at, reverse=True)[:max_memories]
-
-            if len(recent_memories) < 2:
-                logger.debug("记忆数量不足，跳过智能关联")
-                return result
-
-            logger.debug(f"🧠 智能关联: 检查 {len(recent_memories)} 条重要记忆")
-
-            # 第一步：向量相似度预筛选，找到潜在关联对
-            candidate_pairs = []
-
-            for i, memory in enumerate(recent_memories):
-                # 获取主题节点
-                topic_node = next(
-                    (n for n in memory.nodes if n.node_type == NodeType.TOPIC),
-                    None
-                )
-
-                if not topic_node or topic_node.embedding is None:
-                    continue
-
-                # 与其他记忆计算相似度
-                for j, other_memory in enumerate(recent_memories[i+1:], i+1):
-                    other_topic = next(
-                        (n for n in other_memory.nodes if n.node_type == NodeType.TOPIC),
-                        None
-                    )
-
-                    if not other_topic or other_topic.embedding is None:
-                        continue
-
-                    # 快速相似度计算
-                    similarity = cosine_similarity(
-                        topic_node.embedding,
-                        other_topic.embedding
-                    )
-
-                    # 使用配置的预筛选阈值
-                    pre_filter_threshold = getattr(self.config, "consolidation_linking_pre_filter_threshold", 0.7)
-                    if similarity >= pre_filter_threshold:
-                        candidate_pairs.append((memory, other_memory, similarity))
-
-                # 让出控制权
-                if i % 3 == 0:
-                    await asyncio.sleep(0.001)
-
-            logger.debug(f"🔍 预筛选找到 {len(candidate_pairs)} 个候选关联对")
-
-            if not candidate_pairs:
-                return result
-
-            # 第二步：批量LLM分析（使用配置的最大候选对数）
-            max_pairs_for_llm = getattr(self.config, "consolidation_linking_max_pairs_for_llm", 5)
-            if len(candidate_pairs) <= max_pairs_for_llm:
-                link_relations = await self._batch_analyze_memory_relations(candidate_pairs)
-                result["llm_calls"] = 1
-
-                # 第三步：建立LLM确认的关联
-                for relation_info in link_relations:
-                    try:
-                        memory_a, memory_b = relation_info["memory_pair"]
-                        relation_type = relation_info["relation_type"]
-                        confidence = relation_info["confidence"]
-
-                        # 创建关联边
-                        edge = MemoryEdge(
-                            id=f"smart_edge_{uuid.uuid4().hex[:12]}",
-                            source_id=memory_a.subject_id,
-                            target_id=memory_b.subject_id,
-                            relation=relation_type,
-                            edge_type=EdgeType.RELATION,
-                            importance=confidence,
-                            metadata={
-                                "auto_linked": True,
-                                "method": "llm_analyzed",
-                                "vector_similarity": relation_info.get("vector_similarity", 0.0),
-                                "confidence": confidence,
-                                "reasoning": relation_info.get("reasoning", ""),
-                                "created_at": datetime.now().isoformat(),
-                            }
-                        )
-
-                        # 添加到图
-                        self.graph_store.graph.add_edge(
-                            edge.source_id,
-                            edge.target_id,
-                            edge_id=edge.id,
-                            relation=edge.relation,
-                            edge_type=edge.edge_type.value,
-                            importance=edge.importance,
-                            metadata=edge.metadata,
-                        )
-
-                        memory_a.edges.append(edge)
-                        result["linked_count"] += 1
-
-                        logger.debug(f"🧠 智能关联: {memory_a.id[:8]} --[{relation_type}]--> {memory_b.id[:8]} (置信度={confidence:.2f})")
-
-                    except Exception as e:
-                        logger.warning(f"建立智能关联失败: {e}")
-                        continue
-
-            # 保存关联结果
-            if result["linked_count"] > 0:
-                await self.persistence.save_graph_store(self.graph_store)
-
-            logger.debug(f"✅ 智能关联完成: 建立了 {result['linked_count']} 个关联，LLM调用 {result['llm_calls']} 次")
-            return result
-
-        except Exception as e:
-            logger.error(f"智能关联失败: {e}", exc_info=True)
-            return {"error": str(e), "checked_count": 0, "linked_count": 0}
-
-    async def _batch_analyze_memory_relations(
+    async def _batch_analyze_memory_relations(  # 已废弃
         self,
         candidate_pairs: list[tuple[Memory, Memory, float]]
     ) -> list[dict[str, Any]]:
         """
-        批量分析记忆关系（优化LLM调用）
+        批量分析记忆关系（已废弃）
+
+        该功能已由三级记忆系统取代。
 
         Args:
-            candidate_pairs: 候选记忆对列表，每项包含 (memory_a, memory_b, vector_similarity)
+            candidate_pairs: 候选记忆对列表
 
         Returns:
-            关系分析结果列表
+            空列表（向后兼容）
         """
-        try:
-            from src.config.config import model_config
-            from src.llm_models.utils_model import LLMRequest
-
-            llm = LLMRequest(
-                model_set=model_config.model_task_config.utils_small,
-                request_type="memory.batch_relation_analysis"
-            )
-
-            # 格式化所有候选记忆对
-            candidates_text = ""
-            for i, (mem_a, mem_b, similarity) in enumerate(candidate_pairs):
-                desc_a = self._format_memory_for_llm(mem_a)
-                desc_b = self._format_memory_for_llm(mem_b)
-                candidates_text += f"""
-候选对 {i+1}:
-记忆A: {desc_a}
-记忆B: {desc_b}
-向量相似度: {similarity:.3f}
-"""
-
-            # 构建批量分析提示词（使用配置的置信度阈值）
-            min_confidence = getattr(self.config, "consolidation_linking_min_confidence", 0.7)
-
-            prompt = f"""你是记忆关系分析专家。请批量分析以下候选记忆对之间的关系。
-
-**关系类型说明：**
-- 导致: A的发生导致了B的发生（因果关系）
-- 引用: A提到或涉及B（引用关系）
-- 相似: A和B描述相似的内容（相似关系）
-- 相反: A和B表达相反的观点（对立关系）
-- 关联: A和B存在某种关联但不属于以上类型（一般关联）
-
-**候选记忆对：**
-{candidates_text}
-
-**任务要求：**
-1. 对每个候选对，判断是否存在有意义的关系
-2. 如果存在关系，指定关系类型和置信度(0.0-1.0)
-3. 简要说明判断理由
-4. 只返回置信度 >= {min_confidence} 的关系
-5. 优先考虑因果、引用等强关系，谨慎建立相似关系
-
-**输出格式（JSON）：**
-```json
-[
-  {{
-    "candidate_id": 1,
-    "has_relation": true,
-    "relation_type": "导致",
-    "confidence": 0.85,
-    "reasoning": "记忆A描述的原因导致记忆B的结果"
-  }},
-  {{
-    "candidate_id": 2,
-    "has_relation": false,
-    "reasoning": "两者无明显关联"
-  }}
-]
-```
-
-请分析并输出JSON结果："""
-
-            # 调用LLM（使用配置的参数）
-            llm_temperature = getattr(self.config, "consolidation_linking_llm_temperature", 0.2)
-            llm_max_tokens = getattr(self.config, "consolidation_linking_llm_max_tokens", 1500)
-
-            response, _ = await llm.generate_response_async(
-                prompt,
-                temperature=llm_temperature,
-                max_tokens=llm_max_tokens,
-            )
-
-            # 解析响应
-            import json
-            import re
-
-            # 提取JSON
-            json_match = re.search(r"```json\s*(.*?)\s*```", response, re.DOTALL)
-            if json_match:
-                json_str = json_match.group(1)
-            else:
-                json_str = response.strip()
-
-            try:
-                analysis_results = json.loads(json_str)
-            except json.JSONDecodeError:
-                logger.warning(f"LLM返回格式错误，尝试修复: {response[:200]}")
-                # 尝试简单修复
-                json_str = re.sub(r"[\r\n\t]", "", json_str)
-                analysis_results = json.loads(json_str)
-
-            # 转换为结果格式
-            relations = []
-            for result in analysis_results:
-                if not result.get("has_relation", False):
-                    continue
-
-                confidence = result.get("confidence", 0.0)
-                if confidence < min_confidence:  # 使用配置的置信度阈值
-                    continue
-
-                candidate_id = result.get("candidate_id", 0) - 1
-                if 0 <= candidate_id < len(candidate_pairs):
-                    mem_a, mem_b, vector_similarity = candidate_pairs[candidate_id]
-                    relations.append({
-                        "memory_pair": (mem_a, mem_b),
-                        "relation_type": result.get("relation_type", "关联"),
-                        "confidence": confidence,
-                        "reasoning": result.get("reasoning", ""),
-                        "vector_similarity": vector_similarity,
-                    })
-
-            logger.debug(f"🧠 LLM批量分析完成: 发现 {len(relations)} 个关系")
-            return relations
-
-        except Exception as e:
-            logger.error(f"LLM批量关系分析失败: {e}", exc_info=True)
-            return []
+        logger.warning("_batch_analyze_memory_relations 已废弃")
+        return []
 
     def _start_maintenance_task(self) -> None:
         """

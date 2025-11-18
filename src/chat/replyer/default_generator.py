@@ -564,7 +564,7 @@ class DefaultReplyer:
         return f"{expression_habits_title}\n{expression_habits_block}"
 
     async def build_memory_block(self, chat_history: str, target: str) -> str:
-        """构建记忆块
+        """构建记忆块（使用三层记忆系统）
 
         Args:
             chat_history: 聊天历史记录
@@ -573,149 +573,13 @@ class DefaultReplyer:
         Returns:
             str: 记忆信息字符串
         """
-        # 使用新的记忆图系统检索记忆（带智能查询优化）
-        all_memories = []
-        try:
-            from src.memory_graph.manager_singleton import get_memory_manager, is_initialized
-
-            if is_initialized():
-                manager = get_memory_manager()
-                if manager:
-                    # 构建查询上下文
-                    stream = self.chat_stream
-                    user_info_obj = getattr(stream, "user_info", None)
-                    sender_name = ""
-                    if user_info_obj:
-                        sender_name = getattr(user_info_obj, "user_nickname", "") or getattr(user_info_obj, "user_cardname", "")
-
-                    # 格式化聊天历史为更友好的格式
-                    formatted_history = ""
-                    if chat_history:
-                        # 移除过长的历史记录，只保留最近部分
-                        lines = chat_history.strip().split("\n")
-                        recent_lines = lines[-10:] if len(lines) > 10 else lines
-                        formatted_history = "\n".join(recent_lines)
-
-                    query_context = {
-                        "chat_history": formatted_history,
-                        "sender": sender_name,
-                    }
-
-                    # 使用记忆管理器的智能检索（多查询策略）
-                    memories = []
-                    if global_config.memory:
-                        memories = []
-                        if global_config.memory:
-                            top_k = global_config.memory.search_top_k
-                            min_importance = global_config.memory.search_min_importance
-                            memories = await manager.search_memories(
-                                query=target,
-                                top_k=top_k,
-                                min_importance=min_importance,
-                                include_forgotten=False,
-                                use_multi_query=True,
-                                context=query_context,
-                            )
-
-                    if memories:
-                        logger.info(f"[记忆图] 检索到 {len(memories)} 条相关记忆")
-
-                        # 使用新的格式化工具构建完整的记忆描述
-                        from src.memory_graph.utils.memory_formatter import (
-                            format_memory_for_prompt,
-                            get_memory_type_label,
-                        )
-
-                        for memory in memories:
-                            # 使用格式化工具生成完整的主谓宾描述
-                            content = format_memory_for_prompt(memory, include_metadata=False)
-
-                            # 获取记忆类型
-                            mem_type = memory.memory_type.value if memory.memory_type else "未知"
-
-                            if content:
-                                all_memories.append({
-                                    "content": content,
-                                    "memory_type": mem_type,
-                                    "importance": memory.importance,
-                                    "relevance": 0.7,
-                                    "source": "memory_graph",
-                                })
-                                logger.debug(f"[记忆构建] 格式化记忆: [{mem_type}] {content[:50]}...")
-                    else:
-                        logger.debug("[记忆图] 未找到相关记忆")
-        except Exception as e:
-            logger.debug(f"[记忆图] 检索失败: {e}")
-            all_memories = []
-
-        # 构建记忆字符串，使用方括号格式
-        memory_str = ""
-        has_any_memory = False
-
-        # 添加长期记忆（来自记忆图系统）
-        if all_memories:
-            # 使用方括号格式
-            memory_parts = ["### 🧠 相关记忆 (Relevant Memories)", ""]
-
-            # 按相关度排序，并记录相关度信息用于调试
-            sorted_memories = sorted(all_memories, key=lambda x: x.get("relevance", 0.0), reverse=True)
-
-            # 调试相关度信息
-            relevance_info = [(m.get("memory_type", "unknown"), m.get("relevance", 0.0)) for m in sorted_memories]
-            logger.debug(f"记忆相关度信息: {relevance_info}")
-            logger.debug(f"[记忆构建] 准备将 {len(sorted_memories)} 条记忆添加到提示词")
-
-            for idx, running_memory in enumerate(sorted_memories, 1):
-                content = running_memory.get("content", "")
-                memory_type = running_memory.get("memory_type", "unknown")
-
-                # 跳过空内容
-                if not content or not content.strip():
-                    logger.warning(f"[记忆构建] 跳过第 {idx} 条记忆：内容为空 (type={memory_type})")
-                    logger.debug(f"[记忆构建] 空记忆详情: {running_memory}")
-                    continue
-
-                # 使用记忆图的类型映射（优先）或全局映射
-                try:
-                    from src.memory_graph.utils.memory_formatter import get_memory_type_label
-                    chinese_type = get_memory_type_label(memory_type)
-                except ImportError:
-                    # 回退到全局映射
-                    chinese_type = get_memory_type_chinese_label(memory_type)
-
-                # 提取纯净内容（如果包含旧格式的元数据）
-                clean_content = content
-                if "（类型:" in content and "）" in content:
-                    clean_content = content.split("（类型:")[0].strip()
-
-                logger.debug(f"[记忆构建] 添加第 {idx} 条记忆: [{chinese_type}] {clean_content[:50]}...")
-                memory_parts.append(f"- **[{chinese_type}]** {clean_content}")
-
-            memory_str = "\n".join(memory_parts) + "\n"
-            has_any_memory = True
-            logger.debug(f"[记忆构建] 成功构建记忆字符串，包含 {len(memory_parts) - 2} 条记忆")
-
-        # 瞬时记忆由另一套系统处理，这里不再添加
-
-        # 只有当完全没有任何记忆时才返回空字符串
-        return memory_str if has_any_memory else ""
-
-    async def build_three_tier_memory_block(self, chat_history: str, target: str) -> str:
-        """构建三层记忆块（感知记忆 + 短期记忆 + 长期记忆）
-
-        Args:
-            chat_history: 聊天历史记录
-            target: 目标消息内容
-
-        Returns:
-            str: 三层记忆信息字符串
-        """
         # 检查是否启用三层记忆系统
         if not (global_config.three_tier_memory and global_config.three_tier_memory.enable):
             return ""
 
         try:
-            from src.memory_graph.three_tier.manager_singleton import get_unified_memory_manager
+            from src.memory_graph.manager_singleton import get_unified_memory_manager
+            from src.memory_graph.utils.memory_formatter import format_memory_for_prompt
 
             unified_manager = get_unified_memory_manager()
             if not unified_manager:
@@ -737,51 +601,53 @@ class DefaultReplyer:
             short_term_memories = search_result.get("short_term_memories", [])
             long_term_memories = search_result.get("long_term_memories", [])
 
-            memory_parts = ["### 🔮 三层记忆系统 (Three-Tier Memory)", ""]
+            memory_parts = ["### 🧠 相关记忆 (Relevant Memories)", ""]
 
             # 添加感知记忆（最近的消息块）
             if perceptual_blocks:
-                memory_parts.append("#### 🌊 感知记忆 (Perceptual Memory)")
+                memory_parts.append("#### 🌊 感知记忆")
                 for block in perceptual_blocks[:2]:  # 最多显示2个块
-                    # MemoryBlock 对象有 messages 属性（列表）
                     messages = block.messages if hasattr(block, 'messages') else []
                     if messages:
-                        block_content = " → ".join([f"{msg.get('sender_name', msg.get('sender_id', ''))}: {msg.get('content', '')[:30]}" for msg in messages[:3]])
+                        block_content = " → ".join([
+                            f"{msg.get('sender_name', msg.get('sender_id', ''))}: {msg.get('content', '')[:30]}" 
+                            for msg in messages[:3]
+                        ])
                         memory_parts.append(f"- {block_content}")
                 memory_parts.append("")
 
             # 添加短期记忆（结构化活跃记忆）
             if short_term_memories:
-                memory_parts.append("#### 💭 短期记忆 (Short-Term Memory)")
+                memory_parts.append("#### 💭 短期记忆")
                 for mem in short_term_memories[:3]:  # 最多显示3条
-                    # ShortTermMemory 对象有属性而非字典
-                    if hasattr(mem, 'subject') and hasattr(mem, 'topic') and hasattr(mem, 'object'):
-                        subject = mem.subject or ""
-                        topic = mem.topic or ""
-                        obj = mem.object or ""
-                        content = f"{subject} {topic} {obj}" if all([subject, topic, obj]) else (mem.content if hasattr(mem, 'content') else str(mem))
-                    else:
-                        content = mem.content if hasattr(mem, 'content') else str(mem)
-                    memory_parts.append(f"- {content}")
+                    content = format_memory_for_prompt(mem, include_metadata=False)
+                    if content:
+                        memory_parts.append(f"- {content}")
                 memory_parts.append("")
 
             # 添加长期记忆（图谱记忆）
             if long_term_memories:
-                memory_parts.append("#### 🧠 长期记忆 (Long-Term Memory)")
+                memory_parts.append("#### 🗄️ 长期记忆")
                 for mem in long_term_memories[:3]:  # 最多显示3条
-                    # Memory 对象有 content 属性
-                    content = mem.content if hasattr(mem, 'content') else str(mem)
-                    memory_parts.append(f"- {content}")
+                    content = format_memory_for_prompt(mem, include_metadata=False)
+                    if content:
+                        memory_parts.append(f"- {content}")
                 memory_parts.append("")
 
             total_count = len(perceptual_blocks) + len(short_term_memories) + len(long_term_memories)
-            logger.info(f"[三层记忆] 检索到 {total_count} 条记忆 (感知:{len(perceptual_blocks)}, 短期:{len(short_term_memories)}, 长期:{len(long_term_memories)})")
+            if total_count > 0:
+                logger.info(
+                    f"[三层记忆] 检索到 {total_count} 条记忆 "
+                    f"(感知:{len(perceptual_blocks)}, 短期:{len(short_term_memories)}, 长期:{len(long_term_memories)})"
+                )
 
             return "\n".join(memory_parts) if len(memory_parts) > 2 else ""
 
         except Exception as e:
             logger.error(f"[三层记忆] 检索失败: {e}", exc_info=True)
             return ""
+
+
 
     async def build_tool_info(self, chat_history: str, sender: str, target: str, enable_tool: bool = True) -> str:
         """构建工具信息块
@@ -1404,9 +1270,6 @@ class DefaultReplyer:
             ),
             "memory_block": asyncio.create_task(
                 self._time_and_run_task(self.build_memory_block(chat_talking_prompt_short, target), "memory_block")
-            ),
-            "three_tier_memory": asyncio.create_task(
-                self._time_and_run_task(self.build_three_tier_memory_block(chat_talking_prompt_short, target), "three_tier_memory")
             ),
             "tool_info": asyncio.create_task(
                 self._time_and_run_task(

@@ -17,7 +17,7 @@ from typing import Any
 from src.common.logger import get_logger
 from src.memory_graph.manager import MemoryManager
 from src.memory_graph.models import Memory, MemoryType, NodeType
-from src.memory_graph.three_tier.models import GraphOperation, GraphOperationType, ShortTermMemory
+from src.memory_graph.models import GraphOperation, GraphOperationType, ShortTermMemory
 
 logger = get_logger(__name__)
 
@@ -249,9 +249,9 @@ class LongTermMemoryManager:
             # 构建提示词
             prompt = self._build_graph_operation_prompt(stm, similar_memories)
 
-            # 调用 LLM
+            # 调用长期记忆构建模型
             llm = LLMRequest(
-                model_set=model_config.model_task_config.utils_small,
+                model_set=model_config.model_task_config.memory_long_term_builder,
                 request_type="long_term_memory.graph_operations",
             )
 
@@ -509,6 +509,10 @@ class LongTermMemoryManager:
     async def _execute_update_memory(self, op: GraphOperation) -> None:
         """执行更新记忆操作"""
         memory_id = op.target_id
+        if not memory_id:
+            logger.error("更新操作缺少目标记忆ID")
+            return
+            
         updates = op.parameters.get("updated_fields", {})
 
         success = await self.memory_manager.update_memory(memory_id, **updates)
