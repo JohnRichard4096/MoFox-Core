@@ -1,7 +1,7 @@
 <div align="center">
 
 # 🌟 MoFox_Bot
-**🚀 基于 MaiCore 的增强型 AI 智能体，功能更强大，体验更流畅**
+**🚀 基于 MaiCore 0.10.0 snapshot.5进一步开发的 AI 智能体，插件功能更强大**
 
 </div>
 
@@ -36,12 +36,13 @@
 
 ## 📖 项目简介
 
-**MoFox_Bot** 是一个基于 [MaiCore](https://github.com/MaiM-with-u/MaiBot) `0.10.0 snapshot.5` 的增强型 fork 项目。我们保留了原项目几乎所有核心功能，并在此基础上进行了深度优化与功能扩展，致力于打造一个**更稳定、更智能、更具趣味性**的 AI 智能体。
+**MoFox_Bot** 是一个基于 [MaiCore](https://github.com/MaiM-with-u/MaiBot) `0.10.0 snapshot.5` 的 fork 项目。我们保留了原项目几乎所有核心功能，并在此基础上进行了深度优化与功能扩展，致力于打造一个**更稳定、更智能、更具趣味性**的 AI 智能体。
+
 
 > [IMPORTANT]
 > **第三方项目声明**
 >
-> 本项目由 **MoFox Studio** 独立维护，为 **MaiBot 的第三方分支**，并非官方版本。所有更新与支持均由我们团队负责，与 MaiBot 官方无直接关系。
+> 本项目Fork后由 **MoFox Studio** 独立维护，为 **MaiBot 的第三方分支**，并非官方版本。所有更新与支持均由我们团队负责，后续的更新与 MaiBot 官方无直接关系。
 
 > [WARNING]
 > **迁移风险提示**
@@ -62,7 +63,7 @@
 <tr>
 <td width="50%">
  
-### 🔧 原版功能（全部保留）
+### 🔧 MaiBot 0.10.0 snapshot.5 原版功能
 - 🔌 **强大插件系统** - 全面重构的插件架构，支持完整的管理 API 和权限控制
 - 💭 **实时思维系统** - 模拟人类思考过程
 - 📚 **表达学习功能** - 学习群友的说话风格和表达方式
@@ -150,9 +151,11 @@
 
 | 项目                                       | 描述                 | 贡献             |
 | ------------------------------------------ | -------------------- | ---------------- |
-| 🎯 [MaiM-with-u/MaiBot](https://github.com/MaiM-with-u/MaiBot) | 原版 MaiBot 框架     | 提供核心架构与设计 |
+| 🎯 [MaiM-with-u/MaiBot](https://github.com/Mai-with-u/MaiBot) | 原版 MaiBot 框架     | 提供核心架构与设计 |
 | 🐱 [NapNeko/NapCatQQ](https://github.com/NapNeko/NapCatQQ) | 高性能 QQ 协议端     | 实现稳定通信       |
 | 🌌 [internetsb/Maizone](https://github.com/internetsb/Maizone) | 魔改空间插件         | 功能借鉴与启发     |
+
+如果可以的话，请为这些项目也点个 ⭐️ ！(尤其是MaiBot)
 
 </div>
 
