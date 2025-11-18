@@ -31,7 +31,7 @@ def _get_unified_memory_manager():
     global _unified_memory_manager
     if _unified_memory_manager is None:
         try:
-            from src.memory_graph.three_tier.manager_singleton import get_unified_memory_manager
+            from src.memory_graph.manager_singleton import get_unified_memory_manager
 
             _unified_memory_manager = get_unified_memory_manager()
         except Exception as e:

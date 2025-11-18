@@ -18,7 +18,7 @@ from typing import Any
 import numpy as np
 
 from src.common.logger import get_logger
-from src.memory_graph.three_tier.models import MemoryBlock, PerceptualMemory
+from src.memory_graph.models import MemoryBlock, PerceptualMemory
 from src.memory_graph.utils.embeddings import EmbeddingGenerator
 from src.memory_graph.utils.similarity import cosine_similarity
 
@@ -74,6 +74,13 @@ class PerceptualMemoryManager:
             f"感知记忆管理器已创建 (max_blocks={max_blocks}, "
             f"block_size={block_size}, activation_threshold={activation_threshold})"
         )
+
+    @property
+    def memory(self) -> PerceptualMemory:
+        """获取感知记忆对象（保证非 None）"""
+        if self.perceptual_memory is None:
+            raise RuntimeError("感知记忆管理器未初始化")
+        return self.perceptual_memory
 
     async def initialize(self) -> None:
         """初始化管理器"""

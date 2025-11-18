@@ -1,7 +1,7 @@
 """
-记忆系统插件工具
+记忆系统插件工具（已废弃）
 
-将 MemoryTools 适配为 BaseTool 格式，供 LLM 使用
+警告：记忆创建不再由工具负责，而是通过三级记忆系统自动处理
 """
 
 from __future__ import annotations
@@ -15,7 +15,15 @@ from src.plugin_system.base.component_types import ToolParamType
 logger = get_logger(__name__)
 
 
-class CreateMemoryTool(BaseTool):
+# ========== 以下工具类已废弃 ==========
+# 记忆系统现在采用三级记忆架构：
+# 1. 感知记忆：自动收集消息块
+# 2. 短期记忆：激活后由模型格式化
+# 3. 长期记忆：定期转移到图结构
+# 
+# 不再需要LLM手动调用工具创建记忆
+
+class _DeprecatedCreateMemoryTool(BaseTool):
     """创建记忆工具"""
 
     name = "create_memory"
@@ -129,8 +137,8 @@ class CreateMemoryTool(BaseTool):
             }
 
 
-class LinkMemoriesTool(BaseTool):
-    """关联记忆工具"""
+class _DeprecatedLinkMemoriesTool(BaseTool):
+    """关联记忆工具（已废弃）"""
 
     name = "link_memories"
     description = "在两个记忆之间建立关联关系。用于连接相关的记忆，形成知识网络。"
@@ -189,8 +197,8 @@ class LinkMemoriesTool(BaseTool):
             }
 
 
-class SearchMemoriesTool(BaseTool):
-    """搜索记忆工具"""
+class _DeprecatedSearchMemoriesTool(BaseTool):
+    """搜索记忆工具（已废弃）"""
 
     name = "search_memories"
     description = "搜索相关的记忆。根据查询词搜索记忆库，返回最相关的记忆。"

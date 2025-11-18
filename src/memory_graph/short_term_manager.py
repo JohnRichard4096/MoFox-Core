@@ -18,7 +18,7 @@ from typing import Any
 import numpy as np
 
 from src.common.logger import get_logger
-from src.memory_graph.three_tier.models import (
+from src.memory_graph.models import (
     MemoryBlock,
     ShortTermDecision,
     ShortTermMemory,
@@ -194,9 +194,9 @@ class ShortTermMemoryManager:
 
 请输出JSON："""
 
-            # 调用 LLM
+            # 调用短期记忆构建模型
             llm = LLMRequest(
-                model_set=model_config.model_task_config.utils_small,
+                model_set=model_config.model_task_config.memory_short_term_builder,
                 request_type="short_term_memory.extract",
             )
 
@@ -299,9 +299,9 @@ class ShortTermMemoryManager:
 
 请输出JSON："""
 
-            # 调用 LLM
+            # 调用短期记忆决策模型
             llm = LLMRequest(
-                model_set=model_config.model_task_config.utils_small,
+                model_set=model_config.model_task_config.memory_short_term_decider,
                 request_type="short_term_memory.decide",
             )
 

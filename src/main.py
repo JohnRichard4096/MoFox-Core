@@ -249,7 +249,7 @@ class MainSystem:
         # 停止增强记忆系统
         # 停止三层记忆系统
         try:
-            from src.memory_graph.three_tier.manager_singleton import get_unified_memory_manager, shutdown_unified_memory_manager
+            from src.memory_graph.manager_singleton import get_unified_memory_manager, shutdown_unified_memory_manager
 
             if get_unified_memory_manager():
                 cleanup_tasks.append(("三层记忆系统", shutdown_unified_memory_manager()))
@@ -480,7 +480,7 @@ MoFox_Bot(第三方修改版)
         # 初始化三层记忆系统（如果启用）
         try:
             if global_config.three_tier_memory and global_config.three_tier_memory.enable:
-                from src.memory_graph.three_tier.manager_singleton import initialize_unified_memory_manager
+                from src.memory_graph.manager_singleton import initialize_unified_memory_manager
                 logger.info("三层记忆系统已启用，正在初始化...")
                 await initialize_unified_memory_manager()
                 logger.info("三层记忆系统初始化成功")
