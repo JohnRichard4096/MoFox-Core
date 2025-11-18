@@ -117,6 +117,16 @@ class ToolExecutor:
 
         self.llm_model = LLMRequest(model_set=model_config.model_task_config.tool_use, request_type="tool_executor")
 
+        # 工具调用状态缓存
+        self._pending_step_two_tools: dict[str, dict[str, Any]] = {}
+        """存储待执行的二阶段工具调用，格式为 {tool_name: step_two_definition}"""
+        self._log_prefix_initialized = False
+
+        # 标准化工具历史记录管理器
+        self.history_manager = get_stream_tool_history_manager(self.chat_id)
+
+        # logger.info(f"{self.log_prefix}工具执行器初始化完成")  # 挪到异步初始化阶段
+
     def _apply_config_defaults(self) -> None:
         tool_cfg = getattr(global_config, "tool", None)
         if not tool_cfg:
@@ -129,17 +139,6 @@ class ToolExecutor:
         timeout = getattr(tool_cfg, "tool_timeout", None)
         if timeout:
             self.execution_config.tool_timeout = max(1.0, float(timeout))
-
-
-        # 二步工具调用状态管理
-        self._pending_step_two_tools: dict[str, dict[str, Any]] = {}
-        """待处理的第二步工具调用，格式为 {tool_name: step_two_definition}"""
-        self._log_prefix_initialized = False
-
-        # 流式工具历史记录管理器
-        self.history_manager = get_stream_tool_history_manager(chat_id)
-
-        # logger.info(f"{self.log_prefix}工具执行器初始化完成")  # 移到异步初始化中
 
     async def _initialize_log_prefix(self):
         """异步初始化log_prefix和chat_stream"""
