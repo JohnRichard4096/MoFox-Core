@@ -232,7 +232,8 @@ class SingleStreamContextManager:
             failed_ids = []
             for message_id in message_ids:
                 try:
-                    self.context.mark_message_as_read(message_id)
+                    # 传递最大历史消息数量限制
+                    self.context.mark_message_as_read(message_id, max_history_size=self.max_context_size)
                     marked_count += 1
                 except Exception as e:
                     failed_ids.append(str(message_id)[:8])
@@ -374,11 +375,11 @@ class SingleStreamContextManager:
 
             from src.chat.utils.chat_message_builder import get_raw_msg_before_timestamp_with_chat
 
-            # 加载历史消息（限制数量为max_context_size的2倍，用于丰富上下文）
+            # 加载历史消息（限制数量为max_context_size）
             db_messages = await get_raw_msg_before_timestamp_with_chat(
                 chat_id=self.stream_id,
                 timestamp=time.time(),
-                limit=self.max_context_size * 2,
+                limit=self.max_context_size,
             )
 
             if db_messages:
@@ -400,6 +401,12 @@ class SingleStreamContextManager:
                     except Exception as e:
                         logger.warning(f"转换历史消息失败 (message_id={msg_dict.get('message_id', 'unknown')}): {e}")
                         continue
+
+                # 应用历史消息长度限制
+                if len(self.context.history_messages) > self.max_context_size:
+                    removed_count = len(self.context.history_messages) - self.max_context_size
+                    self.context.history_messages = self.context.history_messages[-self.max_context_size:]
+                    logger.debug(f"📝 [历史加载] 移除了 {removed_count} 条过旧的历史消息以保持上下文大小限制")
 
                 logger.info(f"✅ [历史加载] 成功加载 {loaded_count} 条历史消息到内存: {self.stream_id}")
             else:

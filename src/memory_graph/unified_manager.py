@@ -10,6 +10,7 @@
 """
 
 import asyncio
+import time
 from datetime import datetime
 from pathlib import Path
 from typing import Any
@@ -47,6 +48,7 @@ class UnifiedMemoryManager:
         long_term_batch_size: int = 10,
         long_term_search_top_k: int = 5,
         long_term_decay_factor: float = 0.95,
+        long_term_auto_transfer_interval: int = 600,
         # 智能检索配置
         judge_confidence_threshold: float = 0.7,
     ):
@@ -65,6 +67,7 @@ class UnifiedMemoryManager:
             long_term_batch_size: 批量处理的短期记忆数量
             long_term_search_top_k: 检索相似记忆的数量
             long_term_decay_factor: 长期记忆的衰减因子
+            long_term_auto_transfer_interval: 自动转移间隔（秒）
             judge_confidence_threshold: 裁判模型的置信度阈值
         """
         self.data_dir = data_dir or Path("data/memory_graph/three_tier")
@@ -104,6 +107,9 @@ class UnifiedMemoryManager:
         # 状态
         self._initialized = False
         self._auto_transfer_task: asyncio.Task | None = None
+        self._auto_transfer_interval = max(10.0, float(long_term_auto_transfer_interval))
+        self._max_transfer_delay = min(max(30.0, self._auto_transfer_interval), 300.0)
+        self._transfer_wakeup_event: asyncio.Event | None = None
 
         logger.info("统一记忆管理器已创建")
 
@@ -428,6 +434,31 @@ class UnifiedMemoryManager:
 
         task.add_done_callback(_callback)
 
+    def _trigger_transfer_wakeup(self) -> None:
+        """通知自动转移任务立即检查缓存"""
+        if self._transfer_wakeup_event and not self._transfer_wakeup_event.is_set():
+            self._transfer_wakeup_event.set()
+
+    def _calculate_auto_sleep_interval(self) -> float:
+        """根据短期内存压力计算自适应等待间隔"""
+        base_interval = self._auto_transfer_interval
+        if not getattr(self, "short_term_manager", None):
+            return base_interval
+
+        max_memories = max(1, getattr(self.short_term_manager, "max_memories", 1))
+        occupancy = len(self.short_term_manager.memories) / max_memories
+
+        if occupancy >= 0.9:
+            return max(5.0, base_interval * 0.1)
+        if occupancy >= 0.75:
+            return max(10.0, base_interval * 0.2)
+        if occupancy >= 0.5:
+            return max(15.0, base_interval * 0.4)
+        if occupancy >= 0.3:
+            return max(20.0, base_interval * 0.6)
+
+        return base_interval
+
     async def _transfer_blocks_to_short_term(self, blocks: list[MemoryBlock]) -> None:
         """实际转换逻辑在后台执行"""
         logger.info(f"正在后台处理 {len(blocks)} 个感知记忆块")
@@ -438,6 +469,7 @@ class UnifiedMemoryManager:
                     continue
 
                 await self.perceptual_manager.remove_block(block.id)
+                self._trigger_transfer_wakeup()
                 logger.info(f"✓ 记忆块 {block.id} 已被转移到短期记忆 {stm.id}")
             except Exception as exc:
                 logger.error(f"后台转移失败，记忆块 {block.id}: {exc}", exc_info=True)
@@ -519,64 +551,92 @@ class UnifiedMemoryManager:
             logger.warning("自动转移任务已在运行")
             return
 
+        if self._transfer_wakeup_event is None:
+            self._transfer_wakeup_event = asyncio.Event()
+        else:
+            self._transfer_wakeup_event.clear()
+
         self._auto_transfer_task = asyncio.create_task(self._auto_transfer_loop())
         logger.info("自动转移任务已启动")
 
     async def _auto_transfer_loop(self) -> None:
         """自动转移循环（批量缓存模式）"""
-        transfer_cache = []  # 缓存待转移的短期记忆
-        cache_size_threshold = self._config["long_term"]["batch_size"]  # 使用配置的批量大小
-        
+        transfer_cache: list[ShortTermMemory] = []
+        cached_ids: set[str] = set()
+        cache_size_threshold = max(1, self._config["long_term"].get("batch_size", 1))
+        last_transfer_time = time.monotonic()
+
         while True:
             try:
-                # 每 10 分钟检查一次
-                await asyncio.sleep(600)
+                sleep_interval = self._calculate_auto_sleep_interval()
+                if self._transfer_wakeup_event is not None:
+                    try:
+                        await asyncio.wait_for(
+                            self._transfer_wakeup_event.wait(),
+                            timeout=sleep_interval,
+                        )
+                        self._transfer_wakeup_event.clear()
+                    except asyncio.TimeoutError:
+                        pass
+                else:
+                    await asyncio.sleep(sleep_interval)
 
-                # 检查短期记忆是否有需要转移的
                 memories_to_transfer = self.short_term_manager.get_memories_for_transfer()
-                
+
                 if memories_to_transfer:
-                    # 添加到缓存
-                    transfer_cache.extend(memories_to_transfer)
-                    logger.info(
-                        f"缓存待转移记忆: 新增{len(memories_to_transfer)}条, "
-                        f"缓存总数{len(transfer_cache)}/{cache_size_threshold}"
-                    )
-                
-                # 检查是否达到批量转移阈值或短期记忆已满
+                    added = 0
+                    for memory in memories_to_transfer:
+                        mem_id = getattr(memory, "id", None)
+                        if mem_id and mem_id in cached_ids:
+                            continue
+                        transfer_cache.append(memory)
+                        if mem_id:
+                            cached_ids.add(mem_id)
+                        added += 1
+
+                    if added:
+                        logger.info(
+                            f"自动转移缓存: 新增{added}条, 当前缓存{len(transfer_cache)}/{cache_size_threshold}"
+                        )
+
+                max_memories = max(1, getattr(self.short_term_manager, 'max_memories', 1))
+                occupancy_ratio = len(self.short_term_manager.memories) / max_memories
+                time_since_last_transfer = time.monotonic() - last_transfer_time
+
                 should_transfer = (
-                    len(transfer_cache) >= cache_size_threshold or
-                    len(self.short_term_manager.memories) >= self.short_term_manager.max_memories
+                    len(transfer_cache) >= cache_size_threshold
+                    or occupancy_ratio >= 0.85
+                    or (transfer_cache and time_since_last_transfer >= self._max_transfer_delay)
+                    or len(self.short_term_manager.memories) >= self.short_term_manager.max_memories
                 )
-                
+
                 if should_transfer and transfer_cache:
-                    logger.info(f"触发批量转移: {len(transfer_cache)}条短期记忆→长期记忆")
-                    
-                    # 执行批量转移
-                    result = await self.long_term_manager.transfer_from_short_term(
-                        transfer_cache
+                    logger.info(
+                        f"准备批量转移: {len(transfer_cache)}条短期记忆到长期记忆 (占用率 {occupancy_ratio:.0%})"
                     )
 
-                    # 清除已转移的记忆
+                    result = await self.long_term_manager.transfer_from_short_term(list(transfer_cache))
+
                     if result.get("transferred_memory_ids"):
                         await self.short_term_manager.clear_transferred_memories(
                             result["transferred_memory_ids"]
                         )
-                        # 从缓存中移除已转移的
                         transferred_ids = set(result["transferred_memory_ids"])
                         transfer_cache = [
-                            m for m in transfer_cache 
-                            if m.id not in transferred_ids
+                            m
+                            for m in transfer_cache
+                            if getattr(m, "id", None) not in transferred_ids
                         ]
+                        cached_ids.difference_update(transferred_ids)
 
+                    last_transfer_time = time.monotonic()
                     logger.info(f"✅ 批量转移完成: {result}")
 
             except asyncio.CancelledError:
-                logger.info("自动转移任务已取消")
+                logger.info("自动转移循环被取消")
                 break
             except Exception as e:
-                logger.error(f"自动转移任务错误: {e}", exc_info=True)
-                # 继续运行
+                logger.error(f"自动转移循环异常: {e}", exc_info=True)
 
     async def manual_transfer(self) -> dict[str, Any]:
         """

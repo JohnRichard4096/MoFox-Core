@@ -163,6 +163,7 @@ async def initialize_unified_memory_manager():
             long_term_batch_size=getattr(config, "long_term_batch_size", 10),
             long_term_search_top_k=getattr(config, "long_term_search_top_k", 5),
             long_term_decay_factor=getattr(config, "long_term_decay_factor", 0.95),
+            long_term_auto_transfer_interval=getattr(config, "long_term_auto_transfer_interval", 600),
             # 智能检索配置
             judge_confidence_threshold=getattr(config, "judge_confidence_threshold", 0.7),
         )

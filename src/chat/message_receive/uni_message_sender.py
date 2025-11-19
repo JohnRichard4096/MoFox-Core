@@ -104,7 +104,19 @@ class HeartFCSender:
                     # 将MessageSending转换为DatabaseMessages
                     db_message = await self._convert_to_database_message(message)
                     if db_message and message.chat_stream.context_manager:
-                        message.chat_stream.context_manager.context.history_messages.append(db_message)
+                        context = message.chat_stream.context_manager.context
+
+                        # 应用历史消息长度限制
+                        from src.config.config import global_config
+                        max_context_size = getattr(global_config.chat, "max_context_size", 40)
+
+                        if len(context.history_messages) >= max_context_size:
+                            # 移除最旧的历史消息以保持长度限制
+                            removed_count = 1
+                            context.history_messages = context.history_messages[removed_count:]
+                            logger.debug(f"[{chat_id}] Send API添加前移除了 {removed_count} 条历史消息以保持上下文大小限制")
+
+                        context.history_messages.append(db_message)
                         logger.debug(f"[{chat_id}] Send API消息已添加到流上下文: {message_id}")
                 except Exception as context_error:
                     logger.warning(f"[{chat_id}] 将Send API消息添加到流上下文失败: {context_error}")

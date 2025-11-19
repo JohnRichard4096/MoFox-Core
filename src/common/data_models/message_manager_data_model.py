@@ -97,7 +97,7 @@ class StreamContext(BaseDataModel):
                 message.add_action(action)
                 break
 
-    def mark_message_as_read(self, message_id: str):
+    def mark_message_as_read(self, message_id: str, max_history_size: int | None = None):
         """标记消息为已读"""
         # 先找到要标记的消息（处理 int/str 类型不匹配问题）
         message_to_mark = None
@@ -110,6 +110,19 @@ class StreamContext(BaseDataModel):
         # 然后移动到历史消息
         if message_to_mark:
             message_to_mark.is_read = True
+
+            # 应用历史消息长度限制
+            if max_history_size is None:
+                # 从全局配置获取最大历史消息数量
+                from src.config.config import global_config
+                max_history_size = getattr(global_config.chat, "max_context_size", 40)
+
+            # 如果历史消息已达到最大长度，移除最旧的消息
+            if len(self.history_messages) >= max_history_size:
+                # 移除最旧的历史消息（保持先进先出）
+                removed_count = len(self.history_messages) - max_history_size + 1
+                self.history_messages = self.history_messages[removed_count:]
+
             self.history_messages.append(message_to_mark)
             self.unread_messages.remove(message_to_mark)
 

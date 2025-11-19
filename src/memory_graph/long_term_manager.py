@@ -492,43 +492,44 @@ class LongTermMemoryManager:
 
         try:
             success_count = 0
+            temp_id_map: dict[str, str] = {}
 
             for op in operations:
                 try:
                     if op.operation_type == GraphOperationType.CREATE_MEMORY:
-                        await self._execute_create_memory(op, source_stm)
+                        await self._execute_create_memory(op, source_stm, temp_id_map)
                         success_count += 1
 
                     elif op.operation_type == GraphOperationType.UPDATE_MEMORY:
-                        await self._execute_update_memory(op)
+                        await self._execute_update_memory(op, temp_id_map)
                         success_count += 1
 
                     elif op.operation_type == GraphOperationType.MERGE_MEMORIES:
-                        await self._execute_merge_memories(op, source_stm)
+                        await self._execute_merge_memories(op, source_stm, temp_id_map)
                         success_count += 1
 
                     elif op.operation_type == GraphOperationType.CREATE_NODE:
-                        await self._execute_create_node(op)
+                        await self._execute_create_node(op, temp_id_map)
                         success_count += 1
 
                     elif op.operation_type == GraphOperationType.UPDATE_NODE:
-                        await self._execute_update_node(op)
+                        await self._execute_update_node(op, temp_id_map)
                         success_count += 1
 
                     elif op.operation_type == GraphOperationType.MERGE_NODES:
-                        await self._execute_merge_nodes(op)
+                        await self._execute_merge_nodes(op, temp_id_map)
                         success_count += 1
 
                     elif op.operation_type == GraphOperationType.CREATE_EDGE:
-                        await self._execute_create_edge(op)
+                        await self._execute_create_edge(op, temp_id_map)
                         success_count += 1
 
                     elif op.operation_type == GraphOperationType.UPDATE_EDGE:
-                        await self._execute_update_edge(op)
+                        await self._execute_update_edge(op, temp_id_map)
                         success_count += 1
 
                     elif op.operation_type == GraphOperationType.DELETE_EDGE:
-                        await self._execute_delete_edge(op)
+                        await self._execute_delete_edge(op, temp_id_map)
                         success_count += 1
 
                     else:
@@ -544,11 +545,64 @@ class LongTermMemoryManager:
             logger.error(f"执行图操作失败: {e}", exc_info=True)
             return False
 
+    @staticmethod
+    def _is_placeholder_id(candidate: str | None) -> bool:
+        if not candidate or not isinstance(candidate, str):
+            return False
+        lowered = candidate.strip().lower()
+        return lowered.startswith(("new_", "temp_"))
+
+    def _register_temp_id(
+        self, placeholder: str | None, actual_id: str, temp_id_map: dict[str, str]
+    ) -> None:
+        if actual_id and placeholder and self._is_placeholder_id(placeholder):
+            temp_id_map[placeholder] = actual_id
+
+    def _resolve_id(self, raw_id: str | None, temp_id_map: dict[str, str]) -> str | None:
+        if raw_id is None:
+            return None
+        return temp_id_map.get(raw_id, raw_id)
+
+    def _resolve_value(self, value: Any, temp_id_map: dict[str, str]) -> Any:
+        if isinstance(value, str):
+            return self._resolve_id(value, temp_id_map)
+        if isinstance(value, list):
+            return [self._resolve_value(v, temp_id_map) for v in value]
+        if isinstance(value, dict):
+            return {k: self._resolve_value(v, temp_id_map) for k, v in value.items()}
+        return value
+
+    def _resolve_parameters(
+        self, params: dict[str, Any], temp_id_map: dict[str, str]
+    ) -> dict[str, Any]:
+        return {k: self._resolve_value(v, temp_id_map) for k, v in params.items()}
+
+    def _register_aliases_from_params(
+        self, params: dict[str, Any], actual_id: str, temp_id_map: dict[str, str]
+    ) -> None:
+        alias_keywords = ("alias", "placeholder", "temp_id", "register_as")
+        for key, value in params.items():
+            if isinstance(value, str):
+                lower_key = key.lower()
+                if any(keyword in lower_key for keyword in alias_keywords):
+                    self._register_temp_id(value, actual_id, temp_id_map)
+            elif isinstance(value, list):
+                lower_key = key.lower()
+                if any(keyword in lower_key for keyword in alias_keywords):
+                    for item in value:
+                        if isinstance(item, str):
+                            self._register_temp_id(item, actual_id, temp_id_map)
+            elif isinstance(value, dict):
+                self._register_aliases_from_params(value, actual_id, temp_id_map)
+
     async def _execute_create_memory(
-        self, op: GraphOperation, source_stm: ShortTermMemory
+        self,
+        op: GraphOperation,
+        source_stm: ShortTermMemory,
+        temp_id_map: dict[str, str],
     ) -> None:
         """执行创建记忆操作"""
-        params = op.parameters
+        params = self._resolve_parameters(op.parameters, temp_id_map)
 
         memory = await self.memory_manager.create_memory(
             subject=params.get("subject", source_stm.subject or "未知"),
@@ -565,17 +619,26 @@ class LongTermMemoryManager:
             memory.metadata["transfer_time"] = datetime.now().isoformat()
 
             logger.info(f"✅ 创建长期记忆: {memory.id} (来自短期记忆 {source_stm.id})")
+            self._register_temp_id(op.target_id, memory.id, temp_id_map)
+            self._register_aliases_from_params(op.parameters, memory.id, temp_id_map)
         else:
             logger.error(f"创建长期记忆失败: {op}")
 
-    async def _execute_update_memory(self, op: GraphOperation) -> None:
+    async def _execute_update_memory(
+        self, op: GraphOperation, temp_id_map: dict[str, str]
+    ) -> None:
         """执行更新记忆操作"""
-        memory_id = op.target_id
+        memory_id = self._resolve_id(op.target_id, temp_id_map)
         if not memory_id:
             logger.error("更新操作缺少目标记忆ID")
             return
             
-        updates = op.parameters.get("updated_fields", {})
+        updates_raw = op.parameters.get("updated_fields", {})
+        updates = (
+            self._resolve_parameters(updates_raw, temp_id_map)
+            if isinstance(updates_raw, dict)
+            else updates_raw
+        )
 
         success = await self.memory_manager.update_memory(memory_id, **updates)
 
@@ -585,12 +648,16 @@ class LongTermMemoryManager:
             logger.error(f"更新长期记忆失败: {memory_id}")
 
     async def _execute_merge_memories(
-        self, op: GraphOperation, source_stm: ShortTermMemory
+        self,
+        op: GraphOperation,
+        source_stm: ShortTermMemory,
+        temp_id_map: dict[str, str],
     ) -> None:
         """执行合并记忆操作 (智能合并版)"""
-        source_ids = op.parameters.get("source_memory_ids", [])
-        merged_content = op.parameters.get("merged_content", "")
-        merged_importance = op.parameters.get("merged_importance", source_stm.importance)
+        params = self._resolve_parameters(op.parameters, temp_id_map)
+        source_ids = params.get("source_memory_ids", [])
+        merged_content = params.get("merged_content", "")
+        merged_importance = params.get("merged_importance", source_stm.importance)
 
         if not source_ids:
             logger.warning("合并操作缺少源记忆ID，跳过")
@@ -626,9 +693,11 @@ class LongTermMemoryManager:
         else:
             logger.error(f"合并记忆失败: {source_ids}")
 
-    async def _execute_create_node(self, op: GraphOperation) -> None:
+    async def _execute_create_node(
+        self, op: GraphOperation, temp_id_map: dict[str, str]
+    ) -> None:
         """执行创建节点操作"""
-        params = op.parameters
+        params = self._resolve_parameters(op.parameters, temp_id_map)
         content = params.get("content")
         node_type = params.get("node_type", "OBJECT")
         memory_id = params.get("memory_id")
@@ -652,13 +721,17 @@ class LongTermMemoryManager:
             # 尝试为新节点生成 embedding (异步)
             asyncio.create_task(self._generate_node_embedding(node_id, content))
             logger.info(f"✅ 创建节点: {content} ({node_type}) -> {memory_id}")
+            self._register_temp_id(op.target_id, node_id, temp_id_map)
+            self._register_aliases_from_params(op.parameters, node_id, temp_id_map)
         else:
             logger.error(f"创建节点失败: {op}")
 
-    async def _execute_update_node(self, op: GraphOperation) -> None:
+    async def _execute_update_node(
+        self, op: GraphOperation, temp_id_map: dict[str, str]
+    ) -> None:
         """执行更新节点操作"""
-        node_id = op.target_id
-        params = op.parameters
+        node_id = self._resolve_id(op.target_id, temp_id_map)
+        params = self._resolve_parameters(op.parameters, temp_id_map)
         updated_content = params.get("updated_content")
         
         if not node_id:
@@ -675,9 +748,11 @@ class LongTermMemoryManager:
         else:
             logger.error(f"更新节点失败: {node_id}")
 
-    async def _execute_merge_nodes(self, op: GraphOperation) -> None:
+    async def _execute_merge_nodes(
+        self, op: GraphOperation, temp_id_map: dict[str, str]
+    ) -> None:
         """执行合并节点操作"""
-        params = op.parameters
+        params = self._resolve_parameters(op.parameters, temp_id_map)
         source_node_ids = params.get("source_node_ids", [])
         merged_content = params.get("merged_content")
         
@@ -698,9 +773,11 @@ class LongTermMemoryManager:
             
         logger.info(f"✅ 合并节点: {sources} -> {target_id}")
 
-    async def _execute_create_edge(self, op: GraphOperation) -> None:
+    async def _execute_create_edge(
+        self, op: GraphOperation, temp_id_map: dict[str, str]
+    ) -> None:
         """执行创建边操作"""
-        params = op.parameters
+        params = self._resolve_parameters(op.parameters, temp_id_map)
         source_id = params.get("source_node_id")
         target_id = params.get("target_node_id")
         relation = params.get("relation", "related")
@@ -725,10 +802,12 @@ class LongTermMemoryManager:
         else:
             logger.error(f"创建边失败: {op}")
 
-    async def _execute_update_edge(self, op: GraphOperation) -> None:
+    async def _execute_update_edge(
+        self, op: GraphOperation, temp_id_map: dict[str, str]
+    ) -> None:
         """执行更新边操作"""
-        edge_id = op.target_id
-        params = op.parameters
+        edge_id = self._resolve_id(op.target_id, temp_id_map)
+        params = self._resolve_parameters(op.parameters, temp_id_map)
         updated_relation = params.get("updated_relation")
         updated_importance = params.get("updated_importance")
         
@@ -747,9 +826,11 @@ class LongTermMemoryManager:
         else:
             logger.error(f"更新边失败: {edge_id}")
 
-    async def _execute_delete_edge(self, op: GraphOperation) -> None:
+    async def _execute_delete_edge(
+        self, op: GraphOperation, temp_id_map: dict[str, str]
+    ) -> None:
         """执行删除边操作"""
-        edge_id = op.target_id
+        edge_id = self._resolve_id(op.target_id, temp_id_map)
         
         if not edge_id:
             logger.warning("删除边失败: 缺少 edge_id")

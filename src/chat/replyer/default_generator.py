@@ -607,12 +607,12 @@ class DefaultReplyer:
             # 添加感知记忆（最近的消息块）
             if perceptual_blocks:
                 memory_parts.append("#### 🌊 感知记忆")
-                for block in perceptual_blocks[:2]:  # 最多显示2个块
+                for block in perceptual_blocks:
                     messages = block.messages if hasattr(block, 'messages') else []
                     if messages:
                         block_content = "\n".join([
                             f"{msg.get('sender_name', msg.get('sender_id', ''))}: {msg.get('content', '')[:30]}" 
-                            for msg in messages[:3]
+                            for msg in messages
                         ])
                         memory_parts.append(f"- {block_content}")
                 memory_parts.append("")
@@ -620,7 +620,7 @@ class DefaultReplyer:
             # 添加短期记忆（结构化活跃记忆）
             if short_term_memories:
                 memory_parts.append("#### 💭 短期记忆")
-                for mem in short_term_memories[:3]:  # 最多显示3条
+                for mem in short_term_memories:
                     content = format_memory_for_prompt(mem, include_metadata=False)
                     if content:
                         memory_parts.append(f"- {content}")
@@ -629,7 +629,7 @@ class DefaultReplyer:
             # 添加长期记忆（图谱记忆）
             if long_term_memories:
                 memory_parts.append("#### 🗄️ 长期记忆")
-                for mem in long_term_memories[:3]:  # 最多显示3条
+                for mem in long_term_memories:
                     content = format_memory_for_prompt(mem, include_metadata=False)
                     if content:
                         memory_parts.append(f"- {content}")
