@@ -117,13 +117,14 @@ async def replace_user_references_async(
         str: 处理后的内容字符串
     """
     if name_resolver is None:
+        person_info_manager = get_person_info_manager()
+
         async def default_resolver(platform: str, user_id: str) -> str:
             # 检查是否是机器人自己
             if replace_bot_name and (user_id == str(global_config.bot.qq_account)):
                 return f"{global_config.bot.nickname}(你)"
             person_id = PersonInfoManager.get_person_id(platform, user_id)
-            person_info = await person_info_manager.get_values(person_id, ["person_name"])
-            return person_info.get("person_name") or user_id
+            return await person_info_manager.get_value(person_id, "person_name") or user_id  # type: ignore
 
         name_resolver = default_resolver
 
@@ -744,10 +745,11 @@ async def _build_readable_messages_internal(
                     "is_action": is_action,
                 }
                 continue
+
             # 如果是同一个人发送的连续消息且时间间隔小于等于60秒
             if name == current_merge["name"] and (timestamp - current_merge["end_time"] <= 60):
                 current_merge["content"].append(content)
-                current_merge["end_time"] = timestamp
+                current_merge["end_time"] = timestamp  # 更新最后消息时间
             else:
                 # 保存上一个合并块
                 merged_messages.append(current_merge)
@@ -775,14 +777,8 @@ async def _build_readable_messages_internal(
 
     # 4 & 5: 格式化为字符串
     output_lines = []
-    read_mark_inserted = False
 
     for _i, merged in enumerate(merged_messages):
-        # 检查是否需要插入已读标记
-        if read_mark > 0 and not read_mark_inserted and merged["start_time"] >= read_mark:
-            output_lines.append("\n--- 以上消息是你已经看过，请关注以下未读的新消息---\n")
-            read_mark_inserted = True
-
         # 使用指定的 timestamp_mode 格式化时间
         readable_time = translate_timestamp_to_human_readable(merged["start_time"], mode=timestamp_mode)
 
@@ -1136,7 +1132,7 @@ async def build_anonymous_messages(messages: list[dict[str, Any]]) -> str:
             # print("SELF11111111111111")
             return "SELF"
         try:
-            person_id = get_person_id(platform, user_id)
+            person_id = PersonInfoManager.get_person_id(platform, user_id)
         except Exception as _e:
             person_id = None
         if not person_id:
@@ -1222,11 +1218,7 @@ async def get_person_id_list(messages: list[dict[str, Any]]) -> list[str]:
         if platform is None:
             platform = "unknown"
 
-        # 添加空值检查，防止 platform 为 None 时出错
-        if platform is None:
-            platform = "unknown"
-
-        if person_id := get_person_id(platform, user_id):
+        if person_id := PersonInfoManager.get_person_id(platform, user_id):
             person_ids_set.add(person_id)
 
     return list(person_ids_set)

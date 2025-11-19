@@ -325,12 +325,11 @@ class BaseAction(ABC):
         return await send_api.text_to_stream(
             text=content,
             stream_id=self.chat_id,
-            set_reply=set_reply,
-            reply_message=reply_message,
+            reply_to=reply_to,
             typing=typing,
         )
 
-    async def send_emoji(self, emoji_base64: str, set_reply: bool = False,reply_message: Optional[Dict[str, Any]] = None) -> bool:
+    async def send_emoji(self, emoji_base64: str) -> bool:
         """发送表情包
 
         Args:
@@ -343,9 +342,9 @@ class BaseAction(ABC):
             logger.error(f"{self.log_prefix} 缺少聊天ID")
             return False
 
-        return await send_api.emoji_to_stream(emoji_base64, self.chat_id,set_reply=set_reply,reply_message=reply_message)
+        return await send_api.emoji_to_stream(emoji_base64, self.chat_id)
 
-    async def send_image(self, image_base64: str, set_reply: bool = False,reply_message: Optional[Dict[str, Any]] = None) -> bool:
+    async def send_image(self, image_base64: str) -> bool:
         """发送图片
 
         Args:
@@ -358,9 +357,9 @@ class BaseAction(ABC):
             logger.error(f"{self.log_prefix} 缺少聊天ID")
             return False
 
-        return await send_api.image_to_stream(image_base64, self.chat_id,set_reply=set_reply,reply_message=reply_message)
+        return await send_api.image_to_stream(image_base64, self.chat_id)
 
-    async def send_custom(self, message_type: str, content: str, typing: bool = False, set_reply: bool = False,reply_message: Optional[Dict[str, Any]] = None) -> bool:
+    async def send_custom(self, message_type: str, content: str, typing: bool = False, reply_to: str = "") -> bool:
         """发送自定义类型消息
 
         Args:
@@ -381,8 +380,7 @@ class BaseAction(ABC):
             content=content,
             stream_id=self.chat_id,
             typing=typing,
-            set_reply=set_reply,
-            reply_message=reply_message,
+            reply_to=reply_to,
         )
 
     async def store_action_info(
@@ -465,7 +463,6 @@ class BaseAction(ABC):
         logger.info(f"{log_prefix} 尝试调用Action: {action_name}")
 
         try:
-            from src.plugin_system.core.component_registry import component_registry
             # 1. 从注册中心获取Action类
             from src.plugin_system.core.component_registry import component_registry
 

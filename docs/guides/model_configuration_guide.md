@@ -165,12 +165,20 @@ temperature = 0.7
 max_tokens = 800
 ```
 
-### replyer - 主要回复模型
+### replyer_1 - 主要回复模型
 首要回复模型，也用于表达器和表达方式学习：
 ```toml
-[model_task_config.replyer]
+[model_task_config.replyer_1]
 model_list = ["siliconflow-deepseek-v3"]
 temperature = 0.2
+max_tokens = 800
+```
+
+### replyer_2 - 次要回复模型
+```toml
+[model_task_config.replyer_2]
+model_list = ["siliconflow-deepseek-v3"]
+temperature = 0.7
 max_tokens = 800
 ```
 

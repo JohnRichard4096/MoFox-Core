@@ -117,18 +117,11 @@ def get_value_by_path(d, path):
 
 
 def set_value_by_path(d, path, value):
-    """设置嵌套字典中指定路径的值"""
     for k in path[:-1]:
         if k not in d or not isinstance(d[k], dict):
             d[k] = {}
         d = d[k]
-    
-    # 使用 tomlkit.item 来保持 TOML 格式
-    try:
-        d[path[-1]] = tomlkit.item(value)
-    except (TypeError, ValueError):
-        # 如果转换失败，直接赋值
-        d[path[-1]] = value
+    d[path[-1]] = value
 
 
 def compare_default_values(new, old, path=None, logs=None, changes=None):
@@ -285,7 +278,6 @@ def _update_config_generic(config_name: str, template_name: str):
             for log in logs:
                 logger.info(log)
             # 检查旧配置是否等于旧默认值，如果是则更新为新默认值
-            config_updated = False
             for path, old_default, new_default in changes:
                 old_value = get_value_by_path(old_config, path)
                 if old_value == old_default:
@@ -293,13 +285,6 @@ def _update_config_generic(config_name: str, template_name: str):
                     logger.info(
                         f"已自动将{config_name}配置 {'.'.join(path)} 的值从旧默认值 {old_default} 更新为新默认值 {new_default}"
                     )
-                    config_updated = True
-            
-            # 如果配置有更新，立即保存到文件
-            if config_updated:
-                with open(old_config_path, "w", encoding="utf-8") as f:
-                    f.write(tomlkit.dumps(old_config))
-                logger.info(f"已保存更新后的{config_name}配置文件")
         else:
             logger.info(f"未检测到{config_name}模板默认值变动")
 

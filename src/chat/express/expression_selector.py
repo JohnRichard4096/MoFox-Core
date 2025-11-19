@@ -32,7 +32,7 @@ def init_prompt():
 以下是可选的表达情境：
 {all_situations}
 
-请你分析聊天内容的语境、情绪、话题类型，从上述情境中选择最适合当前聊天情境的，最多{max_num}个情境。
+请你分析聊天内容的语境、情绪、话题类型，从上述情境中选择最适合当前聊天情境的{min_num}-{max_num}个情境。
 考虑因素包括：
 1. 聊天的情绪氛围（轻松、严肃、幽默等）
 2. 话题类型（日常、技术、游戏、情感等）
@@ -42,7 +42,7 @@ def init_prompt():
 请以JSON格式输出，只需要输出选中的情境编号：
 例如：
 {{
-    "selected_situations": [2, 3, 5, 7, 19]
+    "selected_situations": [2, 3, 5, 7, 19, 22, 25, 38, 39, 45, 48, 64]
 }}
 
 请严格按照JSON格式输出，不要包含其他内容：
@@ -544,24 +544,34 @@ class ExpressionSelector:
         # 检查是否允许在此聊天流中使用表达
         if not self.can_use_expression_for_chat(chat_id):
             logger.debug(f"聊天流 {chat_id} 不允许使用表达，返回空列表")
-            return [], []
+            return []
 
         # 1. 获取35个随机表达方式（现在按权重抽取）
         style_exprs, grammar_exprs = await self.get_random_expressions(chat_id, 30, 0.5, 0.5)
 
         # 2. 构建所有表达方式的索引和情境列表
-        all_expressions: List[Dict[str, Any]] = []
-        all_situations: List[str] = []
+        all_expressions = []
+        all_situations = []
 
         # 添加style表达方式
         for expr in style_exprs:
-            expr = expr.copy()
-            all_expressions.append(expr)
-            all_situations.append(f"{len(all_expressions)}.当 {expr['situation']} 时，使用 {expr['style']}")
+            if isinstance(expr, dict) and "situation" in expr and "style" in expr:
+                expr_with_type = expr.copy()
+                expr_with_type["type"] = "style"
+                all_expressions.append(expr_with_type)
+                all_situations.append(f"{len(all_expressions)}.{expr['situation']}")
+
+        # 添加grammar表达方式
+        for expr in grammar_exprs:
+            if isinstance(expr, dict) and "situation" in expr and "style" in expr:
+                expr_with_type = expr.copy()
+                expr_with_type["type"] = "grammar"
+                all_expressions.append(expr_with_type)
+                all_situations.append(f"{len(all_expressions)}.{expr['situation']}")
 
         if not all_expressions:
             logger.warning("没有找到可用的表达方式")
-            return [], []
+            return []
 
         all_situations_str = "\n".join(all_situations)
 
@@ -577,10 +587,13 @@ class ExpressionSelector:
             bot_name=global_config.bot.nickname,
             chat_observe_info=chat_info,
             all_situations=all_situations_str,
+            min_num=min_num,
             max_num=max_num,
             target_message=target_message_str,
             target_message_extra_block=target_message_extra_block,
         )
+
+        # print(prompt)
 
         # 4. 调用LLM
         try:
@@ -589,7 +602,7 @@ class ExpressionSelector:
 
             if not content:
                 logger.warning("LLM返回空结果")
-                return [], []
+                return []
 
             # 5. 解析结果
             result = repair_json(content)
@@ -599,17 +612,15 @@ class ExpressionSelector:
             if not isinstance(result, dict) or "selected_situations" not in result:
                 logger.error("LLM返回格式错误")
                 logger.info(f"LLM返回结果: \n{content}")
-                return [], []
+                return []
 
             selected_indices = result["selected_situations"]
 
             # 根据索引获取完整的表达方式
-            valid_expressions: List[Dict[str, Any]] = []
-            selected_ids = []
+            valid_expressions = []
             for idx in selected_indices:
                 if isinstance(idx, int) and 1 <= idx <= len(all_expressions):
                     expression = all_expressions[idx - 1]  # 索引从1开始
-                    selected_ids.append(expression["id"])
                     valid_expressions.append(expression)
 
             # 对选中的所有表达方式，一次性更新count数
@@ -617,7 +628,7 @@ class ExpressionSelector:
                 asyncio.create_task(self.update_expressions_count_batch(valid_expressions, 0.006))  # noqa: RUF006
 
             # logger.info(f"LLM从{len(all_expressions)}个情境中选择了{len(valid_expressions)}个")
-            return valid_expressions, selected_ids
+            return valid_expressions
 
         except Exception as e:
             logger.error(f"LLM处理表达方式选择时出错: {e}")

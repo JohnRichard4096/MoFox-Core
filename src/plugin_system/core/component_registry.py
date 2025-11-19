@@ -827,8 +827,7 @@ class ComponentRegistry:
         plugin_info = self.get_plugin_info(plugin_name)
         return plugin_info.components if plugin_info else []
 
-    @staticmethod
-    def get_plugin_config(plugin_name: str) -> dict:
+    def get_plugin_config(self, plugin_name: str) -> dict:
         """获取插件配置
 
         Args:

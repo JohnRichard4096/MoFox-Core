@@ -235,7 +235,7 @@ class ChatMood:
 
 class MoodRegressionTask(AsyncTask):
     def __init__(self, mood_manager: "MoodManager"):
-        super().__init__(task_name="MoodRegressionTask", run_interval=45)
+        super().__init__(task_name="MoodRegressionTask", run_interval=30)
         self.mood_manager = mood_manager
 
     async def run(self):
@@ -245,8 +245,8 @@ class MoodRegressionTask(AsyncTask):
             if mood.last_change_time == 0:
                 continue
 
-            if now - mood.last_change_time > 200:
-                if mood.regression_count >= 2:
+            if now - mood.last_change_time > 180:
+                if mood.regression_count >= 3:
                     continue
 
                 logger.debug(f"{mood.log_prefix} 开始情绪回归, 第 {mood.regression_count + 1} 次")

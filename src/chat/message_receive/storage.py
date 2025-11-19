@@ -682,7 +682,6 @@ class MessageStorage:
                 should_act=should_act,
                 key_words=key_words,
                 key_words_lite=key_words_lite,
-                additional_config=additional_config_json,
             )
             async with get_db_session() as session:
                 session.add(new_message)

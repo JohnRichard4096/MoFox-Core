@@ -399,13 +399,21 @@ class ExpressionLearner:
         # sourcery skip: use-join
         """
         学习并存储表达方式
+        type: "style" or "grammar"
         """
+        if type == "style":
+            type_str = "语言风格"
+        elif type == "grammar":
+            type_str = "句法特点"
+        else:
+            raise ValueError(f"Invalid type: {type}")
+
         # 检查是否允许在此聊天流中学习（在函数最前面检查）
         if not self.can_learn_for_chat():
             logger.debug(f"聊天流 {self.chat_name} 不允许学习表达，跳过学习")
             return []
 
-        res = await self.learn_expression(num)
+        res = await self.learn_expression(type, num)
 
         if res is None:
             return []
@@ -421,10 +429,10 @@ class ExpressionLearner:
         learnt_expressions_str = ""
         for _chat_id, situation, style in learnt_expressions:
             learnt_expressions_str += f"{situation}->{style}\n"
-        logger.info(f"在 {group_name} 学习到表达风格:\n{learnt_expressions_str}")
+        logger.info(f"在 {group_name} 学习到{type_str}:\n{learnt_expressions_str}")
 
         if not learnt_expressions:
-            logger.info("没有学习到表达风格")
+            logger.info(f"没有学习到{type_str}")
             return []
 
         # 按chat_id分组
@@ -572,10 +580,16 @@ class ExpressionLearner:
         """从指定聊天流学习表达方式
 
         Args:
-            num: 学习数量
+            type: "style" or "grammar"
         """
-        type_str = "语言风格"
-        prompt = "learn_style_prompt"
+        if type == "style":
+            type_str = "语言风格"
+            prompt = "learn_style_prompt"
+        elif type == "grammar":
+            type_str = "句法特点"
+            prompt = "learn_grammar_prompt"
+        else:
+            raise ValueError(f"Invalid type: {type}")
 
         current_time = time.time()
 
@@ -766,11 +780,9 @@ class ExpressionLearnerManager:
         """
         自动将/data/expression/learnt_style 和 learnt_grammar 下所有expressions.json迁移到数据库。
         迁移完成后在/data/expression/done.done写入标记文件，存在则跳过。
-        然后检查done.done2，如果没有就删除所有grammar表达并创建该标记文件。
         """
         base_dir = os.path.join("data", "expression")
         done_flag = os.path.join(base_dir, "done.done")
-        done_flag2 = os.path.join(base_dir, "done.done2")
 
         # 确保基础目录存在
         try:
@@ -805,36 +817,27 @@ class ExpressionLearnerManager:
                 expr_file = os.path.join(type_dir, chat_id, "expressions.json")
                 if not os.path.exists(expr_file):
                     continue
-
                 try:
                     async with aiofiles.open(expr_file, encoding="utf-8") as f:
                         content = await f.read()
                         expressions = orjson.loads(content)
 
-                for chat_id in chat_ids:
-                    expr_file = os.path.join(type_dir, chat_id, "expressions.json")
-                    if not os.path.exists(expr_file):
+                    if not isinstance(expressions, list):
+                        logger.warning(f"表达方式文件格式错误，跳过: {expr_file}")
                         continue
-                    try:
-                        with open(expr_file, "r", encoding="utf-8") as f:
-                            expressions = json.load(f)
 
-                        if not isinstance(expressions, list):
-                            logger.warning(f"表达方式文件格式错误，跳过: {expr_file}")
+                    for expr in expressions:
+                        if not isinstance(expr, dict):
                             continue
 
-                        for expr in expressions:
-                            if not isinstance(expr, dict):
-                                continue
+                        situation = expr.get("situation")
+                        style_val = expr.get("style")
+                        count = expr.get("count", 1)
+                        last_active_time = expr.get("last_active_time", time.time())
 
-                            situation = expr.get("situation")
-                            style_val = expr.get("style")
-                            count = expr.get("count", 1)
-                            last_active_time = expr.get("last_active_time", time.time())
-
-                            if not situation or not style_val:
-                                logger.warning(f"表达方式缺少必要字段，跳过: {expr}")
-                                continue
+                        if not situation or not style_val:
+                            logger.warning(f"表达方式缺少必要字段，跳过: {expr}")
+                            continue
 
                         # 查重：同chat_id+type+situation+style
                         async with get_db_session() as session:
@@ -912,41 +915,6 @@ class ExpressionLearnerManager:
                     logger.info(f"已为 {updated_count} 个老的表达方式设置创建日期")
         except Exception as e:
             logger.error(f"迁移老数据创建日期失败: {e}")
-
-    def delete_all_grammar_expressions(self) -> int:
-        """
-        检查expression库中所有type为"grammar"的表达并全部删除
-        
-        Returns:
-            int: 删除的grammar表达数量
-        """
-        try:
-            # 查询所有type为"grammar"的表达
-            grammar_expressions = Expression.select().where(Expression.type == "grammar")
-            grammar_count = grammar_expressions.count()
-            
-            if grammar_count == 0:
-                logger.info("expression库中没有找到grammar类型的表达")
-                return 0
-            
-            logger.info(f"找到 {grammar_count} 个grammar类型的表达，开始删除...")
-            
-            # 删除所有grammar类型的表达
-            deleted_count = 0
-            for expr in grammar_expressions:
-                try:
-                    expr.delete_instance()
-                    deleted_count += 1
-                except Exception as e:
-                    logger.error(f"删除grammar表达失败: {e}")
-                    continue
-            
-            logger.info(f"成功删除 {deleted_count} 个grammar类型的表达")
-            return deleted_count
-            
-        except Exception as e:
-            logger.error(f"删除grammar表达过程中发生错误: {e}")
-            return 0
 
 
 expression_learner_manager = ExpressionLearnerManager()

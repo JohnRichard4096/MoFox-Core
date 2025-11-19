@@ -20,6 +20,7 @@ class Individuality:
 
     def __init__(self):
         self.name = ""
+        self.bot_person_id = ""
         self.meta_info_file_path = "data/personality/meta.json"
         self.personality_data_file_path = "data/personality/personality_data.json"
 
@@ -153,6 +154,7 @@ class Individuality:
         Returns:
             tuple: (personality_changed, identity_changed)
         """
+        person_info_manager = get_person_info_manager()
         current_personality_hash, current_identity_hash = self._get_config_hash(
             bot_nickname, personality_core, personality_side, identity
         )

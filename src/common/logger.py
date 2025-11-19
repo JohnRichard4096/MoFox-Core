@@ -287,6 +287,8 @@ def load_log_config():  # sourcery skip: use-contextlib-suppress
                 return config.get("log", default_config)
     except Exception as e:
         print(f"[日志系统] 加载日志配置失败: {e}")
+        pass
+
     return default_config
 
 
@@ -732,37 +734,6 @@ DEFAULT_MODULE_ALIASES = {
 _rich_console = Console(force_terminal=True, color_system="truecolor")
 
 
-def convert_pathname_to_module(logger, method_name, event_dict):
-    # sourcery skip: extract-method, use-string-remove-affix
-    """将 pathname 转换为模块风格的路径"""
-    if "pathname" in event_dict:
-        pathname = event_dict["pathname"]
-        try:
-            # 获取项目根目录 - 使用绝对路径确保准确性
-            logger_file = Path(__file__).resolve()
-            project_root = logger_file.parent.parent.parent
-            pathname_path = Path(pathname).resolve()
-            rel_path = pathname_path.relative_to(project_root)
-
-            # 转换为模块风格：移除 .py 扩展名，将路径分隔符替换为点
-            module_path = str(rel_path).replace("\\", ".").replace("/", ".")
-            if module_path.endswith(".py"):
-                module_path = module_path[:-3]
-
-            # 使用转换后的模块路径替换 module 字段
-            event_dict["module"] = module_path
-            # 移除原始的 pathname 字段
-            del event_dict["pathname"]
-        except Exception:
-            # 如果转换失败，删除 pathname 但保留原始的 module（如果有的话）
-            del event_dict["pathname"]
-            # 如果没有 module 字段，使用文件名作为备选
-            if "module" not in event_dict:
-                event_dict["module"] = Path(pathname).stem
-
-    return event_dict
-
-
 class ModuleColoredConsoleRenderer:
     """自定义控制台渲染器，使用 Rich 库原生支持 hex 颜色"""
 
@@ -1001,13 +972,6 @@ def configure_structlog():
         processors=[
             structlog.contextvars.merge_contextvars,
             structlog.processors.add_log_level,
-            structlog.processors.CallsiteParameterAdder(
-                parameters=[
-                    structlog.processors.CallsiteParameter.MODULE,
-                    structlog.processors.CallsiteParameter.LINENO,
-                ]
-            ),
-            convert_pathname_to_module,
             structlog.processors.StackInfoRenderer(),
             structlog.dev.set_exc_info,
             structlog.processors.TimeStamper(fmt=get_timestamp_format(), utc=False),
@@ -1032,10 +996,6 @@ file_formatter = structlog.stdlib.ProcessorFormatter(
         structlog.stdlib.add_log_level,
         structlog.stdlib.PositionalArgumentsFormatter(),
         structlog.processors.TimeStamper(fmt="iso"),
-        structlog.processors.CallsiteParameterAdder(
-            parameters=[structlog.processors.CallsiteParameter.MODULE, structlog.processors.CallsiteParameter.LINENO]
-        ),
-        convert_pathname_to_module,
         structlog.processors.StackInfoRenderer(),
         structlog.processors.format_exc_info,
     ],

@@ -77,8 +77,7 @@ class PlanManager:
         finally:
             self.generation_running = False
 
-    @staticmethod
-    def _get_previous_month(current_month: str) -> str:
+    def _get_previous_month(self, current_month: str) -> str:
         try:
             year, month = map(int, current_month.split("-"))
             if month == 1:

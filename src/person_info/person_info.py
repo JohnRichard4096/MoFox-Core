@@ -15,371 +15,41 @@ from src.common.logger import get_logger
 from src.config.config import global_config, model_config
 from src.llm_models.utils_model import LLMRequest
 
+"""
+PersonInfoManager 类方法功能摘要：
+1. get_person_id - 根据平台和用户ID生成MD5哈希的唯一person_id
+2. create_person_info - 创建新个人信息文档（自动合并默认值）
+3. update_one_field - 更新单个字段值（若文档不存在则创建）
+4. del_one_document - 删除指定person_id的文档
+5. get_value - 获取单个字段值（返回实际值或默认值）
+6. get_values - 批量获取字段值（任一字段无效则返回空字典）
+7. del_all_undefined_field - 清理全集合中未定义的字段
+8. get_specific_value_list - 根据指定条件，返回person_id,value字典
+"""
+
+
 logger = get_logger("person_info")
 
-def get_person_id(platform: str, user_id: Union[int, str]) -> str:
-    """获取唯一id"""
-    if "-" in platform:
-        platform = platform.split("-")[1]
-    components = [platform, str(user_id)]
-    key = "_".join(components)
-    return hashlib.md5(key.encode()).hexdigest()
+JSON_SERIALIZED_FIELDS = ["points", "forgotten_points", "info_list"]
 
-def get_person_id_by_person_name(person_name: str) -> str:
-    """根据用户名获取用户ID"""
-    try:
-        record = PersonInfo.get_or_none(PersonInfo.person_name == person_name)
-        return record.person_id if record else ""
-    except Exception as e:
-        logger.error(f"根据用户名 {person_name} 获取用户ID时出错 (Peewee): {e}")
-        return ""
-
-def is_person_known(person_id: str = None,user_id: str = None,platform: str = None,person_name: str = None) -> bool:
-    if person_id:
-        person = PersonInfo.get_or_none(PersonInfo.person_id == person_id)
-        return person.is_known if person else False
-    elif user_id and platform:
-        person_id = get_person_id(platform, user_id)
-        person = PersonInfo.get_or_none(PersonInfo.person_id == person_id)
-        return person.is_known if person else False
-    elif person_name:
-        person_id = get_person_id_by_person_name(person_name)
-        person = PersonInfo.get_or_none(PersonInfo.person_id == person_id)
-        return person.is_known if person else False
-    else:
-        return False
-
-class Person:
-    @classmethod
-    def register_person(cls, platform: str, user_id: str, nickname: str):
-        """
-        注册新用户的类方法
-        必须输入 platform、user_id 和 nickname 参数
-        
-        Args:
-            platform: 平台名称
-            user_id: 用户ID
-            nickname: 用户昵称
-            
-        Returns:
-            Person: 新注册的Person实例
-        """
-        if not platform or not user_id or not nickname:
-            logger.error("注册用户失败：platform、user_id 和 nickname 都是必需参数")
-            return None
-            
-        # 生成唯一的person_id
-        person_id = get_person_id(platform, user_id)
-        
-        if is_person_known(person_id=person_id):
-            logger.info(f"用户 {nickname} 已存在")
-            return Person(person_id=person_id)
-        
-        # 创建Person实例
-        person = cls.__new__(cls)
-        
-        # 设置基本属性
-        person.person_id = person_id
-        person.platform = platform
-        person.user_id = user_id
-        person.nickname = nickname
-        
-        # 初始化默认值
-        person.is_known = True  # 注册后立即标记为已认识
-        person.person_name = nickname  # 使用nickname作为初始person_name
-        person.name_reason = "用户注册时设置的昵称"
-        person.know_times = 1
-        person.know_since = time.time()
-        person.last_know = time.time()
-        person.points = []
-        
-        # 初始化性格特征相关字段
-        person.attitude_to_me = 0
-        person.attitude_to_me_confidence = 1
-        
-        person.neuroticism = 5
-        person.neuroticism_confidence = 1
-        
-        person.friendly_value = 50
-        person.friendly_value_confidence = 1
-        
-        person.rudeness = 50
-        person.rudeness_confidence = 1
-        
-        person.conscientiousness = 50
-        person.conscientiousness_confidence = 1
-        
-        person.likeness = 50
-        person.likeness_confidence = 1
-        
-        # 同步到数据库
-        person.sync_to_database()
-        
-        logger.info(f"成功注册新用户：{person_id}，平台：{platform}，昵称：{nickname}")
-        
-        return person
-    
-    def __init__(self, platform: str = "", user_id: str = "",person_id: str = "",person_name: str = ""):
-        if platform == global_config.bot.platform and user_id == global_config.bot.qq_account:
-            self.is_known = True
-            self.person_id = get_person_id(platform, user_id)
-            self.user_id = user_id
-            self.platform = platform
-            self.nickname = global_config.bot.nickname
-            self.person_name = global_config.bot.nickname
-            return
-        
-        self.user_id = ""
-        self.platform = ""
-        
-        if person_id:
-            self.person_id = person_id
-        elif person_name:
-            self.person_id = get_person_id_by_person_name(person_name)
-            if not self.person_id:
-                logger.error(f"根据用户名 {person_name} 获取用户ID时出错，不存在用户{person_name}")
-                return 
-        elif platform and user_id:
-            self.person_id = get_person_id(platform, user_id)
-            self.user_id = user_id
-            self.platform = platform
-        else:
-            logger.error("Person 初始化失败，缺少必要参数")
-            raise ValueError("Person 初始化失败，缺少必要参数")
-        
-        if not is_person_known(person_id=self.person_id):
-            self.is_known = False
-            logger.warning(f"用户 {platform}:{user_id}:{person_name}:{person_id} 尚未认识")
-            self.person_name = f"未知用户{self.person_id[:4]}"
-            return
-        
-        self.is_known = False
-        
-        # 初始化默认值
-        self.nickname = ""
-        self.person_name = None
-        self.name_reason = None
-        self.know_times = 0
-        self.know_since = None
-        self.last_know = None
-        self.points = []
-        
-        # 初始化性格特征相关字段
-        self.attitude_to_me:float = 0
-        self.attitude_to_me_confidence:float = 1
-        
-        self.neuroticism:float = 5
-        self.neuroticism_confidence:float = 1
-        
-        self.friendly_value:float = 50
-        self.friendly_value_confidence:float = 1
-        
-        self.rudeness:float = 50
-        self.rudeness_confidence:float = 1
-        
-        self.conscientiousness:float = 50
-        self.conscientiousness_confidence:float = 1
-        
-        self.likeness:float = 50
-        self.likeness_confidence:float = 1
-        
-        # 从数据库加载数据
-        self.load_from_database()
-    
-    def load_from_database(self):
-        """从数据库加载个人信息数据"""
-        try:
-            # 查询数据库中的记录
-            record = PersonInfo.get_or_none(PersonInfo.person_id == self.person_id)
-            
-            if record:
-                self.user_id = record.user_id if record.user_id else ""
-                self.platform = record.platform if record.platform else "" 
-                self.is_known = record.is_known if record.is_known else False
-                self.nickname = record.nickname if record.nickname else ""
-                self.person_name = record.person_name if record.person_name else self.nickname
-                self.name_reason = record.name_reason if record.name_reason else None
-                self.know_times = record.know_times if record.know_times else 0
-                
-                # 处理points字段（JSON格式的列表）
-                if record.points:
-                    try:
-                        self.points = json.loads(record.points)
-                    except (json.JSONDecodeError, TypeError):
-                        logger.warning(f"解析用户 {self.person_id} 的points字段失败，使用默认值")
-                        self.points = []
-                else:
-                    self.points = []
-                
-                # 加载性格特征相关字段
-                if record.attitude_to_me and not isinstance(record.attitude_to_me, str):
-                    self.attitude_to_me = record.attitude_to_me
-                
-                if record.attitude_to_me_confidence is not None:
-                    self.attitude_to_me_confidence = float(record.attitude_to_me_confidence)
-                
-                if record.friendly_value is not None:
-                    self.friendly_value = float(record.friendly_value)
-                
-                if record.friendly_value_confidence is not None:
-                    self.friendly_value_confidence = float(record.friendly_value_confidence)
-                
-                if record.rudeness is not None:
-                    self.rudeness = float(record.rudeness)
-                
-                if record.rudeness_confidence is not None:
-                    self.rudeness_confidence = float(record.rudeness_confidence)
-                
-                if record.neuroticism and not isinstance(record.neuroticism, str):
-                    self.neuroticism = float(record.neuroticism)
-                
-                if record.neuroticism_confidence is not None:
-                    self.neuroticism_confidence = float(record.neuroticism_confidence)
-                
-                if record.conscientiousness is not None:
-                    self.conscientiousness = float(record.conscientiousness)
-                
-                if record.conscientiousness_confidence is not None:
-                    self.conscientiousness_confidence = float(record.conscientiousness_confidence)
-                
-                if record.likeness is not None:
-                    self.likeness = float(record.likeness)
-                
-                if record.likeness_confidence is not None:
-                    self.likeness_confidence = float(record.likeness_confidence)
-                
-                logger.debug(f"已从数据库加载用户 {self.person_id} 的信息")
-            else:
-                self.sync_to_database()
-                logger.info(f"用户 {self.person_id} 在数据库中不存在，使用默认值并创建")
-                
-        except Exception as e:
-            logger.error(f"从数据库加载用户 {self.person_id} 信息时出错: {e}")
-            # 出错时保持默认值
-    
-    def sync_to_database(self):
-        """将所有属性同步回数据库"""
-        if not self.is_known:
-            return
-        try:
-            # 准备数据
-            data = {
-                'person_id': self.person_id,
-                'is_known': self.is_known,
-                'platform': self.platform,
-                'user_id': self.user_id,
-                'nickname': self.nickname,
-                'person_name': self.person_name,
-                'name_reason': self.name_reason,
-                'know_times': self.know_times,
-                'know_since': self.know_since,
-                'last_know': self.last_know,
-                'points': json.dumps(self.points, ensure_ascii=False) if self.points else json.dumps([], ensure_ascii=False),
-                'attitude_to_me': self.attitude_to_me,
-                'attitude_to_me_confidence': self.attitude_to_me_confidence,
-                'friendly_value': self.friendly_value,
-                'friendly_value_confidence': self.friendly_value_confidence,
-                'rudeness': self.rudeness,
-                'rudeness_confidence': self.rudeness_confidence,
-                'neuroticism': self.neuroticism,
-                'neuroticism_confidence': self.neuroticism_confidence,
-                'conscientiousness': self.conscientiousness,
-                'conscientiousness_confidence': self.conscientiousness_confidence,
-                'likeness': self.likeness,
-                'likeness_confidence': self.likeness_confidence,
-            }
-            
-            # 检查记录是否存在
-            record = PersonInfo.get_or_none(PersonInfo.person_id == self.person_id)
-            
-            if record:
-                # 更新现有记录
-                for field, value in data.items():
-                    if hasattr(record, field):
-                        setattr(record, field, value)
-                record.save()
-                logger.debug(f"已同步用户 {self.person_id} 的信息到数据库")
-            else:
-                # 创建新记录
-                PersonInfo.create(**data)
-                logger.debug(f"已创建用户 {self.person_id} 的信息到数据库")
-                
-        except Exception as e:
-            logger.error(f"同步用户 {self.person_id} 信息到数据库时出错: {e}")
-            
-    def build_relationship(self,points_num=3):
-        # print(self.person_name,self.nickname,self.platform,self.is_known)
-        
-        
-        if not self.is_known:
-            return ""
-        
-        # 按时间排序forgotten_points
-        current_points = self.points
-        current_points.sort(key=lambda x: x[2])
-        # 按权重加权随机抽取最多3个不重复的points，point[1]的值在1-10之间，权重越高被抽到概率越大
-        if len(current_points) > points_num:
-            # point[1] 取值范围1-10，直接作为权重
-            weights = [max(1, min(10, int(point[1]))) for point in current_points]
-            # 使用加权采样不放回，保证不重复
-            indices = list(range(len(current_points)))
-            points = []
-            for _ in range(points_num):
-                if not indices:
-                    break
-                sub_weights = [weights[i] for i in indices]
-                chosen_idx = random.choices(indices, weights=sub_weights, k=1)[0]
-                points.append(current_points[chosen_idx])
-                indices.remove(chosen_idx)
-        else:
-            points = current_points
-
-        # 构建points文本
-        points_text = "\n".join([f"{point[2]}：{point[0]}" for point in points])
-
-        nickname_str = ""
-        if self.person_name != self.nickname:
-            nickname_str = f"(ta在{self.platform}上的昵称是{self.nickname})"
-
-        relation_info = ""
-        
-        attitude_info = ""
-        if self.attitude_to_me:
-            if self.attitude_to_me > 8:
-                attitude_info = f"{self.person_name}对你的态度十分好,"
-            elif self.attitude_to_me > 5:
-                attitude_info = f"{self.person_name}对你的态度较好,"
-                
-            
-            if self.attitude_to_me < -8:
-                attitude_info = f"{self.person_name}对你的态度十分恶劣,"
-            elif self.attitude_to_me < -4:
-                attitude_info = f"{self.person_name}对你的态度不好,"
-            elif self.attitude_to_me < 0:
-                attitude_info = f"{self.person_name}对你的态度一般,"
-                
-        neuroticism_info = ""
-        if self.neuroticism:
-            if self.neuroticism > 8:
-                neuroticism_info = f"{self.person_name}的情绪十分活跃，容易情绪化,"
-            elif self.neuroticism > 6:
-                neuroticism_info = f"{self.person_name}的情绪比较活跃,"
-            elif self.neuroticism > 4:
-                neuroticism_info = ""
-            elif self.neuroticism > 2:
-                neuroticism_info = f"{self.person_name}的情绪比较稳定,"
-            else:
-                neuroticism_info = f"{self.person_name}的情绪非常稳定,毫无波动"
-        
-        points_info = ""
-        if points_text:
-            points_info = f"你还记得ta最近做的事：{points_text}"
-                
-        if not (nickname_str or attitude_info or neuroticism_info or points_info):
-            return ""
-        relation_info = f"{self.person_name}:{nickname_str}{attitude_info}{neuroticism_info}{points_info}"
-        
-        return relation_info
+person_info_default = {
+    "person_id": None,
+    "person_name": None,
+    "name_reason": None,  # Corrected from person_name_reason to match common usage if intended
+    "platform": "unknown",
+    "user_id": "unknown",
+    "nickname": "Unknown",
+    "know_times": 0,
+    "know_since": None,
+    "last_know": None,
+    "impression": None,  # Corrected from person_impression
+    "short_impression": None,
+    "info_list": None,
+    "points": None,
+    "forgotten_points": None,
+    "relation_value": None,
+    "attitude": 50,
+}
 
 
 class PersonInfoManager:
@@ -767,9 +437,8 @@ class PersonInfoManager:
             logger.debug("取名失败：person_id不能为空")
             return None
 
-        person = Person(person_id=person_id)
-        old_name = person.person_name
-        old_reason = person.name_reason
+        old_name = await self.get_value(person_id, "person_name")
+        old_reason = await self.get_value(person_id, "name_reason")
 
         max_retries = 8
         current_try = 0
@@ -838,9 +507,8 @@ class PersonInfoManager:
                     current_name_set.add(generated_nickname)
 
             if not is_duplicate:
-                person.person_name = generated_nickname
-                person.name_reason = result.get("reason", "未提供理由")
-                person.sync_to_database()
+                await self.update_one_field(person_id, "person_name", generated_nickname)
+                await self.update_one_field(person_id, "name_reason", result.get("reason", "未提供理由"))
 
                 logger.info(
                     f"成功给用户{user_nickname} {person_id} 取名 {generated_nickname}，理由：{result.get('reason', '未提供理由')}"
@@ -862,7 +530,6 @@ class PersonInfoManager:
         await self.update_one_field(person_id, "name_reason", "使用用户原始昵称作为默认值")
         # 移除内存缓存更新，统一使用数据库缓存
         return {"nickname": unique_nickname, "reason": "使用用户原始昵称作为默认值"}
-    
 
     @staticmethod
     async def del_one_document(person_id: str):

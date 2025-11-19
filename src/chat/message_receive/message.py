@@ -261,8 +261,6 @@ class MessageSending(MessageProcessBase):
         self.display_message = display_message
 
         self.interest_value = 0.0
-        
-        self.selected_expressions = selected_expressions
 
     def build_reply(self):
         """设置回复消息"""

@@ -259,10 +259,6 @@ class PromptManager:
         result = prompt.format(**kwargs)
         return result
 
-    @property
-    def context(self):
-        return self._context
-
 
 # 全局单例
 global_prompt_manager = PromptManager()

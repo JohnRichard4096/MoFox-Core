@@ -102,9 +102,7 @@ async def generate_reply(
         reply_to: 回复对象，格式为 "发送者:消息内容"
         reply_message: 回复的原始消息
         extra_info: 额外信息，用于补充上下文
-        reply_reason: 回复原因
         available_actions: 可用动作
-        choosen_actions: 已选动作
         enable_tool: 是否启用工具调用
         enable_splitter: 是否启用消息分割器
         enable_chinese_typo: 是否启用错字生成器
@@ -129,9 +127,6 @@ async def generate_reply(
             reply_to = action_data.get("reply_to", "")
         if not extra_info and action_data:
             extra_info = action_data.get("extra_info", "")
-            
-        if not reply_reason and action_data:
-            reply_reason = action_data.get("reason", "")
 
         # 从action_data中提取prompt_mode
         prompt_mode = "s4u"  # 默认使用s4u模式
@@ -153,13 +148,11 @@ async def generate_reply(
                 extra_info = f"思考过程：{thinking}"
 
         # 调用回复器生成回复
-        success, llm_response_dict, prompt, selected_expressions = await replyer.generate_reply_with_context(
+        success, llm_response_dict, prompt = await replyer.generate_reply_with_context(
+            reply_to=reply_to,
             extra_info=extra_info,
             available_actions=available_actions,
-            choosen_actions=choosen_actions,
             enable_tool=enable_tool,
-            reply_message=reply_message,
-            reply_reason=reply_reason,
             from_plugin=from_plugin,
             stream_id=chat_stream.stream_id if chat_stream else chat_id,
             reply_message=reply_message,
@@ -178,16 +171,10 @@ async def generate_reply(
         logger.debug(f"[GeneratorAPI] 回复生成成功，生成了 {len(reply_set)} 个回复项")
 
         if return_prompt:
-            if return_expressions:
-                return success, reply_set, (prompt, selected_expressions)
-            else:
-                return success, reply_set, prompt
+            return success, reply_set, prompt
         else:
-            if return_expressions:
-                return success, reply_set, (None, selected_expressions)
-            else:
-                return success, reply_set, None
-    
+            return success, reply_set, None
+
     except ValueError as ve:
         raise ve
 

@@ -160,6 +160,16 @@ class MessageHandler:
         )
         logger.debug(f"原始消息内容: {raw_message.get('message', [])}")
 
+        # 检查是否包含@或video消息段
+        message_segments = raw_message.get("message", [])
+        if message_segments:
+            for i, seg in enumerate(message_segments):
+                seg_type = seg.get("type")
+                if seg_type in ["at", "video"]:
+                    logger.info(f"检测到 {seg_type.upper()} 消息段 [{i}]: {seg}")
+                elif seg_type not in ["text", "face", "image"]:
+                    logger.warning(f"检测到特殊消息段 [{i}]: type={seg_type}, data={seg.get('data', {})}")
+
         message_type: str = raw_message.get("message_type")
         message_id: int = raw_message.get("message_id")
         # message_time: int = raw_message.get("time")
@@ -313,7 +323,6 @@ class MessageHandler:
 
         logger.debug("发送到Maibot处理信息")
         await message_send_instance.message_send(message_base)
-        return None
 
     async def handle_real_message(self, raw_message: dict, in_reply: bool = False) -> List[Seg] | None:
         # sourcery skip: low-code-quality
@@ -488,8 +497,7 @@ class MessageHandler:
         logger.debug(f"handle_real_message完成，处理了{len(real_message)}个消息段，生成了{len(seg_message)}个seg")
         return seg_message
 
-    @staticmethod
-    async def handle_text_message(raw_message: dict) -> Seg:
+    async def handle_text_message(self, raw_message: dict) -> Seg:
         """
         处理纯文本信息
         Parameters:
@@ -501,8 +509,7 @@ class MessageHandler:
         plain_text: str = message_data.get("text")
         return Seg(type="text", data=plain_text)
 
-    @staticmethod
-    async def handle_face_message(raw_message: dict) -> Seg | None:
+    async def handle_face_message(self, raw_message: dict) -> Seg | None:
         """
         处理表情消息
         Parameters:
@@ -519,8 +526,7 @@ class MessageHandler:
             logger.warning(f"不支持的表情：{face_raw_id}")
             return None
 
-    @staticmethod
-    async def handle_image_message(raw_message: dict) -> Seg | None:
+    async def handle_image_message(self, raw_message: dict) -> Seg | None:
         """
         处理图片消息与表情包消息
         Parameters:
@@ -576,7 +582,6 @@ class MessageHandler:
                     return Seg(type="at", data=f"{member_info.get('nickname')}:{member_info.get('user_id')}")
                 else:
                     return None
-        return None
 
     async def handle_record_message(self, raw_message: dict) -> Seg | None:
         """
@@ -605,8 +610,7 @@ class MessageHandler:
             return None
         return Seg(type="voice", data=audio_base64)
 
-    @staticmethod
-    async def handle_video_message(raw_message: dict) -> Seg | None:
+    async def handle_video_message(self, raw_message: dict) -> Seg | None:
         """
         处理视频消息
         Parameters:
@@ -740,7 +744,7 @@ class MessageHandler:
             return None
 
         processed_message: Seg
-        if 5 > image_count > 0:
+        if image_count < 5 and image_count > 0:
             # 处理图片数量小于5的情况，此时解析图片为base64
             logger.debug("图片数量小于5，开始解析图片为base64")
             processed_message = await self._recursive_parse_image_seg(handled_message, True)
@@ -757,18 +761,15 @@ class MessageHandler:
         forward_hint = Seg(type="text", data="这是一条转发消息：\n")
         return Seg(type="seglist", data=[forward_hint, processed_message])
 
-    @staticmethod
-    async def handle_dice_message(raw_message: dict) -> Seg:
+    async def handle_dice_message(self, raw_message: dict) -> Seg:
         message_data: dict = raw_message.get("data", {})
         res = message_data.get("result", "")
         return Seg(type="text", data=f"[扔了一个骰子，点数是{res}]")
 
-    @staticmethod
-    async def handle_shake_message(raw_message: dict) -> Seg:
+    async def handle_shake_message(self, raw_message: dict) -> Seg:
         return Seg(type="text", data="[向你发送了窗口抖动，现在你的屏幕猛烈地震了一下！]")
 
-    @staticmethod
-    async def handle_json_message(raw_message: dict) -> Seg | None:
+    async def handle_json_message(self, raw_message: dict) -> Seg:
         """
         处理JSON消息
         Parameters:

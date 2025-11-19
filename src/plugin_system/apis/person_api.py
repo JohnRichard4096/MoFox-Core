@@ -29,7 +29,7 @@ def get_person_id(platform: str, user_id: int | str) -> str:
     这是一个核心的辅助函数，用于生成统一的用户标识。
     """
     try:
-        return Person(platform=platform, user_id=str(user_id)).person_id
+        return PersonInfoManager.get_person_id(platform, user_id)
     except Exception as e:
         logger.error(f"[PersonAPI] 获取person_id失败: platform={platform}, user_id={user_id}, error={e}")
         return ""

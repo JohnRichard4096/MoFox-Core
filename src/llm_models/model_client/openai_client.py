@@ -271,15 +271,7 @@ async def _default_stream_response_handler(
             # 如果中断量被设置，则抛出ReqAbortException
             _insure_buffer_closed()
             raise ReqAbortException("请求被外部信号中断")
-        # 空 choices / usage-only 帧的防御
-        if not hasattr(event, "choices") or not event.choices:
-            if hasattr(event, "usage") and event.usage:
-                _usage_record = (
-                    event.usage.prompt_tokens or 0,
-                    event.usage.completion_tokens or 0,
-                    event.usage.total_tokens or 0,
-                )
-            continue  # 跳过本帧，避免访问 choices[0]
+
         delta = event.choices[0].delta  # 获取当前块的delta内容
 
         if hasattr(delta, "reasoning_content") and delta.reasoning_content:  # type: ignore

@@ -3,7 +3,6 @@
 """
 
 from collections import deque
-from typing import List, Dict
 
 from src.common.logger import get_logger
 
