@@ -152,6 +152,10 @@ class DatabaseMessages(BaseDataModel):
             group_info=self.group_info,
         )
 
+        # 扩展运行时字段
+        self.semantic_embedding = kwargs.pop("semantic_embedding", None)
+        self.interest_calculated = kwargs.pop("interest_calculated", False)
+
         # 处理额外传入的字段（kwargs）
         if kwargs:
             for key, value in kwargs.items():

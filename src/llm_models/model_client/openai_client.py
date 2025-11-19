@@ -580,7 +580,7 @@ class OpenaiClient(BaseClient):
     async def get_embedding(
         self,
         model_info: ModelInfo,
-        embedding_input: str,
+        embedding_input: str | list[str],
         extra_params: dict[str, Any] | None = None,
     ) -> APIResponse:
         """
@@ -590,6 +590,7 @@ class OpenaiClient(BaseClient):
         :return: 嵌入响应
         """
         client = self._create_client()
+        is_batch_request = isinstance(embedding_input, list)
         try:
             raw_response = await client.embeddings.create(
                 model=model_info.model_identifier,
@@ -616,7 +617,8 @@ class OpenaiClient(BaseClient):
 
         # 解析嵌入响应
         if len(raw_response.data) > 0:
-            response.embedding = raw_response.data[0].embedding
+            embeddings = [item.embedding for item in raw_response.data]
+            response.embedding = embeddings if is_batch_request else embeddings[0]
         else:
             raise RespParseException(
                 raw_response,

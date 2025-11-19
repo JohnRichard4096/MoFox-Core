@@ -51,8 +51,8 @@ class APIResponse:
     tool_calls: list[ToolCall] | None = None
     """工具调用 [(工具名称, 工具参数), ...]"""
 
-    embedding: list[float] | None = None
-    """嵌入向量"""
+    embedding: list[float] | list[list[float]] | None = None
+    """嵌入结果（单条时为一维向量，批量时为向量列表）"""
 
     usage: UsageRecord | None = None
     """使用情况 (prompt_tokens, completion_tokens, total_tokens)"""
@@ -105,7 +105,7 @@ class BaseClient(ABC):
     async def get_embedding(
         self,
         model_info: ModelInfo,
-        embedding_input: str,
+        embedding_input: str | list[str],
         extra_params: dict[str, Any] | None = None,
     ) -> APIResponse:
         """

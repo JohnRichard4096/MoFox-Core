@@ -185,18 +185,19 @@ async def initialize_smart_interests(personality_description: str, personality_i
     await interest_service.initialize_smart_interests(personality_description, personality_id)
 
 
-async def calculate_interest_match(content: str, keywords: list[str] | None = None):
-    """
-    计算内容与兴趣的匹配度
+async def calculate_interest_match(
+    content: str, keywords: list[str] | None = None, message_embedding: list[float] | None = None
+):
+    """计算消息兴趣匹配，返回匹配结果"""
+    if not content:
+        logger.warning("[PersonAPI] 请求兴趣匹配时 content 为空")
+        return None
 
-    Args:
-        content: 消息内容
-        keywords: 关键词列表
-
-    Returns:
-        匹配结果
-    """
-    return await interest_service.calculate_interest_match(content, keywords)
+    try:
+        return await interest_service.calculate_interest_match(content, keywords, message_embedding)
+    except Exception as e:
+        logger.error(f"[PersonAPI] 计算消息兴趣匹配失败: {e}")
+        return None
 
 
 # =============================================================================
@@ -213,7 +214,7 @@ def get_system_stats() -> dict[str, Any]:
     """
     return {
         "relationship_service": relationship_service.get_cache_stats(),
-        "interest_service": interest_service.get_interest_stats()
+        "interest_service": interest_service.get_interest_stats(),
     }
 
 

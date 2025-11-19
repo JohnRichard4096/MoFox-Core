@@ -22,7 +22,7 @@ class ThreeTierMemoryFormatter:
         """初始化格式化器"""
         pass
 
-    def format_perceptual_memory(self, blocks: list[MemoryBlock]) -> str:
+    async def format_perceptual_memory(self, blocks: list[MemoryBlock]) -> str:
         """
         格式化感知记忆为提示词
 
@@ -53,7 +53,7 @@ class ThreeTierMemoryFormatter:
         for block in blocks:
             # 提取时间和聊天流信息
             time_str = self._extract_time_from_block(block)
-            stream_name = self._extract_stream_name_from_block(block)
+            stream_name = await self._extract_stream_name_from_block(block)
 
             # 添加块标题
             lines.append(f"- 【{time_str} ({stream_name})】")
@@ -122,7 +122,7 @@ class ThreeTierMemoryFormatter:
 
         return "\n".join(lines)
 
-    def format_all_tiers(
+    async def format_all_tiers(
         self,
         perceptual_blocks: list[MemoryBlock],
         short_term_memories: list[ShortTermMemory],
@@ -142,7 +142,7 @@ class ThreeTierMemoryFormatter:
         sections = []
 
         # 感知记忆
-        perceptual_text = self.format_perceptual_memory(perceptual_blocks)
+        perceptual_text = await self.format_perceptual_memory(perceptual_blocks)
         if perceptual_text:
             sections.append("### 感知记忆（即时对话）")
             sections.append(perceptual_text)
@@ -198,7 +198,7 @@ class ThreeTierMemoryFormatter:
 
         return "未知时间"
 
-    def _extract_stream_name_from_block(self, block: MemoryBlock) -> str:
+    async def _extract_stream_name_from_block(self, block: MemoryBlock) -> str:
         """
         从记忆块中提取聊天流名称
 
@@ -208,18 +208,31 @@ class ThreeTierMemoryFormatter:
         Returns:
             聊天流名称
         """
-        # 尝试从元数据中获取
-        if block.metadata:
-            stream_name = block.metadata.get("stream_name") or block.metadata.get("chat_stream")
-            if stream_name:
-                return stream_name
+        stream_id = None
 
-        # 尝试从消息中提取
-        if block.messages:
+        # 首先尝试从元数据中获取 stream_id
+        if block.metadata:
+            stream_id = block.metadata.get("stream_id")
+
+        # 如果从元数据中没找到，尝试从消息中提取
+        if not stream_id and block.messages:
             first_msg = block.messages[0]
-            stream_name = first_msg.get("stream_name") or first_msg.get("chat_stream")
-            if stream_name:
-                return stream_name
+            stream_id = first_msg.get("stream_id") or first_msg.get("chat_id")
+
+        # 如果有 stream_id，尝试获取实际的流名称
+        if stream_id:
+            try:
+                from src.chat.message_receive.chat_stream import get_chat_manager
+                chat_manager = get_chat_manager()
+                actual_name = await chat_manager.get_stream_name(stream_id)
+                if actual_name:
+                    return actual_name
+                else:
+                    # 如果获取不到名称，返回 stream_id 的截断版本
+                    return stream_id[:12] + "..." if len(stream_id) > 12 else stream_id
+            except Exception:
+                # 如果获取失败，返回 stream_id 的截断版本
+                return stream_id[:12] + "..." if len(stream_id) > 12 else stream_id
 
         return "默认聊天"
 
@@ -375,7 +388,7 @@ class ThreeTierMemoryFormatter:
 
         return type_mapping.get(type_value, "事实")
 
-    def format_for_context_injection(
+    async def format_for_context_injection(
         self,
         query: str,
         perceptual_blocks: list[MemoryBlock],
@@ -407,7 +420,7 @@ class ThreeTierMemoryFormatter:
         limited_short_term = short_term_memories[:max_short_term]
         limited_long_term = long_term_memories[:max_long_term]
 
-        all_tiers_text = self.format_all_tiers(
+        all_tiers_text = await self.format_all_tiers(
             limited_perceptual,
             limited_short_term,
             limited_long_term

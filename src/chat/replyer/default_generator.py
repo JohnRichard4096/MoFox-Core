@@ -110,6 +110,7 @@ def init_prompt():
 
 ## 其他信息
 {memory_block}
+
 {relation_info_block}
 
 {extra_info_block}
@@ -579,7 +580,7 @@ class DefaultReplyer:
 
         try:
             from src.memory_graph.manager_singleton import get_unified_memory_manager
-            from src.memory_graph.utils.memory_formatter import format_memory_for_prompt
+            from src.memory_graph.utils.three_tier_formatter import memory_formatter
 
             unified_manager = get_unified_memory_manager()
             if not unified_manager:
@@ -602,38 +603,12 @@ class DefaultReplyer:
             short_term_memories = search_result.get("short_term_memories", [])
             long_term_memories = search_result.get("long_term_memories", [])
 
-            memory_parts = ["### 🧠 相关记忆 (Relevant Memories)", ""]
-
-            # 添加感知记忆（最近的消息块）
-            if perceptual_blocks:
-                memory_parts.append("#### 🌊 感知记忆")
-                for block in perceptual_blocks:
-                    messages = block.messages if hasattr(block, 'messages') else []
-                    if messages:
-                        block_content = "\n".join([
-                            f"{msg.get('sender_name', msg.get('sender_id', ''))}: {msg.get('content', '')[:30]}" 
-                            for msg in messages
-                        ])
-                        memory_parts.append(f"- {block_content}")
-                memory_parts.append("")
-
-            # 添加短期记忆（结构化活跃记忆）
-            if short_term_memories:
-                memory_parts.append("#### 💭 短期记忆")
-                for mem in short_term_memories:
-                    content = format_memory_for_prompt(mem, include_metadata=False)
-                    if content:
-                        memory_parts.append(f"- {content}")
-                memory_parts.append("")
-
-            # 添加长期记忆（图谱记忆）
-            if long_term_memories:
-                memory_parts.append("#### 🗄️ 长期记忆")
-                for mem in long_term_memories:
-                    content = format_memory_for_prompt(mem, include_metadata=False)
-                    if content:
-                        memory_parts.append(f"- {content}")
-                memory_parts.append("")
+            # 使用新的三级记忆格式化器
+            formatted_memories = await memory_formatter.format_all_tiers(
+                perceptual_blocks=perceptual_blocks,
+                short_term_memories=short_term_memories,
+                long_term_memories=long_term_memories
+            )
 
             total_count = len(perceptual_blocks) + len(short_term_memories) + len(long_term_memories)
             if total_count > 0:
@@ -642,7 +617,11 @@ class DefaultReplyer:
                     f"(感知:{len(perceptual_blocks)}, 短期:{len(short_term_memories)}, 长期:{len(long_term_memories)})"
                 )
 
-            return "\n".join(memory_parts) if len(memory_parts) > 2 else ""
+                # 添加标题并返回格式化后的记忆
+                if formatted_memories.strip():
+                    return "### 🧠 相关记忆 (Relevant Memories)\n\n" + formatted_memories
+
+            return ""
 
         except Exception as e:
             logger.error(f"[三层记忆] 检索失败: {e}", exc_info=True)

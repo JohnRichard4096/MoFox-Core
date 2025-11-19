@@ -652,7 +652,7 @@ class AiohttpGeminiClient(BaseClient):
     async def get_embedding(
         self,
         model_info: ModelInfo,
-        embedding_input: str,
+        embedding_input: str | list[str],
         extra_params: dict[str, Any] | None = None,
     ) -> APIResponse:
         """

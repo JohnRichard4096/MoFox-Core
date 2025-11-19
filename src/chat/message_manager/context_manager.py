@@ -88,8 +88,13 @@ class SingleStreamContextManager:
                 self.context.enable_cache(True)
                 logger.debug(f"为StreamContext {self.stream_id} 启用缓存系统")
 
-            # 先计算兴趣值（需要在缓存前计算）
-            await self._calculate_message_interest(message)
+            # 新消息默认占位兴趣值，延迟到 Chatter 批量处理阶段
+            if message.interest_value is None:
+                message.interest_value = 0.3
+            message.should_reply = False
+            message.should_act = False
+            message.interest_calculated = False
+            message.semantic_embedding = None
             message.is_read = False
 
             # 使用StreamContext的智能缓存功能
@@ -440,6 +445,7 @@ class SingleStreamContextManager:
                     message.interest_value = result.interest_value
                     message.should_reply = result.should_reply
                     message.should_act = result.should_act
+                    message.interest_calculated = True
 
                     logger.debug(
                         f"消息 {message.message_id} 兴趣值已更新: {result.interest_value:.3f}, "
@@ -448,6 +454,7 @@ class SingleStreamContextManager:
                     return result.interest_value
                 else:
                     logger.warning(f"消息 {message.message_id} 兴趣值计算失败: {result.error_message}")
+                    message.interest_calculated = False
                     return 0.5
             else:
                 logger.debug("未找到兴趣值计算器，使用默认兴趣值")
@@ -455,6 +462,8 @@ class SingleStreamContextManager:
 
         except Exception as e:
             logger.error(f"计算消息兴趣度时发生错误: {e}", exc_info=True)
+            if hasattr(message, "interest_calculated"):
+                message.interest_calculated = False
             return 0.5
 
     def _detect_chat_type(self, message: DatabaseMessages):

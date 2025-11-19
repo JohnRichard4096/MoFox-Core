@@ -442,6 +442,43 @@ class BotInterestManager:
         logger.debug(f"✅ 消息embedding生成成功，维度: {len(embedding)}")
         return embedding
 
+    async def generate_embeddings_for_texts(
+        self, text_map: dict[str, str], batch_size: int = 16
+    ) -> dict[str, list[float]]:
+        """批量获取多段文本的embedding，供上层统一处理。"""
+        if not text_map:
+            return {}
+
+        if not self.embedding_request:
+            raise RuntimeError("Embedding客户端未初始化")
+
+        batch_size = max(1, batch_size)
+        keys = list(text_map.keys())
+        results: dict[str, list[float]] = {}
+
+        for start in range(0, len(keys), batch_size):
+            chunk_keys = keys[start : start + batch_size]
+            chunk_texts = [text_map[key] or "" for key in chunk_keys]
+
+            try:
+                chunk_embeddings, _ = await self.embedding_request.get_embedding(chunk_texts)
+            except Exception as exc:  # noqa: BLE001
+                logger.error(f"批量获取embedding失败 (chunk {start // batch_size + 1}): {exc}")
+                continue
+
+            if isinstance(chunk_embeddings, list) and chunk_embeddings and isinstance(chunk_embeddings[0], list):
+                normalized = chunk_embeddings
+            elif isinstance(chunk_embeddings, list):
+                normalized = [chunk_embeddings]
+            else:
+                normalized = []
+
+            for idx_offset, message_id in enumerate(chunk_keys):
+                vector = normalized[idx_offset] if idx_offset < len(normalized) else []
+                results[message_id] = vector
+
+        return results
+
     async def _calculate_similarity_scores(
         self, result: InterestMatchResult, message_embedding: list[float], keywords: list[str]
     ):
@@ -473,7 +510,7 @@ class BotInterestManager:
             logger.error(f"❌ 计算相似度分数失败: {e}")
 
     async def calculate_interest_match(
-        self, message_text: str, keywords: list[str] | None = None
+        self, message_text: str, keywords: list[str] | None = None, message_embedding: list[float] | None = None
     ) -> InterestMatchResult:
         """计算消息与机器人兴趣的匹配度（优化版 - 标签扩展策略）
 
@@ -505,7 +542,8 @@ class BotInterestManager:
 
         # 生成消息的embedding
         logger.debug("正在生成消息 embedding...")
-        message_embedding = await self._get_embedding(message_text)
+        if not message_embedding:
+            message_embedding = await self._get_embedding(message_text)
         logger.debug(f"消息 embedding 生成成功, 维度: {len(message_embedding)}")
 
         # 计算与每个兴趣标签的相似度（使用扩展标签）

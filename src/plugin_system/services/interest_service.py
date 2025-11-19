@@ -40,13 +40,16 @@ class InterestService:
             logger.error(f"初始化智能兴趣系统失败: {e}")
             self.is_initialized = False
 
-    async def calculate_interest_match(self, content: str, keywords: list[str] | None = None):
+    async def calculate_interest_match(
+        self, content: str, keywords: list[str] | None = None, message_embedding: list[float] | None = None
+    ):
         """
-        计算内容与兴趣的匹配度
+        计算消息与兴趣的匹配度
 
         Args:
             content: 消息内容
-            keywords: 关键词列表
+            keywords: 关键字列表
+            message_embedding: 已经生成的消息embedding，可选
 
         Returns:
             匹配结果
@@ -57,12 +60,12 @@ class InterestService:
 
         try:
             if not keywords:
-                # 如果没有关键词，尝试从内容提取
+                # 如果没有关键字，则从内容中提取
                 keywords = self._extract_keywords_from_content(content)
 
-            return await bot_interest_manager.calculate_interest_match(content, keywords)
+            return await bot_interest_manager.calculate_interest_match(content, keywords, message_embedding)
         except Exception as e:
-            logger.error(f"计算兴趣匹配度失败: {e}")
+            logger.error(f"计算兴趣匹配失败: {e}")
             return None
 
     def _extract_keywords_from_content(self, content: str) -> list[str]:

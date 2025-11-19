@@ -308,7 +308,7 @@ class UnifiedMemoryManager:
             from src.memory_graph.utils.three_tier_formatter import memory_formatter
 
             # 使用新的三级记忆格式化器
-            perceptual_desc = memory_formatter.format_perceptual_memory(perceptual_blocks)
+            perceptual_desc = await memory_formatter.format_perceptual_memory(perceptual_blocks)
             short_term_desc = memory_formatter.format_short_term_memory(short_term_memories)
 
             # 构建聊天历史块（如果提供）

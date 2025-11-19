@@ -103,7 +103,7 @@ class AffinityInterestCalculator(BaseInterestCalculator):
 
             # 1. 计算兴趣匹配分
             keywords = self._extract_keywords_from_database(message)
-            interest_match_score = await self._calculate_interest_match_score(content, keywords)
+            interest_match_score = await self._calculate_interest_match_score(message, content, keywords)
             logger.debug(f"[Affinity兴趣计算] 兴趣匹配分: {interest_match_score}")
 
             # 2. 计算关系分
@@ -180,7 +180,9 @@ class AffinityInterestCalculator(BaseInterestCalculator):
                 success=False, message_id=getattr(message, "message_id", ""), interest_value=0.0, error_message=str(e)
             )
 
-    async def _calculate_interest_match_score(self, content: str, keywords: list[str] | None = None) -> float:
+    async def _calculate_interest_match_score(
+        self, message: "DatabaseMessages", content: str, keywords: list[str] | None = None
+    ) -> float:
         """计算兴趣匹配度（使用智能兴趣匹配系统，带超时保护）"""
 
         # 调试日志：检查各个条件
@@ -199,7 +201,9 @@ class AffinityInterestCalculator(BaseInterestCalculator):
         try:
             # 使用机器人的兴趣标签系统进行智能匹配（1.5秒超时保护）
             match_result = await asyncio.wait_for(
-                bot_interest_manager.calculate_interest_match(content, keywords or []),
+                bot_interest_manager.calculate_interest_match(
+                    content, keywords or [], getattr(message, "semantic_embedding", None)
+                ),
                 timeout=1.5
             )
             logger.debug(f"兴趣匹配结果: {match_result}")
