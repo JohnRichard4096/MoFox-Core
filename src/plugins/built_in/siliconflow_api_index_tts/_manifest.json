@@ -1,0 +1,50 @@
+{
+  "manifest_version": 1,
+  "name": "SiliconFlow IndexTTS 语音合成插件",
+  "version": "2.0.0",
+  "description": "基于SiliconFlow API的IndexTTS语音合成插件，使用IndexTeam/IndexTTS-2模型支持高质量的零样本语音克隆。",
+  "author": {
+    "name": "MoFox Studio", 
+    "url": "https://github.com/MoFox-Studio"
+  },
+  "license": "GPL-v3.0-or-later",
+  
+  "host_application": {
+    "min_version": "0.8.0"
+  },
+  "homepage_url": "https://docs.siliconflow.cn/cn/userguide/capabilities/text-to-speech",
+  "repository_url": "https://github.com/MoFox-Studio/MoFox-Bot",
+  "keywords": ["tts", "voice", "audio", "speech", "indextts", "voice-cloning", "siliconflow"],
+  "categories": ["Audio Tools", "Voice Assistant", "AI Tools"],
+  
+  "default_locale": "zh-CN",
+  "locales_path": "_locales",
+  
+  "plugin_info": {
+    "is_built_in": true,
+    "plugin_type": "audio_processor",
+    "components": [
+      {
+        "type": "action",
+        "name": "siliconflow_indextts_action", 
+        "description": "使用SiliconFlow API进行IndexTTS语音合成",
+        "activation_modes": ["llm_judge", "keyword"],
+        "keywords": ["克隆语音", "模仿声音", "语音合成", "indextts", "声音克隆", "语音生成", "仿声", "变声"]
+      },
+      {
+        "type": "command",
+        "name": "siliconflow_tts_cmd",
+        "description": "SiliconFlow IndexTTS语音合成命令",
+        "command_name": "sf_tts",
+        "aliases": ["sftts", "sf语音", "硅基语音"]
+      }
+    ],
+    "features": [
+      "零样本语音克隆",
+      "情感控制语音合成", 
+      "自定义参考音频",
+      "高质量音频输出",
+      "多种语音风格"
+    ]
+  }
+}
