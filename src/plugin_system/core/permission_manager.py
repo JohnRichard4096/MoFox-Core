@@ -34,20 +34,39 @@ class PermissionManager(IPermissionManager):
 
     def _load_master_users(self):
         """从配置文件加载Master用户列表"""
+        logger.info("开始从配置文件加载Master用户...")
         try:
             master_users_config = global_config.permission.master_users
+            if not isinstance(master_users_config, list):
+                logger.warning(f"配置文件中的 permission.master_users 不是一个列表，已跳过加载。")
+                self._master_users = set()
+                return
+
             self._master_users = set()
-            for user_info in master_users_config:
-                if isinstance(user_info, list) and len(user_info) == 2:
-                    platform, user_id = user_info
-                    self._master_users.add((str(platform), str(user_id)))
-            logger.info(f"已加载 {len(self._master_users)} 个Master用户")
+            for i, user_info in enumerate(master_users_config):
+                if not isinstance(user_info, list) or len(user_info) != 2:
+                    logger.warning(f"Master用户配置项格式错误 (索引: {i}): {user_info}，应为 [\"platform\", \"user_id\"]")
+                    continue
+
+                platform, user_id = user_info
+                if not isinstance(platform, str) or not isinstance(user_id, str):
+                    logger.warning(
+                        f"Master用户配置项 platform 或 user_id 类型错误 (索引: {i}): [{type(platform).__name__}, {type(user_id).__name__}]，应为字符串"
+                    )
+                    continue
+
+                self._master_users.add((platform, user_id))
+                logger.debug(f"成功加载Master用户: platform={platform}, user_id={user_id}")
+
+            logger.info(f"成功加载 {len(self._master_users)} 个Master用户")
+
         except Exception as e:
-            logger.warning(f"加载Master用户配置失败: {e}")
+            logger.error(f"加载Master用户配置时发生严重错误: {e}", exc_info=True)
             self._master_users = set()
 
     def reload_master_users(self):
         """重新加载Master用户配置"""
+        logger.info("正在重新加载Master用户配置...")
         self._load_master_users()
         logger.info("Master用户配置已重新加载")
 
@@ -62,10 +81,10 @@ class PermissionManager(IPermissionManager):
             bool: 是否为Master用户
         """
         user_tuple = (user.platform, user.user_id)
-        is_master = user_tuple in self._master_users
-        if is_master:
+        is_master_flag = user_tuple in self._master_users
+        if is_master_flag:
             logger.debug(f"用户 {user.platform}:{user.user_id} 是Master用户")
-        return is_master
+        return is_master_flag
 
     async def check_permission(self, user: UserInfo, permission_node: str) -> bool:
         """

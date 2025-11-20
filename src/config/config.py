@@ -185,6 +185,11 @@ def _update_dict(target: TOMLDocument | dict | Table, source: TOMLDocument | dic
         if key == "version":
             continue
 
+        # 在合并 permission.master_users 时添加特别调试日志
+        if key == "permission" and isinstance(value, (dict, Table)) and "master_users" in value:
+            logger.info(f"【调试日志】在 _update_dict 中检测到 'permission' 表，其 'master_users' 的值为: {value['master_users']}")
+
+
         if key in target:
             # 键已存在，更新值
             target_value = target[key]
@@ -497,6 +502,19 @@ def load_config(config_path: str) -> Config:
         logger.info("正在解析和验证配置文件...")
         config = Config.from_dict(config_data)
         logger.info("配置文件解析和验证完成")
+
+        # 【临时修复】在验证后，手动从原始数据重新加载 master_users
+        try:
+            # 先将 tomlkit 对象转换为纯 Python 字典
+            config_dict = config_data.unwrap()
+            if "permission" in config_dict and "master_users" in config_dict["permission"]:
+                raw_master_users = config_dict["permission"]["master_users"]
+                # 现在 raw_master_users 就是一个标准的 Python 列表了
+                config.permission.master_users = raw_master_users
+                logger.info(f"【临时修复】已手动将 master_users 设置为: {config.permission.master_users}")
+        except Exception as patch_exc:
+            logger.error(f"【临时修复】手动设置 master_users 失败: {patch_exc}")
+
         return config
     except Exception as e:
         logger.critical(f"配置文件解析失败: {e}")
