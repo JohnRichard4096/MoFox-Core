@@ -54,6 +54,7 @@ class ComponentType(Enum):
     INTEREST_CALCULATOR = "interest_calculator"  # 兴趣度计算组件
     PROMPT = "prompt"  # Prompt组件
     ROUTER = "router"  # 路由组件
+    ADAPTER = "adapter"  # 适配器组件
 
     def __str__(self) -> str:
         return self.value
@@ -146,6 +147,20 @@ class PermissionNodeField:
 
     node_name: str  # 节点名称 (例如 "manage" 或 "view")
     description: str  # 权限描述
+
+
+@dataclass
+class AdapterInfo:
+    """适配器组件信息"""
+
+    name: str  # 适配器名称
+    component_type: ComponentType = field(default=ComponentType.ADAPTER, init=False)
+    version: str = "1.0.0"  # 适配器版本
+    platform: str = "unknown"  # 平台名称
+    description: str = ""  # 适配器描述
+    enabled: bool = True  # 是否启用
+    run_in_subprocess: bool = False  # 是否在子进程中运行
+    subprocess_entry: str | None = None  # 子进程入口脚本
 
 
 @dataclass

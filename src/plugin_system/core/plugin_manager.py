@@ -33,12 +33,24 @@ class PluginManager:
 
         self.loaded_plugins: dict[str, PluginBase] = {}  # 已加载的插件类实例注册表，插件名 -> 插件类实例
         self.failed_plugins: dict[str, str] = {}  # 记录加载失败的插件文件及其错误信息，插件名 -> 错误信息
+        
+        # 核心消息接收器（由主程序设置）
+        self._core_sink: Optional[Any] = None
 
         # 确保插件目录存在
         self._ensure_plugin_directories()
         logger.info("插件管理器初始化完成")
 
     # === 插件目录管理 ===
+
+    def set_core_sink(self, core_sink: Any) -> None:
+        """设置核心消息接收器
+        
+        Args:
+            core_sink: 核心消息接收器实例（InProcessCoreSink）
+        """
+        self._core_sink = core_sink
+        logger.info("已设置核心消息接收器")
 
     def add_plugin_directory(self, directory: str) -> bool:
         """添加插件目录"""
@@ -151,6 +163,11 @@ class PluginManager:
                     except Exception as e:
                         logger.error(f"调用插件 '{plugin_name}' 的 on_plugin_loaded 钩子时出错: {e}")
 
+                # 检查并注册适配器组件
+                task = asyncio.create_task(self._register_adapter_components(plugin_name, plugin_instance))
+                _background_tasks.add(task)
+                task.add_done_callback(_background_tasks.discard)
+
                 return True, 1
             else:
                 self.failed_plugins[plugin_name] = "插件注册失败"
@@ -164,6 +181,74 @@ class PluginManager:
             logger.error(f"❌ 插件加载失败: {plugin_name} - {error_msg}")
             logger.debug("详细错误信息: ", exc_info=True)
             return False, 1
+
+    async def _register_adapter_components(self, plugin_name: str, plugin_instance: PluginBase) -> None:
+        """注册适配器组件
+        
+        Args:
+            plugin_name: 插件名称
+            plugin_instance: 插件实例
+        """
+        try:
+            from src.plugin_system.base.component_types import AdapterInfo, ComponentType
+            from src.plugin_system.core.adapter_manager import get_adapter_manager
+            from src.plugin_system.core.component_registry import component_registry
+            
+            # 获取所有 ADAPTER 类型的组件
+            plugin_info = plugin_instance.plugin_info
+            adapter_components = [
+                comp for comp in plugin_info.components 
+                if comp.component_type == ComponentType.ADAPTER
+            ]
+            
+            if not adapter_components:
+                return
+            
+            adapter_manager = get_adapter_manager()
+            
+            for comp_info in adapter_components:
+                # 类型检查：确保是 AdapterInfo
+                if not isinstance(comp_info, AdapterInfo):
+                    logger.warning(f"组件 {comp_info.name} 不是 AdapterInfo 类型")
+                    continue
+                
+                try:
+                    # 从组件注册表获取适配器类
+                    adapter_class = component_registry.get_component_class(
+                        comp_info.name, 
+                        ComponentType.ADAPTER
+                    )
+                    
+                    if not adapter_class:
+                        logger.warning(f"无法找到适配器组件类: {comp_info.name}")
+                        continue
+                    
+                    # 创建适配器实例，传入 core_sink 和 plugin
+                    if self._core_sink is not None:
+                        adapter_instance = adapter_class(self._core_sink, plugin=plugin_instance)  # type: ignore
+                    else:
+                        logger.warning(
+                            f"适配器 '{comp_info.name}' 未获得 core_sink，"
+                            "请在主程序中调用 plugin_manager.set_core_sink()"
+                        )
+                        # 尝试无参数创建（某些适配器可能不需要 core_sink）
+                        adapter_instance = adapter_class(plugin=plugin_instance)  # type: ignore
+                    
+                    # 注册到适配器管理器
+                    adapter_manager.register_adapter(adapter_instance)  # type: ignore
+                    logger.info(
+                        f"插件 '{plugin_name}' 注册了适配器组件: {comp_info.name} "
+                        f"(平台: {comp_info.platform})"
+                    )
+                    
+                except Exception as e:
+                    logger.error(
+                        f"注册插件 '{plugin_name}' 的适配器组件 '{comp_info.name}' 时出错: {e}",
+                        exc_info=True
+                    )
+        
+        except Exception as e:
+            logger.error(f"处理插件 '{plugin_name}' 的适配器组件时出错: {e}", exc_info=True)
 
     async def remove_registered_plugin(self, plugin_name: str) -> bool:
         """

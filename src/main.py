@@ -10,7 +10,7 @@ from functools import partial
 from random import choices
 from typing import Any
 
-from mofox_bus import MessageServer
+from mofox_bus import InProcessCoreSink, MessageEnvelope
 from rich.traceback import install
 
 from src.chat.emoji_system.emoji_manager import get_emoji_manager
@@ -18,7 +18,7 @@ from src.chat.message_receive.bot import chat_bot
 from src.chat.message_receive.chat_stream import get_chat_manager
 from src.chat.utils.statistic import OnlineTimeRecordTask, StatisticOutputTask
 from src.common.logger import get_logger
-from src.common.message import get_global_api
+from src.common.message.envelope_converter import EnvelopeConverter
 
 # 全局背景任务集合
 _background_tasks = set()
@@ -76,8 +76,10 @@ class MainSystem:
     def __init__(self) -> None:
         self.individuality: Individuality = get_individuality()
 
-        # 使用消息API替代直接的FastAPI实例
-        self.app: MessageServer = get_global_api()
+        # 创建核心消息接收器
+        self.core_sink: InProcessCoreSink = InProcessCoreSink(self._handle_message_envelope)
+        
+        # 使用服务器
         self.server: Server = get_global_server()
 
         # 设置信号处理器用于优雅退出
@@ -288,14 +290,15 @@ class MainSystem:
                 cleanup_tasks.append(("服务器", self.server.shutdown()))
         except Exception as e:
             logger.error(f"准备停止服务器时出错: {e}")
-
-        # 停止应用
+        
+        # 停止所有适配器
         try:
-            if self.app:
-                if hasattr(self.app, "stop"):
-                    cleanup_tasks.append(("应用", self.app.stop()))
+            from src.plugin_system.core.adapter_manager import get_adapter_manager
+            
+            adapter_manager = get_adapter_manager()
+            cleanup_tasks.append(("适配器管理器", adapter_manager.stop_all_adapters()))
         except Exception as e:
-            logger.error(f"准备停止应用时出错: {e}")
+            logger.error(f"准备停止适配器管理器时出错: {e}")
 
         # 并行执行所有清理任务
         if cleanup_tasks:
@@ -370,6 +373,23 @@ class MainSystem:
         except Exception:
             logger.error("在创建消息处理任务时发生严重错误:")
             logger.error(traceback.format_exc())
+
+    async def _handle_message_envelope(self, envelope: MessageEnvelope) -> None:
+        """
+        处理来自适配器的 MessageEnvelope
+        
+        Args:
+            envelope: 统一的消息信封
+        """
+        try:
+            # 转换为旧版格式
+            message_data = EnvelopeConverter.to_legacy_dict(envelope)
+            
+            # 使用现有的消息处理流程
+            await self._message_process_wrapper(message_data)
+            
+        except Exception as e:
+            logger.error(f"处理 MessageEnvelope 时出错: {e}", exc_info=True)
 
     async def initialize(self) -> None:
         """初始化系统组件"""
@@ -450,6 +470,9 @@ MoFox_Bot(第三方修改版)
         except Exception as e:
             logger.error(f"统一调度器初始化失败: {e}")
 
+        # 设置核心消息接收器到插件管理器
+        plugin_manager.set_core_sink(self.core_sink)
+        
         # 加载所有插件
         plugin_manager.load_all_plugins()
 
@@ -500,8 +523,8 @@ MoFox_Bot(第三方修改版)
         except Exception as e:
             logger.error(f"LPMM知识库初始化失败: {e}")
 
-        # 将消息处理函数注册到API
-        self.app.register_message_handler(self._message_process_wrapper)
+        # 消息接收器已经在 __init__ 中创建，无需再次注册
+        logger.info("核心消息接收器已就绪")
 
         # 启动消息重组器
         try:
@@ -548,6 +571,16 @@ MoFox_Bot(第三方修改版)
             logger.info(f"初始化完成，神经元放电{init_time}次")
         except Exception as e:
             logger.error(f"启动事件触发失败: {e}")
+        
+        # 启动所有适配器
+        try:
+            from src.plugin_system.core.adapter_manager import get_adapter_manager
+            
+            adapter_manager = get_adapter_manager()
+            await adapter_manager.start_all_adapters()
+            logger.info("所有适配器已启动")
+        except Exception as e:
+            logger.error(f"启动适配器失败: {e}", exc_info=True)
 
     async def _init_planning_components(self) -> None:
         """初始化计划相关组件"""
@@ -591,7 +624,6 @@ MoFox_Bot(第三方修改版)
                 try:
                     tasks = [
                         get_emoji_manager().start_periodic_check_register(),
-                        self.app.run(),
                         self.server.run(),
                     ]
 

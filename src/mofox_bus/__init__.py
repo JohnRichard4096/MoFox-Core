@@ -8,7 +8,7 @@ MoFox 内部通用消息总线实现。
 from . import codec, types
 from .adapter_utils import (
     AdapterTransportOptions,
-    BaseAdapter,
+    AdapterBase,
     BatchDispatcher,
     CoreMessageSink,
     HttpAdapterOptions,
@@ -84,7 +84,7 @@ __all__ = [
     "TargetConfig",
     # Adapter helpers
     "AdapterTransportOptions",
-    "BaseAdapter",
+    "AdapterBase",
     "BatchDispatcher",
     "CoreMessageSink",
     "InProcessCoreSink",

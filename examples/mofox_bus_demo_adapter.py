@@ -21,7 +21,7 @@ import websockets
 sys.path.append(str(Path(__file__).resolve().parents[1] / "src"))
 
 from mofox_bus import (
-    BaseAdapter,
+    AdapterBase,
     InProcessCoreSink,
     MessageEnvelope,
     MessageRuntime,
@@ -86,13 +86,16 @@ class FakePlatformServer:
 
 
 # ---------------------------------------------------------------------------
-# 2. 适配器实现：仅关注核心转换逻辑，网络层交由 BaseAdapter 管理
+# 2. 适配器实现：仅关注核心转换逻辑，网络层交由 AdapterBase 管理
 # ---------------------------------------------------------------------------
 
 
-class DemoWsAdapter(BaseAdapter):
-    platform = "demo"
+class DemoWsAdapter(AdapterBase):   # 继承AdapterBase
+    platform = "demo"   # 定义平台名称
 
+    # 实现 from_platform_message 方法，将平台消息转换为 MessageEnvelope
+    # 该方法必须被实现以便 AdapterBase 正确处理消息转换
+    # 该方法会在adapter接收到平台消息后被调用
     def from_platform_message(self, raw: Dict[str, Any]) -> MessageEnvelope:
         return {
             "id": raw["message_id"],
@@ -104,7 +107,6 @@ class DemoWsAdapter(BaseAdapter):
             "conversation_id": raw["channel_id"],
             "content": {"type": "text", "text": raw["text"]},
         }
-
 
 def incoming_parser(raw: str | bytes) -> Any:
     data = orjson.loads(raw)

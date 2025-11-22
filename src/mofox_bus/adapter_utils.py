@@ -48,7 +48,7 @@ class HttpAdapterOptions:
 AdapterTransportOptions = WebSocketAdapterOptions | HttpAdapterOptions | None
 
 
-class BaseAdapter:
+class AdapterBase:
     """
     适配器基类：负责平台原始消息与 MessageEnvelope 之间的互转。
     子类需要实现平台入站解析与出站发送逻辑。
@@ -261,7 +261,7 @@ class BatchDispatcher:
 
 __all__ = [
     "AdapterTransportOptions",
-    "BaseAdapter",
+    "AdapterBase",
     "BatchDispatcher",
     "CoreMessageSink",
     "HttpAdapterOptions",
