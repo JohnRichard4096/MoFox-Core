@@ -11,6 +11,7 @@ from typing import ClassVar
 from src.chat.utils.prompt_component_manager import prompt_component_manager
 from src.chat.utils.prompt_params import PromptParameters
 from src.plugin_system.apis import (
+    chat_api,
     plugin_manage_api,
 )
 from src.plugin_system.apis.logging_api import get_logger
@@ -21,6 +22,7 @@ from src.plugin_system.base.base_plugin import BasePlugin
 from src.plugin_system.base.command_args import CommandArgs
 from src.plugin_system.base.component_types import (
     ChatType,
+    ComponentType,
     PermissionNodeField,
     PlusCommandInfo,
 )
@@ -103,6 +105,9 @@ class SystemCommand(PlusCommand):
 • `/system plugin load <插件名>` - 加载指定插件
 • `/system plugin reload <插件名>` - 重新加载指定插件
 • `/system plugin reload_all` - 重新加载所有插件
+🎯 局部控制 (需要 `system.plugin.manage.local` 权限):
+• `/system plugin enable_local <名称> [group <群号> | private <QQ号>]` - 在指定会话局部启用组件
+• `/system plugin disable_local <名称> [group <群号> | private <QQ号>]` - 在指定会话局部禁用组件
 """
         elif target == "permission":
             help_text = """📋 权限管理命令帮助
@@ -157,6 +162,10 @@ class SystemCommand(PlusCommand):
             await self._reload_plugin(remaining_args[0])
         elif action in ["reload_all", "重载全部"]:
             await self._reload_all_plugins()
+        elif action in ["enable_local", "局部启用"] and len(remaining_args) >= 1:
+            await self._set_local_component_state(remaining_args, enabled=True)
+        elif action in ["disable_local", "局部禁用"] and len(remaining_args) >= 1:
+            await self._set_local_component_state(remaining_args, enabled=False)
         else:
             await self.send_text("❌ 插件管理命令不合法\n使用 /system plugin help 查看帮助")
 
@@ -309,7 +318,7 @@ class SystemCommand(PlusCommand):
     @require_permission("prompt.view", deny_message="❌ 你没有查看提示词注入信息的权限")
     async def _list_prompt_components(self):
         """列出所有已注册的提示词组件"""
-        components = prompt_component_manager.get_registered_prompt_component_info()
+        components = await prompt_component_manager.get_registered_prompt_component_info()
         if not components:
             await self.send_text("🧩 当前没有已注册的提示词组件")
             return
@@ -391,7 +400,7 @@ class SystemCommand(PlusCommand):
     @require_permission("prompt.view", deny_message="❌ 你没有查看提示词组件信息的权限")
     async def _show_prompt_component_info(self, component_name: str):
         """显示特定提示词组件的详细信息"""
-        all_components = prompt_component_manager.get_registered_prompt_component_info()
+        all_components = await prompt_component_manager.get_registered_prompt_component_info()
 
         target_component = next((comp for comp in all_components if comp.name == component_name), None)
 
@@ -485,6 +494,87 @@ class SystemCommand(PlusCommand):
             await self.send_text("✅ 所有插件已成功重载。")
         else:
             await self.send_text("⚠️ 部分插件重载失败，请检查日志。")
+
+    @require_permission("plugin.manage.local", deny_message="❌ 你没有局部管理插件组件的权限")
+    async def _set_local_component_state(self, args: list[str], enabled: bool):
+        """在局部范围内启用或禁用一个组件"""
+        # 命令格式: <component_name> [group <group_id> | private <user_id>]
+        if not args:
+            action = "enable_local" if enabled else "disable_local"
+            await self.send_text(f"❌ 用法: /system plugin {action} <名称> [group <群号> | private <QQ号>]")
+            return
+
+        comp_name = args[0]
+        context_args = args[1:]
+        stream_id = self.message.chat_info.stream_id  # 默认作用于当前会话
+
+        # 1. 搜索组件
+        found_components = plugin_manage_api.search_components_by_name(comp_name, exact_match=True)
+
+        if not found_components:
+            await self.send_text(f"❌ 未找到名为 '{comp_name}' 的组件。")
+            return
+        
+        if len(found_components) > 1:
+            suggestions = "\n".join([f"- `{c['name']}` (类型: {c['component_type']})" for c in found_components])
+            await self.send_text(f"❌ 发现多个名为 '{comp_name}' 的组件，操作已取消。\n找到的组件:\n{suggestions}")
+            return
+
+        component_info = found_components[0]
+        comp_type_str = component_info["component_type"]
+        component_type = ComponentType(comp_type_str)
+
+        # 2. 增加禁用保护
+        if not enabled:  # 如果是禁用操作
+            # 定义不可禁用的核心组件类型
+            protected_types = [
+                ComponentType.INTEREST_CALCULATOR,
+                ComponentType.PROMPT,
+                ComponentType.ROUTER,
+            ]
+            if component_type in protected_types:
+                await self.send_text(f"❌ 无法局部禁用核心组件 '{comp_name}' ({comp_type_str})。")
+                return
+
+        # 3. 解析上下文
+        if len(context_args) >= 2:
+            context_type = context_args[0].lower()
+            context_id = context_args[1]
+            
+            target_stream = None
+            if context_type == "group":
+                target_stream = chat_api.get_stream_by_group_id(
+                    group_id=context_id,
+                    platform=self.message.chat_info.platform
+                )
+            elif context_type == "private":
+                target_stream = chat_api.get_stream_by_user_id(
+                    user_id=context_id,
+                    platform=self.message.chat_info.platform
+                )
+            else:
+                await self.send_text("❌ 无效的作用域类型，请使用 'group' 或 'private'。")
+                return
+
+            if not target_stream:
+                await self.send_text(f"❌ 在当前平台找不到指定的 {context_type}: `{context_id}`。")
+                return
+            
+            stream_id = target_stream.stream_id
+
+        # 4. 执行操作
+        success = plugin_manage_api.set_component_enabled_local(
+            stream_id=stream_id,
+            name=comp_name,
+            component_type=component_type,
+            enabled=enabled
+        )
+
+        action_text = "启用" if enabled else "禁用"
+        if success:
+            await self.send_text(f"✅ 在会话 `{stream_id}` 中，已成功将组件 `{comp_name}` ({comp_type_str}) 设置为 {action_text} 状态。")
+        else:
+            await self.send_text(f"❌ 操作失败。可能无法禁用最后一个启用的 Chatter，或组件不存在。请检查日志。")
 
 
     # =================================================================
@@ -730,5 +820,9 @@ class SystemManagementPlugin(BasePlugin):
         PermissionNodeField(
             node_name="schedule.manage",
             description="定时任务管理：暂停和恢复定时任务",
+        ),
+        PermissionNodeField(
+            node_name="plugin.manage.local",
+            description="局部插件管理：在指定会话中启用或禁用组件",
         ),
     ]

@@ -197,80 +197,6 @@ class ChatBot:
             logger.error(f"处理PlusCommand时出错: {e}")
             return False, None, True  # 出错时继续处理消息
 
-    async def _process_commands_with_new_system(self, message: DatabaseMessages, chat: ChatStream):
-        # sourcery skip: use-named-expression
-        """使用新插件系统处理命令"""
-        try:
-            text = message.processed_plain_text or ""
-
-            # 使用新的组件注册中心查找命令
-            command_result = component_registry.find_command_by_text(text)
-            if command_result:
-                command_class, matched_groups, command_info = command_result
-                plugin_name = command_info.plugin_name
-                command_name = command_info.name
-                if (
-                    chat
-                    and chat.stream_id
-                    and command_name
-                    in global_announcement_manager.get_disabled_chat_commands(chat.stream_id)
-                ):
-                    logger.info("用户禁用的命令，跳过处理")
-                    return False, None, True
-
-                message.is_command = True
-
-                # 获取插件配置
-                plugin_config = component_registry.get_plugin_config(plugin_name)
-
-                # 创建命令实例
-                command_instance: BaseCommand = command_class(message, plugin_config)
-                command_instance.set_matched_groups(matched_groups)
-
-                # 为插件实例设置 chat_stream 运行时属性
-                setattr(command_instance, "chat_stream", chat)
-
-                try:
-                    # 检查聊天类型限制
-                    if not command_instance.is_chat_type_allowed():
-                        is_group = chat.group_info is not None
-                        logger.info(
-                            f"命令 {command_class.__name__} 不支持当前聊天类型: {'群聊' if is_group else '私聊'}"
-                        )
-                        return False, None, True  # 跳过此命令，继续处理其他消息
-
-                    # 执行命令
-                    success, response, intercept_message = await command_instance.execute()
-
-                    # 记录命令执行结果
-                    if success:
-                        logger.info(f"命令执行成功: {command_class.__name__} (拦截: {intercept_message})")
-                    else:
-                        logger.warning(f"命令执行失败: {command_class.__name__} - {response}")
-
-                    # 根据命令的拦截设置决定是否继续处理消息
-                    return True, response, not intercept_message  # 找到命令，根据intercept_message决定是否继续
-
-                except Exception as e:
-                    logger.error(f"执行命令时出错: {command_class.__name__} - {e}")
-                    logger.error(traceback.format_exc())
-
-                    try:
-                        await command_instance.send_text(f"命令执行出错: {e!s}")
-                    except Exception as send_error:
-                        logger.error(f"发送错误消息失败: {send_error}")
-
-                    # 命令出错时，根据命令的拦截设置决定是否继续处理消息
-                    return True, str(e), False  # 出错时继续处理消息
-
-            # 没有找到命令，继续处理消息
-            return False, None, True
-
-        except Exception as e:
-            logger.error(f"处理命令时出错: {e}")
-            return False, None, True  # 出错时继续处理消息
-
-
     async def _handle_adapter_response_from_dict(self, seg_data: dict | None):
         """处理适配器命令响应（从字典数据）"""
         try:
@@ -411,16 +337,6 @@ class ChatBot:
                 await MessageStorage.store_message(message, chat)
                 logger.info(f"PlusCommand处理完成，跳过后续消息处理: {plus_cmd_result}")
                 return
-
-            # 如果不是PlusCommand，尝试传统的BaseCommand处理
-            if not is_plus_command:
-                is_command, cmd_result, continue_process = await self._process_commands_with_new_system(message, chat)
-
-                # 如果是命令且不需要继续处理，则直接返回
-                if is_command and not continue_process:
-                    await MessageStorage.store_message(message, chat)
-                    logger.info(f"命令处理完成，跳过后续消息处理: {cmd_result}")
-                    return
 
             result = await event_manager.trigger_event(EventType.ON_MESSAGE, permission_group="SYSTEM", message=message)
             if result and not result.all_continue_process():
