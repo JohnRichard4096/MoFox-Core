@@ -5,7 +5,7 @@
 
 import time
 from abc import ABC, abstractmethod
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Any
 
 if TYPE_CHECKING:
     from src.common.data_models.database_data_model import DatabaseMessages
@@ -79,12 +79,16 @@ class BaseInterestCalculator(ABC):
     component_description: str = ""
     enabled_by_default: bool = True  # 是否默认启用
 
-    def __init__(self):
+    def __init__(self, plugin_config: dict | None = None):
         self._enabled = False
         self._last_calculation_time = 0.0
         self._total_calculations = 0
         self._failed_calculations = 0
         self._average_calculation_time = 0.0
+        if plugin_config is None:
+            plugin_config = getattr(self.__class__, "plugin_config", {})
+
+        self.plugin_config = plugin_config or {}
 
         # 验证必须定义的属性
         if not self.component_name:
@@ -192,6 +196,19 @@ class BaseInterestCalculator(ABC):
             )
             self._update_statistics(result)
             return result
+
+    def get_config(self, key: str, default: Any = None) -> Any:
+        """获取插件配置，支持嵌套键访问"""
+        if not self.plugin_config:
+            return default
+
+        current = self.plugin_config
+        for part in key.split("."):
+            if isinstance(current, dict) and part in current:
+                current = current[part]
+            else:
+                return default
+        return current
 
     @classmethod
     def get_interest_calculator_info(cls) -> "InterestCalculatorInfo":

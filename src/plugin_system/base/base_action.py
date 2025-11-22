@@ -109,13 +109,14 @@ class BaseAction(ABC):
             action_message: 消息数据
             **kwargs: 其他参数
         """
-        if plugin_config is None:
-            plugin_config: ClassVar = {}
         self.action_data = action_data
         self.reasoning = reasoning
         self.cycle_timers = cycle_timers
         self.thinking_id = thinking_id
         self.log_prefix = log_prefix
+
+        if plugin_config is None:
+            plugin_config = getattr(self.__class__, "plugin_config", {})
 
         self.plugin_config = plugin_config or {}
         """对应的插件配置"""

@@ -34,7 +34,9 @@ class BasePrompt(ABC):
     injection_point: str | list[str] | None = None
     """[已废弃] 要注入的目标Prompt名称或列表，请使用 injection_rules"""
 
-    def __init__(self, params: PromptParameters, plugin_config: dict | None = None, target_prompt_name: str | None = None):
+    def __init__(
+        self, params: PromptParameters, plugin_config: dict | None = None, target_prompt_name: str | None = None
+    ):
         """初始化Prompt组件
 
         Args:
@@ -43,6 +45,9 @@ class BasePrompt(ABC):
             target_prompt_name: 在应用注入时，当前注入的目标提示词名称。
         """
         self.params = params
+        if plugin_config is None:
+            plugin_config = getattr(self.__class__, "plugin_config", {})
+
         self.plugin_config = plugin_config or {}
         self.target_prompt_name = target_prompt_name
         self.log_prefix = "[PromptComponent]"

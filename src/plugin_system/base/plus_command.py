@@ -60,6 +60,9 @@ class PlusCommand(ABC):
             message: 接收到的消息对象（DatabaseMessages）
             plugin_config: 插件配置字典
         """
+        if plugin_config is None:
+            plugin_config = getattr(self.__class__, "plugin_config", {})
+
         self.message = message
         self.plugin_config = plugin_config or {}
         self.log_prefix = "[PlusCommand]"

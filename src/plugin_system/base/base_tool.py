@@ -48,6 +48,9 @@ class BaseTool(ABC):
     """子工具列表，格式为[(子工具名, 子工具描述, 子工具参数)]。仅在二步工具中使用"""
 
     def __init__(self, plugin_config: dict | None = None, chat_stream: Any = None):
+        if plugin_config is None:
+            plugin_config = getattr(self.__class__, "plugin_config", {})
+
         self.plugin_config = plugin_config or {}  # 直接存储插件配置字典
         self.chat_stream = chat_stream  # 存储聊天流信息，可用于获取上下文
 
@@ -205,7 +208,7 @@ class BaseTool(ABC):
         """直接执行工具函数(供插件调用)
            通过该方法，插件可以直接调用工具，而不需要传入字典格式的参数
            插件可以直接调用此方法，用更加明了的方式传入参数
-           示例: result = await tool.direct_execute(arg1="参数",arg2="参数2")
+           示例: result = await tool.direct_execute(arg1=\"参数\",arg2=\"参数2\")
 
            工具开发者可以重写此方法以实现与llm调用差异化的执行逻辑
 
@@ -226,7 +229,7 @@ class BaseTool(ABC):
         """获取插件配置值，使用嵌套键访问
 
         Args:
-            key: 配置键名，使用嵌套访问如 "section.subsection.key"
+            key: 配置键名，使用嵌套访问如 \"section.subsection.key\"
             default: 默认值
 
         Returns:

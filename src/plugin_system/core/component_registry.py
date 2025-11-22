@@ -341,11 +341,9 @@ class ComponentRegistry:
         if not hasattr(self, "_enabled_interest_calculator_registry"):
             self._enabled_interest_calculator_registry: dict[str, type["BaseInterestCalculator"]] = {}
 
-        setattr(interest_calculator_class, "plugin_name", interest_calculator_info.plugin_name)
-        # 设置插件配置
-        setattr(
+        _assign_plugin_attrs(
             interest_calculator_class,
-            "plugin_config",
+            interest_calculator_info.plugin_name,
             self.get_plugin_config(interest_calculator_info.plugin_name) or {},
         )
         self._interest_calculator_registry[calculator_name] = interest_calculator_class
@@ -394,6 +392,8 @@ class ComponentRegistry:
 
             router_name = router_info.name
             plugin_name = router_info.plugin_name
+            plugin_config = self.get_plugin_config(plugin_name) or {}
+            _assign_plugin_attrs(router_class, plugin_name, plugin_config)
 
             # 2. 实例化组件以触发其 __init__ 和 register_endpoints
             component_instance = router_class()

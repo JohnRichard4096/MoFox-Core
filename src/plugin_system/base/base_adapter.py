@@ -75,6 +75,17 @@ class BaseAdapter(MoFoxAdapterBase, ABC):
         """设置适配器配置"""
         self._config = value
 
+    def get_config(self, key: str, default: Any = None) -> Any:
+        """获取适配器配置，优先使用插件配置，其次使用内部配置。"""
+        current = self.config or {}
+        for part in key.split("."):
+            if isinstance(current, dict) and part in current:
+                current = current[part]
+            else:
+                return default
+        return current
+
+
     async def start(self) -> None:
         """启动适配器"""
         logger.info(f"启动适配器: {self.adapter_name} v{self.adapter_version}")
