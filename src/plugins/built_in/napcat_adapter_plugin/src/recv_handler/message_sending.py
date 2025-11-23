@@ -18,7 +18,7 @@ class MessageSending:
     maibot_router: Router = None
     plugin_config = None
     _connection_retries = 0
-    _max_retries = 3
+    _max_retries = 10
 
     def __init__(self):
         pass
