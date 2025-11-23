@@ -216,7 +216,7 @@ class ProactiveThinkingScheduler:
                 return 0.5
 
         except Exception as e:
-            logger.error(f"[调度器] ❌ 获取聊天流 {stream_id} 的 focus_energy 失败: {e}", exc_info=True)
+            logger.error(f"[调度器] [错误] 获取聊天流 {stream_id} 的 focus_energy 失败: {e}", exc_info=True)
             return 0.5
 
     async def schedule_proactive_thinking(self, stream_id: str) -> bool:
@@ -280,7 +280,7 @@ class ProactiveThinkingScheduler:
                 return True
 
         except Exception as e:
-            logger.error(f"❌ 创建主动思考任务失败 {stream_id}: {e}", exc_info=True)
+            logger.error(f"[错误] 创建主动思考任务失败 {stream_id}: {e}", exc_info=True)
             return False
 
     async def pause_proactive_thinking(self, stream_id: str, reason: str = "抛出话题") -> bool:
@@ -340,7 +340,7 @@ class ProactiveThinkingScheduler:
                 return success
 
         except Exception as e:
-            logger.error(f"❌ 恢复主动思考失败 {stream_id}: {e}", exc_info=True)
+            logger.error(f"[错误] 恢复主动思考失败 {stream_id}: {e}", exc_info=True)
             return False
 
     async def cancel_proactive_thinking(self, stream_id: str) -> bool:
@@ -361,12 +361,12 @@ class ProactiveThinkingScheduler:
                 self._paused_streams.discard(stream_id)
 
                 success = await unified_scheduler.remove_schedule(schedule_id)
-                logger.debug(f"⏹️ 取消主动思考 {stream_id}")
+                logger.debug(f"[取消] 取消主动思考 {stream_id}")
 
                 return success
 
         except Exception as e:
-            logger.error(f"❌ 取消主动思考失败 {stream_id}: {e}", exc_info=True)
+            logger.error(f"[错误] 取消主动思考失败 {stream_id}: {e}", exc_info=True)
             return False
 
     async def is_paused(self, stream_id: str) -> bool:
@@ -482,7 +482,7 @@ class ProactiveThinkingScheduler:
                     minutes = (remaining_seconds % 3600) // 60
                     time_str = f"{hours}小时{minutes}分钟后"
 
-                status = "⏸️ 暂停中" if is_paused else "✅ 活跃"
+                status = "[暂停] 暂停中" if is_paused else "[活跃] 活跃"
 
                 logger.info(
                     f"[{i:2d}] {status} | {stream_name}\n"

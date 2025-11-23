@@ -694,11 +694,11 @@ async def execute_proactive_thinking(stream_id: str):
 
     # 尝试获取锁，如果已被占用则跳过本次执行（防止重复）
     if lock.locked():
-        logger.warning(f"⚠️ 主动思考跳过：聊天流 {stream_id} 已有正在执行的主动思考任务")
+        logger.warning(f"[警告] 主动思考跳过：聊天流 {stream_id} 已有正在执行的主动思考任务")
         return
 
     async with lock:
-        logger.debug(f"🤔 开始主动思考 {stream_id}")
+        logger.debug(f"[思考] 开始主动思考 {stream_id}")
 
         try:
             # 0. 前置检查
@@ -709,10 +709,10 @@ async def execute_proactive_thinking(stream_id: str):
                 chat_stream = await chat_manager.get_stream(stream_id)
 
                 if chat_stream and chat_stream.context_manager.context.is_chatter_processing:
-                    logger.warning(f"⚠️ 主动思考等待：聊天流 {stream_id} 的 chatter 正在处理消息，等待3秒后重试...")
+                    logger.warning(f"[警告] 主动思考等待：聊天流 {stream_id} 的 chatter 正在处理消息，等待3秒后重试...")
                     await asyncio.sleep(3)
                     if chat_stream.context_manager.context.is_chatter_processing:
-                        logger.warning(f"⚠️ 主动思考跳过：聊天流 {stream_id} 的 chatter 仍在处理消息")
+                        logger.warning(f"[警告] 主动思考跳过：聊天流 {stream_id} 的 chatter 仍在处理消息")
                         return
             except Exception as e:
                 logger.warning(f"检查 chatter 处理状态时出错: {e}，继续执行")
@@ -781,7 +781,7 @@ async def execute_proactive_thinking(stream_id: str):
                 return
 
             elif action == "simple_bubble":
-                logger.info(f"💬 决策：冒个泡。理由：{reasoning}")
+                logger.info(f"[决策] 决策：冒个泡。理由：{reasoning}")
 
                 proactive_thinking_scheduler.record_decision(stream_id, action, reasoning, None)
 
@@ -793,7 +793,7 @@ async def execute_proactive_thinking(stream_id: str):
                         stream_id=stream_id,
                         text=reply,
                     )
-                    logger.info("✅ 已发送冒泡消息")
+                    logger.info("[成功] 已发送冒泡消息")
 
                     # 增加每日计数
                     proactive_thinking_scheduler._increment_daily_count(stream_id)
