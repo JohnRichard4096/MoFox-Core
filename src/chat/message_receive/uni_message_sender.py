@@ -1,13 +1,26 @@
+"""
+统一消息发送器
+
+重构说明（2025-11）：
+- 使用 CoreSinkManager 发送消息，而不是直接通过 WS 连接
+- MessageServer 仅作为与旧适配器的兼容层
+- 所有发送的消息都通过 CoreSinkManager.send_outgoing() 路由到适配器
+"""
+
 import asyncio
 import traceback
+import time
+import uuid
+from typing import Any, cast
 
 from rich.traceback import install
+
+from mofox_bus import MessageEnvelope
 
 from src.chat.message_receive.message import MessageSending
 from src.chat.message_receive.storage import MessageStorage
 from src.chat.utils.utils import calculate_typing_time, truncate_message
 from src.common.logger import get_logger
-from src.common.message.api import get_global_api
 
 install(extra_lines=3)
 
@@ -15,12 +28,30 @@ logger = get_logger("sender")
 
 
 async def send_message(message: MessageSending, show_log=True) -> bool:
-    """合并后的消息发送函数，包含WS发送和日志记录"""
+    """
+    合并后的消息发送函数
+    
+    重构后使用 CoreSinkManager 发送消息，而不是直接调用 MessageServer
+    
+    Args:
+        message: 要发送的消息
+        show_log: 是否显示日志
+    
+    Returns:
+        bool: 是否发送成功
+    """
     message_preview = truncate_message(message.processed_plain_text, max_length=120)
 
     try:
-        # 直接调用API发送消息
-        await get_global_api().send_message(message)
+        # 将 MessageSending 转换为 MessageEnvelope
+        envelope = _message_sending_to_envelope(message)
+        
+        # 通过 CoreSinkManager 发送
+        from src.common.core_sink_manager import get_core_sink_manager
+        
+        manager = get_core_sink_manager()
+        await manager.send_outgoing(envelope)
+        
         if show_log:
             logger.info(f"已将消息  '{message_preview}'  发往平台'{message.message_info.platform}'")
 
@@ -44,7 +75,67 @@ async def send_message(message: MessageSending, show_log=True) -> bool:
     except Exception as e:
         logger.error(f"发送消息   '{message_preview}'   发往平台'{message.message_info.platform}' 失败: {e!s}")
         traceback.print_exc()
-        raise e  # 重新抛出其他异常
+        raise e
+
+
+def _message_sending_to_envelope(message: MessageSending) -> MessageEnvelope:
+    """
+    将 MessageSending 转换为 MessageEnvelope
+    
+    Args:
+        message: MessageSending 对象
+    
+    Returns:
+        MessageEnvelope: 消息信封
+    """
+    # 构建消息信息
+    message_info: dict[str, Any] = {
+        "message_id": message.message_info.message_id,
+        "time": message.message_info.time or time.time(),
+        "platform": message.message_info.platform,
+        "user_info": {
+            "user_id": message.message_info.user_info.user_id,
+            "user_nickname": message.message_info.user_info.user_nickname,
+            "platform": message.message_info.user_info.platform,
+        } if message.message_info.user_info else None,
+    }
+    
+    # 添加群组信息（如果有）
+    if message.chat_stream and message.chat_stream.group_info:
+        message_info["group_info"] = {
+            "group_id": message.chat_stream.group_info.group_id,
+            "group_name": message.chat_stream.group_info.group_name,
+            "platform": message.chat_stream.group_info.group_platform,
+        }
+    
+    # 构建消息段
+    message_segment: dict[str, Any]
+    if message.message_segment:
+        message_segment = {
+            "type": message.message_segment.type,
+            "data": message.message_segment.data,
+        }
+    else:
+        # 默认为文本消息
+        message_segment = {
+            "type": "text",
+            "data": message.processed_plain_text or "",
+        }
+    
+    # 添加回复信息（如果有）
+    if message.reply_to:
+        message_segment["reply_to"] = message.reply_to
+    
+    # 构建消息信封
+    envelope = cast(MessageEnvelope, {
+        "id": str(uuid.uuid4()),
+        "direction": "outgoing",
+        "platform": message.message_info.platform,
+        "message_info": message_info,
+        "message_segment": message_segment,
+    })
+    
+    return envelope
 
 
 class HeartFCSender:

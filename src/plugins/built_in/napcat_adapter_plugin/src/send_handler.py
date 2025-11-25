@@ -3,7 +3,7 @@ import random
 import time
 import websockets as Server
 import uuid
-from mofox_bus import (
+from maim_message import (
     UserInfo,
     GroupInfo,
     Seg,

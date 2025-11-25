@@ -8,9 +8,10 @@ import random
 import time
 from typing import TYPE_CHECKING, Any
 
-from src.chat.chatter_manager import ChatterManager
-from src.chat.message_receive.chat_stream import ChatStream
 from src.chat.planner_actions.action_manager import ChatterActionManager
+
+if TYPE_CHECKING:
+    from src.chat.chatter_manager import ChatterManager
 from src.common.data_models.database_data_model import DatabaseMessages
 from src.common.data_models.message_manager_data_model import MessageManagerStats, StreamStats
 from src.common.logger import get_logger
@@ -21,7 +22,7 @@ from .distribution_manager import stream_loop_manager
 from .global_notice_manager import NoticeScope, global_notice_manager
 
 if TYPE_CHECKING:
-    pass
+    from src.chat.message_receive.chat_stream import ChatStream
 
 logger = get_logger("message_manager")
 
@@ -39,6 +40,8 @@ class MessageManager:
 
         # 初始化chatter manager
         self.action_manager = ChatterActionManager()
+        # 延迟导入ChatterManager以避免循环导入
+        from src.chat.chatter_manager import ChatterManager
         self.chatter_manager = ChatterManager(self.action_manager)
 
         # 不再需要全局上下文管理器，直接通过 ChatManager 访问各个 ChatStream 的 context

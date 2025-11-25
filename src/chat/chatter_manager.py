@@ -121,8 +121,6 @@ class ChatterManager:
 
         chatter_class = self.get_chatter_class(chat_type)
         if not chatter_class:
-            from src.plugin_system.base.component_types import ChatType
-
             all_chatter_class = self.get_chatter_class(ChatType.ALL)
             if all_chatter_class:
                 chatter_class = all_chatter_class

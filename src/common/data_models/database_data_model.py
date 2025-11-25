@@ -16,6 +16,24 @@ class DatabaseUserInfo(BaseDataModel):
     user_nickname: str = field(default_factory=str)  # 用户昵称
     user_cardname: str | None = None  # 用户备注名或群名片，可为空
 
+    @classmethod
+    def from_dict(cls, data: dict) -> "DatabaseUserInfo":
+        """从字典创建实例"""
+        return cls(
+            platform=data.get("platform", ""),
+            user_id=data.get("user_id", ""),
+            user_nickname=data.get("user_nickname", ""),
+            user_cardname=data.get("user_cardname"),
+        )
+
+    def to_dict(self) -> dict:
+        """将实例转换为字典"""
+        return {
+            "platform": self.platform,
+            "user_id": self.user_id,
+            "user_nickname": self.user_nickname,
+            "user_cardname": self.user_cardname,
+        }
 
 @dataclass
 class DatabaseGroupInfo(BaseDataModel):
@@ -26,7 +44,23 @@ class DatabaseGroupInfo(BaseDataModel):
     group_name: str = field(default_factory=str)  # 群组名称
     group_platform: str | None = None  # 群组所在平台，可为空
 
-
+    @classmethod
+    def from_dict(cls, data: dict) -> "DatabaseGroupInfo":
+        """从字典创建实例"""
+        return cls(
+            group_id=data.get("group_id", ""),
+            group_name=data.get("group_name", ""),
+            group_platform=data.get("group_platform"),
+        )
+    
+    def to_dict(self) -> dict:
+        """将实例转换为字典"""
+        return {
+            "group_id": self.group_id,
+            "group_name": self.group_name,
+            "group_platform": self.group_platform,
+        }
+    
 @dataclass
 class DatabaseChatInfo(BaseDataModel):
     """

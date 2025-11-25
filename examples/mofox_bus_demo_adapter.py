@@ -8,7 +8,6 @@
 from __future__ import annotations
 
 import asyncio
-import sys
 import time
 import uuid
 from pathlib import Path
@@ -17,8 +16,6 @@ from typing import Any, Dict, Optional
 import orjson
 import websockets
 
-# 追加 src 目录，便于直接运行示例
-sys.path.append(str(Path(__file__).resolve().parents[1] / "src"))
 
 from mofox_bus import (
     AdapterBase,

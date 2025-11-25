@@ -17,12 +17,13 @@ from typing import Any, ClassVar, Dict, List, Optional
 import orjson
 import websockets
 
-from mofox_bus import CoreMessageSink, MessageEnvelope, WebSocketAdapterOptions
+from mofox_bus import CoreSink, MessageEnvelope, WebSocketAdapterOptions
 from src.common.logger import get_logger
 from src.plugin_system import register_plugin
 from src.plugin_system.base import BaseAdapter, BasePlugin
 from src.plugin_system.apis import config_api
 
+from .src.handlers import utils as handler_utils
 from .src.handlers.to_core.message_handler import MessageHandler
 from .src.handlers.to_core.notice_handler import NoticeHandler
 from .src.handlers.to_core.meta_event_handler import MetaEventHandler
@@ -41,22 +42,16 @@ class NapcatAdapter(BaseAdapter):
     platform = "qq"
 
     run_in_subprocess = False
-    subprocess_entry = None
 
-    def __init__(self, core_sink: CoreMessageSink, plugin: Optional[BasePlugin] = None):
+    def __init__(self, core_sink: CoreSink, plugin: Optional[BasePlugin] = None):
         """初始化 Napcat 适配器"""
         # 从插件配置读取 WebSocket URL
         if plugin:
-            mode = config_api.get_plugin_config(plugin.config, "napcat_server.mode", "reverse")
             host = config_api.get_plugin_config(plugin.config, "napcat_server.host", "localhost")
             port = config_api.get_plugin_config(plugin.config, "napcat_server.port", 8095)
-            url = config_api.get_plugin_config(plugin.config, "napcat_server.url", "")
             access_token = config_api.get_plugin_config(plugin.config, "napcat_server.access_token", "")
-            
-            if mode == "forward" and url:
-                ws_url = url
-            else:
-                ws_url = f"ws://{host}:{port}"
+
+            ws_url = f"ws://{host}:{port}"
             
             headers = {}
             if access_token:
@@ -69,8 +64,6 @@ class NapcatAdapter(BaseAdapter):
         transport = WebSocketAdapterOptions(
             url=ws_url,
             headers=headers if headers else None,
-            incoming_parser=self._parse_napcat_message,
-            outgoing_encoder=self._encode_napcat_response,
         )
 
         super().__init__(core_sink, plugin=plugin, transport=transport)
@@ -88,6 +81,9 @@ class NapcatAdapter(BaseAdapter):
         # WebSocket 连接（用于发送 API 请求）
         # 注意：_ws 继承自 BaseAdapter，是 WebSocketLike 协议类型
         self._napcat_ws = None  # 可选的额外连接引用
+
+        # 注册 utils 内部使用的适配器实例，便于工具方法自动获取 WS
+        handler_utils.register_adapter(self)
 
     async def on_adapter_loaded(self) -> None:
         """适配器加载时的初始化"""
@@ -113,22 +109,6 @@ class NapcatAdapter(BaseAdapter):
         self._response_pool.clear()
 
         logger.info("Napcat 适配器已关闭")
-
-    def _parse_napcat_message(self, raw: str | bytes) -> Any:
-        """解析 Napcat/OneBot 消息"""
-        try:
-            if isinstance(raw, bytes):
-                data = orjson.loads(raw)
-            else:
-                data = orjson.loads(raw)
-            return data
-        except Exception as e:
-            logger.error(f"解析 Napcat 消息失败: {e}")
-            raise
-
-    def _encode_napcat_response(self, envelope: MessageEnvelope) -> bytes:
-        """编码响应消息为 Napcat 格式（暂未使用，通过 API 调用发送）"""
-        return orjson.dumps(envelope)
 
     async def from_platform_message(self, raw: Dict[str, Any]) -> MessageEnvelope:  # type: ignore[override]
         """
@@ -177,20 +157,6 @@ class NapcatAdapter(BaseAdapter):
         而是调用 Napcat API（send_group_msg, send_private_msg 等）
         """
         await self.send_handler.handle_message(envelope)
-
-    def _create_empty_envelope(self) -> MessageEnvelope:  # type: ignore[return]
-        """创建一个空的消息信封（用于不需要处理的事件）"""
-        import time
-        return {
-            "direction": "incoming",
-            "message_info": {
-                "platform": self.platform,
-                "message_id": str(uuid.uuid4()),
-                "time": time.time(),
-            },
-            "message_segment": {"type": "text", "data": "[系统事件]"},
-            "timestamp_ms": int(time.time() * 1000),
-        }
 
     async def send_napcat_api(self, action: str, params: Dict[str, Any], timeout: float = 30.0) -> Dict[str, Any]:
         """
@@ -260,18 +226,12 @@ class NapcatAdapterPlugin(BasePlugin):
     config_schema: ClassVar[dict] = {
         "plugin": {
             "name": {"type": str, "default": "napcat_adapter_plugin"},
-            "version": {"type": str, "default": "2.0.0"},
+            "version": {"type": str, "default": "1.0.0"},
             "enabled": {"type": bool, "default": True},
         },
         "napcat_server": {
-            "mode": {
-                "type": str,
-                "default": "reverse",
-                "description": "连接模式：reverse=反向连接(作为服务器), forward=正向连接(作为客户端)",
-            },
             "host": {"type": str, "default": "localhost"},
             "port": {"type": int, "default": 8095},
-            "url": {"type": str, "default": "", "description": "正向连接时的完整URL"},
             "access_token": {"type": str, "default": ""},
         },
         "features": {
@@ -284,34 +244,18 @@ class NapcatAdapterPlugin(BasePlugin):
         },
     }
 
-    def __init__(self, plugin_dir: str = "", metadata: Any = None):
-        # 如果没有提供参数，创建一个默认的元数据
-        if metadata is None:
-            from src.plugin_system.base.plugin_metadata import PluginMetadata
-            metadata = PluginMetadata(
-                name=self.plugin_name,
-                version=self.plugin_version,
-                author=self.plugin_author,
-                description=self.plugin_description,
-                usage="",
-                dependencies=[],
-                python_dependencies=[],
-            )
-        
-        if not plugin_dir:
-            from pathlib import Path
-            plugin_dir = str(Path(__file__).parent)
-        
-        super().__init__(plugin_dir, metadata)
+    def __init__(self):
         self._adapter: Optional[NapcatAdapter] = None
 
     async def on_plugin_loaded(self):
         """插件加载时启动适配器"""
         logger.info("Napcat 适配器插件正在加载...")
 
-        # 获取核心 Sink
-        from src.common.core_sink import get_core_sink
-        core_sink = get_core_sink()
+        # 从 CoreSinkManager 获取 InProcessCoreSink
+        from src.common.core_sink_manager import get_core_sink_manager
+        
+        core_sink_manager = get_core_sink_manager()
+        core_sink = core_sink_manager.get_in_process_sink()
 
         # 创建并启动适配器
         self._adapter = NapcatAdapter(core_sink, plugin=self)

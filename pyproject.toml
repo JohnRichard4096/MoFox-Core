@@ -78,6 +78,7 @@ dependencies = [
     "inkfox>=0.1.1",
     "rjieba>=0.1.13",
     "fastmcp>=2.13.0",
+    "mofox-bus",
 ]
 
 [[tool.uv.index]]

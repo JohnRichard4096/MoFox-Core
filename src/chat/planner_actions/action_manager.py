@@ -1,9 +1,9 @@
 import asyncio
 import time
 import traceback
-from typing import Any
+from typing import Any, TYPE_CHECKING
 
-from src.chat.message_receive.chat_stream import ChatStream, get_chat_manager
+from src.chat.message_receive.chat_stream import get_chat_manager
 from src.chat.utils.timer_calculator import Timer
 from src.common.data_models.database_data_model import DatabaseMessages
 from src.common.logger import get_logger
@@ -13,6 +13,9 @@ from src.plugin_system.apis import database_api, generator_api, message_api, sen
 from src.plugin_system.base.base_action import BaseAction
 from src.plugin_system.base.component_types import ActionInfo, ComponentType
 from src.plugin_system.core.component_registry import component_registry
+
+if TYPE_CHECKING:
+    from src.chat.message_receive.chat_stream import ChatStream
 
 logger = get_logger("action_manager")
 
@@ -48,7 +51,7 @@ class ChatterActionManager:
         reasoning: str,
         cycle_timers: dict,
         thinking_id: str,
-        chat_stream: ChatStream,
+        chat_stream: "ChatStream",
         log_prefix: str,
         shutting_down: bool = False,
         action_message: DatabaseMessages | None = None,
@@ -476,7 +479,7 @@ class ChatterActionManager:
 
     async def _send_and_store_reply(
         self,
-        chat_stream: ChatStream,
+        chat_stream: "ChatStream",
         response_set,
         loop_start_time,
         action_message,

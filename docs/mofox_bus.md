@@ -2,6 +2,8 @@
 
 MoFox Bus 是 MoFox Bot 自研的统一消息中台，替换第三方 `maim_message`，将核心与各平台适配器之间的通信抽象成可拓展、可热插拔的组件。该库完全异步、面向高吞吐，覆盖消息建模、序列化、传输层、运行时路由、适配器工具等多个层面。
 
+> 现在已拆分为独立 pip 包：在项目根目录执行 `pip install -e ./packages/mofox-bus` 即可安装到当前 Python 环境。
+
 ---
 
 ## 1. 设计目标
@@ -14,7 +16,7 @@ MoFox Bus 是 MoFox Bot 自研的统一消息中台，替换第三方 `maim_mess
 
 ---
 
-## 2. 包结构概览（`src/mofox_bus/`）
+## 2. 包结构概览（`packages/mofox-bus/src/mofox_bus/`）
 
 | 模块 | 主要职责 |
 | --- | --- |

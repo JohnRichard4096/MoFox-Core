@@ -2,11 +2,11 @@ import asyncio
 import hashlib
 import time
 
-from mofox_bus import GroupInfo, UserInfo
 from rich.traceback import install
 from sqlalchemy.dialects.mysql import insert as mysql_insert
 from sqlalchemy.dialects.sqlite import insert as sqlite_insert
 
+from src.common.data_models.database_data_model import DatabaseGroupInfo,DatabaseUserInfo
 from src.common.data_models.database_data_model import DatabaseMessages
 from src.common.data_models.message_manager_data_model import StreamContext
 from src.plugin_system.base.component_types import ChatMode, ChatType
@@ -30,8 +30,8 @@ class ChatStream:
         self,
         stream_id: str,
         platform: str,
-        user_info: UserInfo | None = None,
-        group_info: GroupInfo | None = None,
+        user_info: DatabaseUserInfo | None = None,
+        group_info: DatabaseGroupInfo | None = None,
         data: dict | None = None,
     ):
         self.stream_id = stream_id
@@ -77,8 +77,8 @@ class ChatStream:
     @classmethod
     def from_dict(cls, data: dict) -> "ChatStream":
         """从字典创建实例"""
-        user_info = UserInfo.from_dict(data.get("user_info", {})) if data.get("user_info") else None
-        group_info = GroupInfo.from_dict(data.get("group_info", {})) if data.get("group_info") else None
+        user_info = DatabaseUserInfo.from_dict(data.get("user_info", {})) if data.get("user_info") else None
+        group_info = DatabaseGroupInfo.from_dict(data.get("group_info", {})) if data.get("group_info") else None
 
         instance = cls(
             stream_id=data["stream_id"],
@@ -369,7 +369,7 @@ class ChatManager:
         # logger.debug(f"注册消息到聊天流: {stream_id}")
 
     @staticmethod
-    def _generate_stream_id(platform: str, user_info: UserInfo | None, group_info: GroupInfo | None = None) -> str:
+    def _generate_stream_id(platform: str, user_info: DatabaseUserInfo | None, group_info: DatabaseGroupInfo | None = None) -> str:
         """生成聊天流唯一ID"""
         if not user_info and not group_info:
             raise ValueError("用户信息或群组信息必须提供")
@@ -392,7 +392,7 @@ class ChatManager:
         return hashlib.sha256(key.encode()).hexdigest()
 
     async def get_or_create_stream(
-        self, platform: str, user_info: UserInfo, group_info: GroupInfo | None = None
+        self, platform: str, user_info: DatabaseUserInfo, group_info: DatabaseGroupInfo | None = None
     ) -> ChatStream:
         """获取或创建聊天流 - 优化版本使用缓存机制"""
         try:
@@ -483,7 +483,7 @@ class ChatManager:
         return stream
 
     def get_stream_by_info(
-        self, platform: str, user_info: UserInfo, group_info: GroupInfo | None = None
+        self, platform: str, user_info: DatabaseUserInfo, group_info: DatabaseGroupInfo | None = None
     ) -> ChatStream | None:
         """通过信息获取聊天流"""
         stream_id = self._generate_stream_id(platform, user_info, group_info)

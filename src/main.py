@@ -6,17 +6,21 @@ import sys
 import time
 import traceback
 from collections.abc import Callable, Coroutine
-from functools import partial
 from random import choices
 from typing import Any
 
-from mofox_bus import InProcessCoreSink, MessageEnvelope
 from rich.traceback import install
 
 from src.chat.emoji_system.emoji_manager import get_emoji_manager
-from src.chat.message_receive.bot import chat_bot
+from chat.message_receive.message_handler import get_message_handler, shutdown_message_handler
 from src.chat.message_receive.chat_stream import get_chat_manager
 from src.chat.utils.statistic import OnlineTimeRecordTask, StatisticOutputTask
+from src.common.core_sink_manager import (
+    CoreSinkManager,
+    get_core_sink_manager,
+    initialize_core_sink_manager,
+    shutdown_core_sink_manager,
+)
 from src.common.logger import get_logger
 
 # 全局背景任务集合
@@ -55,28 +59,15 @@ EGG_PHRASES: list[tuple[str, int]] = [
 ]
 
 
-def _task_done_callback(task: asyncio.Task, message_id: str, start_time: float) -> None:
-    """后台任务完成时的回调函数"""
-    end_time = time.time()
-    duration = end_time - start_time
-    try:
-        task.result()  # 如果任务有异常，这里会重新抛出
-        logger.debug(f"消息 {message_id} 的后台任务 (ID: {id(task)}) 已成功完成, 耗时: {duration:.2f}s")
-    except asyncio.CancelledError:
-        logger.warning(f"消息 {message_id} 的后台任务 (ID: {id(task)}) 被取消, 耗时: {duration:.2f}s")
-    except Exception:
-        logger.error(f"处理消息 {message_id} 的后台任务 (ID: {id(task)}) 出现未捕获的异常, 耗时: {duration:.2f}s:")
-        logger.error(traceback.format_exc())
-
-
 class MainSystem:
     """主系统类，负责协调所有组件"""
 
     def __init__(self) -> None:
         self.individuality: Individuality = get_individuality()
 
-        # 创建核心消息接收器
-        self.core_sink: InProcessCoreSink = InProcessCoreSink(self._message_process_wrapper)
+        # CoreSinkManager 和 MessageHandler 将在 initialize() 中创建
+        self.core_sink_manager: CoreSinkManager | None = None
+        self.message_handler = None
         
         # 使用服务器
         self.server: Server = get_global_server()
@@ -163,10 +154,11 @@ class MainSystem:
                     continue
 
                 try:
+                    from src.plugin_system.base.component_types import ComponentType as CT
                     from src.plugin_system.core.component_registry import component_registry
 
                     component_class = component_registry.get_component_class(
-                        calc_name, ComponentType.INTEREST_CALCULATOR
+                        calc_name, CT.INTEREST_CALCULATOR
                     )
 
                     if not component_class:
@@ -299,6 +291,18 @@ class MainSystem:
         except Exception as e:
             logger.error(f"准备停止适配器管理器时出错: {e}")
 
+        # 停止 CoreSinkManager
+        try:
+            cleanup_tasks.append(("CoreSinkManager", shutdown_core_sink_manager()))
+        except Exception as e:
+            logger.error(f"准备停止 CoreSinkManager 时出错: {e}")
+
+        # 停止 MessageHandler
+        try:
+            cleanup_tasks.append(("MessageHandler", shutdown_message_handler()))
+        except Exception as e:
+            logger.error(f"准备停止 MessageHandler 时出错: {e}")
+
         # 并行执行所有清理任务
         if cleanup_tasks:
             logger.info(f"开始并行执行 {len(cleanup_tasks)} 个清理任务...")
@@ -352,27 +356,6 @@ class MainSystem:
         except Exception as e:
             logger.error(f"同步清理资源时出错: {e}")
 
-    async def _message_process_wrapper(self, envelope: MessageEnvelope) -> None:
-        """并行处理消息的包装器"""
-        try:
-            start_time = time.time()
-            message_id = envelope.get("message_info", {}).get("message_id", "UNKNOWN")
-            # 检查系统是否正在关闭
-            if self._shutting_down:
-                logger.warning(f"系统正在关闭，拒绝处理消息 {message_id}")
-                return
-
-            # 创建后台任务
-            task = asyncio.create_task(chat_bot.message_process(envelope))
-            logger.debug(f"已为消息 {message_id} 创建后台处理任务 (ID: {id(task)})")
-
-            # 添加一个回调函数，当任务完成时，它会被调用
-            task.add_done_callback(partial(_task_done_callback, message_id=message_id, start_time=start_time))
-        except Exception:
-            logger.error("在创建消息处理任务时发生严重错误:")
-            logger.error(traceback.format_exc())
-
-
     async def initialize(self) -> None:
         """初始化系统组件"""
         # 检查必要的配置
@@ -381,6 +364,18 @@ class MainSystem:
             raise ValueError("Bot配置不完整")
 
         logger.info(f"正在唤醒{global_config.bot.nickname}......")
+
+        # 初始化 CoreSinkManager（包含 MessageRuntime）
+        logger.info("正在初始化 CoreSinkManager...")
+        self.core_sink_manager = await initialize_core_sink_manager()
+        
+        # 获取 MessageHandler 并向 MessageRuntime 注册处理器
+        self.message_handler = get_message_handler()
+        self.message_handler.set_core_sink_manager(self.core_sink_manager)
+        
+        # 向 MessageRuntime 注册消息处理器和钩子
+        self.message_handler.register_handlers(self.core_sink_manager.runtime)
+        logger.info("CoreSinkManager 和 MessageHandler 初始化完成（使用 MessageRuntime 路由）")
 
         # 初始化组件
         await self._init_components()
@@ -453,7 +448,11 @@ MoFox_Bot(第三方修改版)
             logger.error(f"统一调度器初始化失败: {e}")
 
         # 设置核心消息接收器到插件管理器
-        plugin_manager.set_core_sink(self.core_sink)
+        # 使用 CoreSinkManager 的 InProcessCoreSink
+        if self.core_sink_manager:
+            plugin_manager.set_core_sink(self.core_sink_manager.get_in_process_sink())
+        else:
+            logger.error("CoreSinkManager 未初始化，无法设置核心消息接收器")
         
         # 加载所有插件
         plugin_manager.load_all_plugins()
@@ -505,8 +504,8 @@ MoFox_Bot(第三方修改版)
         except Exception as e:
             logger.error(f"LPMM知识库初始化失败: {e}")
 
-        # 消息接收器已经在 __init__ 中创建，无需再次注册
-        logger.info("核心消息接收器已就绪")
+        # 消息接收器已在 initialize() 中通过 CoreSinkManager 创建
+        logger.info("核心消息接收器已就绪（通过 CoreSinkManager）")
 
         # 启动消息重组器
         try:

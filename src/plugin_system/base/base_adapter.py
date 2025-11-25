@@ -62,8 +62,8 @@ class BaseAdapter(MoFoxAdapterBase, ABC):
         self._config: Dict[str, Any] = {}
         self._health_check_task: Optional[asyncio.Task] = None
         self._running = False
-        # 标记是否在子进程中运行（由核心管理器传入 ProcessCoreSink 时自动生效）
-        self._is_subprocess = isinstance(core_sink, ProcessCoreSink)
+        # 标记是否在子进程中运行
+        self._is_subprocess = False
 
     @classmethod
     def from_process_queues(
