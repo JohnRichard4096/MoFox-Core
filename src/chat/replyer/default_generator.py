@@ -1332,8 +1332,8 @@ class DefaultReplyer:
             ),
             "cross_context": asyncio.create_task(
                 self._time_and_run_task(
-                    Prompt.build_cross_context(chat_id, "s4u", target_user_info),
-                    "cross_context",
+                    # cross_context 的构建已移至 prompt.py
+                    asyncio.sleep(0, result=""), "cross_context"
                 )
             ),
             "notice_block": asyncio.create_task(
@@ -1521,6 +1521,8 @@ class DefaultReplyer:
 
         # 使用新的统一Prompt系统 - 创建PromptParameters
         prompt_parameters = PromptParameters(
+            platform=platform,
+            user_id=user_id,
             chat_scene=chat_scene_prompt,
             chat_id=chat_id,
             is_group_chat=is_group_chat,

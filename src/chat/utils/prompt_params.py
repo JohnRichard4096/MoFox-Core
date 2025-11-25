@@ -11,6 +11,8 @@ class PromptParameters:
 
     # 基础参数
     chat_id: str = ""
+    platform: str = ""
+    user_id: str = ""
     is_group_chat: bool = False
     sender: str = ""
     target: str = ""
