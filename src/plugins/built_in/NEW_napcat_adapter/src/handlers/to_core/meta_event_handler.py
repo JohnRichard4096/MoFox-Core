@@ -26,16 +26,4 @@ class MetaEventHandler:
     async def handle_meta_event(self, raw: Dict[str, Any]):
         """处理元事件"""
         # 简化版本：返回一个空的 MessageEnvelope
-        import time
-        import uuid
-        
-        return {
-            "direction": "incoming",
-            "message_info": {
-                "platform": "qq",
-                "message_id": str(uuid.uuid4()),
-                "time": time.time(),
-            },
-            "message_segment": {"type": "text", "data": "[元事件]"},
-            "timestamp_ms": int(time.time() * 1000),
-        }
+        pass

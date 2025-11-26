@@ -13,22 +13,19 @@ from datetime import datetime, timedelta
 from typing import Any, Literal, TYPE_CHECKING
 
 from src.chat.express.expression_selector import expression_selector
-from mofox_wire import MessageEnvelope
-from src.chat.message_receive.message import Seg, UserInfo
 from src.chat.message_receive.uni_message_sender import HeartFCSender
 from src.chat.utils.chat_message_builder import (
     build_readable_messages,
     get_raw_msg_before_timestamp_with_chat,
     replace_user_references_async,
 )
-from src.chat.utils.memory_mappings import get_memory_type_chinese_label
 
 # 导入新的统一Prompt系统
 from src.chat.utils.prompt import Prompt, global_prompt_manager
 from src.chat.utils.prompt_params import PromptParameters
 from src.chat.utils.timer_calculator import Timer
 from src.chat.utils.utils import get_chat_type_and_target_info
-from src.common.data_models.database_data_model import DatabaseMessages
+from src.common.data_models.database_data_model import DatabaseMessages, DatabaseUserInfo
 from src.common.logger import get_logger
 from src.config.config import global_config, model_config
 from src.individuality.individuality import get_individuality
@@ -920,7 +917,7 @@ class DefaultReplyer:
                 await stream_context.ensure_history_initialized()
 
                 # 直接使用内存中的已读和未读消息，无需再查询数据库
-                read_messages = stream_context.context.history_messages  # 已读消息（已从数据库加载）
+                read_messages = stream_context.history_messages  # 已读消息（已从数据库加载）
                 unread_messages = stream_context.get_unread_messages()  # 未读消息
 
                 # 构建已读历史消息 prompt
@@ -1762,63 +1759,6 @@ class DefaultReplyer:
         prompt_text = await prompt.build()
 
         return prompt_text
-
-    async def _build_single_sending_message(
-        self,
-        message_id: str,
-        message_segment: Seg,
-        reply_to: bool,
-        is_emoji: bool,
-        thinking_start_time: float,
-        display_message: str,
-        anchor_message: DatabaseMessages | None = None,
-    ) -> MessageEnvelope:
-        """构造单条发送消息的信封"""
-
-        bot_user_info = UserInfo(
-            user_id=str(global_config.bot.qq_account),
-            user_nickname=global_config.bot.nickname,
-            platform=self.chat_stream.platform,
-        )
-
-        base_segment = {"type": message_segment.type, "data": message_segment.data}
-        if reply_to and anchor_message and anchor_message.message_id:
-            segment_payload = {
-                "type": "seglist",
-                "data": [
-                    {"type": "reply", "data": anchor_message.message_id},
-                    base_segment,
-                ],
-            }
-        else:
-            segment_payload = base_segment
-
-        timestamp = thinking_start_time or time.time()
-        message_info = {
-            "message_id": message_id,
-            "time": timestamp,
-            "platform": self.chat_stream.platform,
-            "user_info": {
-                "user_id": bot_user_info.user_id,
-                "user_nickname": bot_user_info.user_nickname,
-                "platform": bot_user_info.platform,
-            },
-        }
-
-        if self.chat_stream.group_info:
-            message_info["group_info"] = {
-                "group_id": self.chat_stream.group_info.group_id,
-                "group_name": self.chat_stream.group_info.group_name,
-                "platform": self.chat_stream.group_info.platform,
-            }
-
-        return {
-            "id": str(uuid.uuid4()),
-            "direction": "outgoing",
-            "platform": self.chat_stream.platform,
-            "message_info": message_info,
-            "message_segment": segment_payload,
-        }
 
     async def llm_generate_content(self, prompt: str):
         with Timer("LLM生成", {}):  # 内部计时器，可选保留
