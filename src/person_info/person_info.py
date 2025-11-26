@@ -136,6 +136,113 @@ class PersonInfoManager:
             return ""
 
     @staticmethod
+    @cached(ttl=600, key_prefix="person_info_by_user_id", use_kwargs=False)
+    async def get_person_info_by_user_id(platform: str, user_id: str) -> dict | None:
+        """[新] 根据 platform 和 user_id 获取用户信息字典"""
+        if not platform or not user_id:
+            return None
+        
+        person_id = PersonInfoManager.get_person_id(platform, user_id)
+        crud = CRUDBase(PersonInfo)
+        record = await crud.get_by(person_id=person_id)
+        
+        if not record:
+            return None
+            
+        # 将 SQLAlchemy 模型对象转换为字典
+        return {c.name: getattr(record, c.name) for c in record.__table__.columns}
+
+    @staticmethod
+    @cached(ttl=600, key_prefix="person_info_by_person_id", use_kwargs=False)
+    async def get_person_info_by_person_id(person_id: str) -> dict | None:
+        """[新] 根据 person_id 获取用户信息字典"""
+        if not person_id:
+            return None
+        
+        crud = CRUDBase(PersonInfo)
+        record = await crud.get_by(person_id=person_id)
+        
+        if not record:
+            return None
+            
+        # 将 SQLAlchemy 模型对象转换为字典
+        return {c.name: getattr(record, c.name) for c in record.__table__.columns}
+
+    @staticmethod
+    async def get_person_id_by_name_robust(name: str) -> str | None:
+        """[新] 稳健地根据名称获取 person_id，按 person_name -> nickname 顺序回退"""
+        if not name:
+            return None
+
+        crud = CRUDBase(PersonInfo)
+        
+        # 1. 按 person_name 查询
+        records = await crud.get_multi(person_name=name, limit=1)
+        if records:
+            return records[0].person_id
+            
+        # 2. 按 nickname 查询
+        records = await crud.get_multi(nickname=name, limit=1)
+        if records:
+            return records[0].person_id
+
+        return None
+
+    @staticmethod
+    @staticmethod
+    @cached(ttl=600, key_prefix="person_info_by_name_robust", use_kwargs=False)
+    async def get_person_info_by_name_robust(name: str) -> dict | None:
+        """[新] 稳健地根据名称获取用户信息，按 person_name -> nickname 顺序回退"""
+        person_id = await PersonInfoManager.get_person_id_by_name_robust(name)
+        if person_id:
+            return await PersonInfoManager.get_person_info_by_person_id(person_id)
+        return None
+
+    @staticmethod
+    async def sync_user_info(platform: str, user_id: str, nickname: str | None, cardname: str | None) -> str:
+        """
+        [新] 同步用户信息。查询或创建用户，并更新易变信息（如昵称）。
+        返回 person_id。
+        """
+        if not platform or not user_id:
+            raise ValueError("platform 和 user_id 不能为空")
+
+        person_id = PersonInfoManager.get_person_id(platform, user_id)
+        crud = CRUDBase(PersonInfo)
+        record = await crud.get_by(person_id=person_id)
+
+        effective_name = cardname or nickname or "未知用户"
+
+        if record:
+            # 用户已存在，检查是否需要更新
+            updates = {}
+            if nickname and record.nickname != nickname:
+                updates["nickname"] = nickname
+            
+            if updates:
+                await crud.update(record.id, updates)
+                logger.debug(f"用户 {person_id} 信息已更新: {updates}")
+        else:
+            # 用户不存在，创建新用户
+            logger.info(f"新用户 {platform}:{user_id}，将创建记录。")
+            unique_person_name = await PersonInfoManager._generate_unique_person_name(effective_name)
+            
+            new_person_data = {
+                "person_id": person_id,
+                "platform": platform,
+                "user_id": str(user_id),
+                "nickname": nickname,
+                "person_name": unique_person_name,
+                "name_reason": "首次遇见时自动设置",
+                "know_since": int(time.time()),
+                "last_know": int(time.time()),
+            }
+            await PersonInfoManager._safe_create_person_info(person_id, new_person_data)
+
+        return person_id
+
+    @staticmethod
+    @staticmethod
     async def first_knowing_some_one(platform: str, user_id: str, user_nickname: str, user_cardname: str):
         """判断是否认识某人"""
         person_id = PersonInfoManager.get_person_id(platform, user_id)
