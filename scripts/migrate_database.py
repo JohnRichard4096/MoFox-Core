@@ -663,20 +663,21 @@ class DatabaseMigrator:
         self._drop_target_tables()
 
         # 开始迁移
-        with self.source_engine.connect() as source_conn, self.target_engine.connect() as target_conn:
+        with self.source_engine.connect() as source_conn:
             for source_table in tables:
                 try:
                     # 在目标库中创建表结构
                     target_table = copy_table_structure(source_table, MetaData(), self.target_engine)
 
-                    # 迁移数据
-                    migrated_rows, error_count = migrate_table_data(
-                        source_conn,
-                        target_conn,
-                        source_table,
-                        target_table,
-                        batch_size=self.batch_size,
-                    )
+                    # 每张表单独事务，避免退出上下文被自动回滚
+                    with self.target_engine.begin() as target_conn:
+                        migrated_rows, error_count = migrate_table_data(
+                            source_conn,
+                            target_conn,
+                            source_table,
+                            target_table,
+                            batch_size=self.batch_size,
+                        )
 
                     self.stats["tables_migrated"] += 1
                     self.stats["rows_migrated"] += migrated_rows
