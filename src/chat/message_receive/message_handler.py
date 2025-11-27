@@ -30,16 +30,16 @@ from __future__ import annotations
 import os
 import re
 import traceback
-from typing import TYPE_CHECKING, Any
+from typing import TYPE_CHECKING, Any, cast
 
-from mofox_wire import MessageEnvelope, MessageRuntime
+from mofox_wire import MessageEnvelope
 
 from src.chat.message_manager import message_manager
 from src.chat.message_receive.storage import MessageStorage
 from src.chat.utils.utils import is_mentioned_bot_in_message
 from src.common.data_models.database_data_model import DatabaseGroupInfo, DatabaseMessages, DatabaseUserInfo
 from src.common.logger import get_logger
-from src.config.config import global_config
+from src.config.config import Config, global_config
 from src.mood.mood_manager import mood_manager
 from src.plugin_system.base import BaseCommand, EventType
 from src.plugin_system.core import component_registry, event_manager, global_announcement_manager
@@ -48,6 +48,10 @@ if TYPE_CHECKING:
     from src.chat.message_receive.chat_stream import ChatStream
     from src.common.core_sink_manager import CoreSinkManager
 
+if TYPE_CHECKING:
+    from mofox_wire import MessageRuntime
+    global_config: Config | None
+
 logger = get_logger("message_handler")
 
 # 项目根目录
@@ -55,7 +59,13 @@ PROJECT_ROOT = os.path.abspath(os.path.join(os.path.dirname(__file__), "../.."))
 
 def _check_ban_words(text: str, chat: "ChatStream", userinfo) -> bool:
     """检查消息是否包含过滤词"""
-    for word in global_config.message_receive.ban_words:
+    if global_config:
+        for word in global_config.message_receive.ban_words:
+            if word in text:
+                chat_name = chat.group_info.group_name if chat.group_info else "私聊"
+                logger.info(f"[{chat_name}]{userinfo.user_nickname}:{text}")
+                logger.info(f"[过滤词识别]消息中含有{word}，filtered")
+                return True
         if word in text:
             chat_name = chat.group_info.group_name if chat.group_info else "私聊"
             logger.info(f"[{chat_name}]{userinfo.user_nickname}:{text}")
@@ -66,7 +76,13 @@ def _check_ban_words(text: str, chat: "ChatStream", userinfo) -> bool:
 
 def _check_ban_regex(text: str, chat: "ChatStream", userinfo) -> bool:
     """检查消息是否匹配过滤正则表达式"""
-    for pattern in global_config.message_receive.ban_msgs_regex:
+    if global_config:
+        for pattern in global_config.message_receive.ban_msgs_regex:
+            if re.search(pattern, text):
+                chat_name = chat.group_info.group_name if chat.group_info else "私聊"
+                logger.info(f"[{chat_name}]{userinfo.user_nickname}:{text}")
+                logger.info(f"[正则表达式过滤]消息匹配到{pattern}，filtered")
+                return True
         if re.search(pattern, text):
             chat_name = chat.group_info.group_name if chat.group_info else "私聊"
             logger.info(f"[{chat_name}]{userinfo.user_nickname}:{text}")
@@ -100,13 +116,13 @@ class MessageHandler:
         self._message_manager_started = False
         self._core_sink_manager: CoreSinkManager | None = None
         self._shutting_down = False
-        self._runtime: MessageRuntime | None = None
+        self._runtime: "MessageRuntime | None" = None
 
     def set_core_sink_manager(self, manager: "CoreSinkManager") -> None:
         """设置 CoreSinkManager 引用"""
         self._core_sink_manager = manager
 
-    def register_handlers(self, runtime: MessageRuntime) -> None:
+    def register_handlers(self, runtime: "MessageRuntime") -> None:
         """
         向 MessageRuntime 注册消息处理器和钩子
 
@@ -281,7 +297,7 @@ class MessageHandler:
             chat = await get_chat_manager().get_or_create_stream(
                 platform=platform,
                 user_info=DatabaseUserInfo.from_dict(user_info) if user_info else None,  # type: ignore
-                group_info=DatabaseGroupInfo.from_dict(group_info) if group_info else None,
+                group_info=DatabaseGroupInfo.from_dict(cast(dict, group_info)) if group_info else None,
             )
 
             # 将消息信封转换为 DatabaseMessages
@@ -431,7 +447,7 @@ class MessageHandler:
             chat = await get_chat_manager().get_or_create_stream(
                 platform=platform,
                 user_info=DatabaseUserInfo.from_dict(user_info) if user_info else None,  # type: ignore
-                group_info=DatabaseGroupInfo.from_dict(group_info) if group_info else None,
+                group_info=DatabaseGroupInfo.from_dict(cast(dict, group_info)) if group_info else None,
             )
 
             # 将消息信封转换为 DatabaseMessages
@@ -535,7 +551,7 @@ class MessageHandler:
             text = message.processed_plain_text or ""
 
             # 获取配置的命令前缀
-            prefixes = global_config.command.command_prefixes
+            prefixes = global_config.command.command_prefixes if global_config else []
 
             # 检查是否以任何前缀开头
             matched_prefix = None
@@ -707,7 +723,7 @@ class MessageHandler:
 
             # 检查是否需要处理消息
             should_process_in_manager = True
-            if group_info and str(group_info.group_id) in global_config.message_receive.mute_group_list:
+            if global_config and group_info and str(group_info.group_id) in global_config.message_receive.mute_group_list:
                 is_image_or_emoji = message.is_picid or message.is_emoji
                 if not message.is_mentioned and not is_image_or_emoji:
                     logger.debug(
@@ -731,7 +747,7 @@ class MessageHandler:
 
             # 情绪系统更新
             try:
-                if global_config.mood.enable_mood:
+                if global_config and global_config.mood.enable_mood:
                     interest_rate = message.interest_value or 0.0
                     logger.debug(f"开始更新情绪状态，兴趣度: {interest_rate:.2f}")
 

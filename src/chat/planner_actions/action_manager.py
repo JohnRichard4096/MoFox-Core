@@ -104,7 +104,7 @@ class ChatterActionManager:
                 log_prefix=log_prefix,
                 shutting_down=shutting_down,
                 plugin_config=plugin_config,
-                action_message=action_message,
+                action_message=action_message.flatten() if action_message else None,
             )
 
             logger.debug(f"创建Action实例成功: {action_name}")
@@ -252,7 +252,7 @@ class ChatterActionManager:
                 # 检查目标消息是否为表情包消息以及配置是否允许回复表情包
                 if target_message and getattr(target_message, "is_emoji", False):
                     # 如果是表情包消息且配置不允许回复表情包，则跳过回复
-                    if not getattr(global_config.chat, "allow_reply_to_emoji", True):
+                    if global_config and not getattr(global_config.chat, "allow_reply_to_emoji", True):
                         logger.info(f"{log_prefix} 目标消息为表情包且配置不允许回复表情包，跳过回复")
                         return {"action_type": action_name, "success": True, "reply_text": "", "skip_reason": "emoji_not_allowed"}
 
@@ -288,7 +288,7 @@ class ChatterActionManager:
                         reply_message=target_message,
                         action_data=action_data_with_mode,
                         available_actions=current_actions,  # type: ignore
-                        enable_tool=global_config.tool.enable_tool,
+                        enable_tool=global_config.tool.enable_tool if global_config else False,
                         request_type="chat.replyer",
                         from_plugin=False,
                     )
@@ -325,6 +325,7 @@ class ChatterActionManager:
                         thinking_id,
                         [],  # actions
                         should_quote_reply,  # 传递should_quote_reply参数
+                        action_data=action_data or {}
                     )
 
                     # 记录回复动作到目标消息
@@ -492,6 +493,7 @@ class ChatterActionManager:
         thinking_id,
         actions,
         should_quote_reply: bool | None = None,
+        action_data: dict | None = None
     ) -> tuple[str, dict[str, float]]:
         """
         发送并存储回复信息
@@ -509,11 +511,39 @@ class ChatterActionManager:
         Returns:
             Tuple[Dict[str, Any], str, Dict[str, float]]: 循环信息, 回复文本, 循环计时器
         """
-        # 发送回复
-        with Timer("回复发送", cycle_timers):
-            reply_text = await self.send_response(
-                chat_stream, response_set, loop_start_time, action_message, should_quote_reply
+        # 提取回复文本
+        reply_text = ""
+        for reply_seg in response_set:
+            if isinstance(reply_seg, tuple) and len(reply_seg) >= 2:
+                _, data = reply_seg
+            else:
+                data = str(reply_seg)
+            if isinstance(data, list):
+                data = "".join(map(str, data))
+            reply_text += data
+
+        # 检查是否需要@用户
+        at_user_id = action_data.get("at_user_id") if action_data else None
+        if at_user_id and chat_stream.group_info:
+            logger.info(f"检测到需要@用户: {at_user_id}，将使用 SEND_AT_MESSAGE 命令发送")
+            from src.plugins.built_in.napcat_adapter.src.event_models import CommandType
+            command_payload = {
+                "name": CommandType.SEND_AT_MESSAGE.name,
+                "args": {
+                    "qq_id": str(at_user_id),
+                    "text": reply_text
+                }
+            }
+            await send_api.command_to_stream(
+                command=command_payload,
+                stream_id=chat_stream.stream_id
             )
+        else:
+            # 正常发送回复
+            with Timer("回复发送", cycle_timers):
+                reply_text = await self.send_response(
+                    chat_stream, response_set, loop_start_time, action_message, should_quote_reply, action_data
+                )
 
         # 存储reply action信息
         person_info_manager = get_person_info_manager()
@@ -558,7 +588,7 @@ class ChatterActionManager:
         return reply_text, cycle_timers
 
     async def send_response(
-        self, chat_stream, reply_set, thinking_start_time, message_data, should_quote_reply: bool | None = None
+        self, chat_stream, reply_set, thinking_start_time, message_data, should_quote_reply: bool | None = None, action_data: dict | None = None
     ) -> str:
         """
         发送回复内容的具体实现
@@ -569,6 +599,7 @@ class ChatterActionManager:
             thinking_start_time: 思考开始时间
             message_data: 消息数据
             should_quote_reply: 是否应该引用回复原消息，None表示自动决定
+            action_data: 动作数据，用于检查是否需要@
 
         Returns:
             str: 完整的回复文本
@@ -597,6 +628,7 @@ class ChatterActionManager:
         logger.debug(f"[send_response] message_data: {message_data}")
 
         first_replied = False
+
         for reply_seg in reply_set:
             # 调试日志：验证reply_seg的格式
             logger.debug(f"Processing reply_seg type: {type(reply_seg)}, content: {reply_seg}")

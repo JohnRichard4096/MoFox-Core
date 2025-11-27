@@ -5,7 +5,7 @@ from __future__ import annotations
 import random
 import time
 import uuid
-from typing import TYPE_CHECKING, Any, Dict, List, Optional
+from typing import TYPE_CHECKING, Any, Dict, List, Optional, Union, cast, TypedDict
 
 from mofox_wire import MessageEnvelope, SegPayload, GroupInfoPayload, UserInfoPayload, MessageInfoPayload
 from src.common.logger import get_logger
@@ -17,6 +17,12 @@ logger = get_logger("napcat_adapter")
 
 if TYPE_CHECKING:
     from ....plugin import NapcatAdapter
+
+
+class AtPayload(TypedDict, total=False):
+    """@ 消息段数据"""
+
+    user_id: str
 
 
 class SendHandler:
@@ -41,10 +47,11 @@ class SendHandler:
             return
 
         message_segment = envelope.get("message_segment")
+        segment: SegPayload
         if isinstance(message_segment, list):
-            segment: SegPayload = {"type": "seglist", "data": message_segment}
+            segment = {"type": "seglist", "data": message_segment}
         else:
-            segment = message_segment or {}
+            segment = message_segment or {}  # type: ignore
 
         if segment:
             seg_type = segment.get("type")
@@ -66,11 +73,12 @@ class SendHandler:
         处理普通消息发送
         """
         logger.info("处理普通信息中")
-        message_info: MessageInfoPayload = envelope.get("message_info", {})
-        message_segment: SegPayload = envelope.get("message_segment", {})  # type: ignore[assignment]
+        message_info: MessageInfoPayload = envelope.get("message_info", {}) or {}
+        message_segment: Union[SegPayload, List[SegPayload]] = envelope.get("message_segment") or cast(SegPayload, {})
 
+        seg_data: SegPayload
         if isinstance(message_segment, list):
-            seg_data: SegPayload = {"type": "seglist", "data": message_segment}
+            seg_data = {"type": "seglist", "data": message_segment}
         else:
             seg_data = message_segment
 
@@ -81,7 +89,9 @@ class SendHandler:
         id_name: Optional[str] = None
         processed_message: list = []
         try:
-            processed_message = await self.handle_seg_recursive(seg_data, user_info or {})
+            processed_message = await self.handle_seg_recursive(
+                seg_data, cast(UserInfoPayload, user_info if user_info is not None else {})
+            )
         except Exception as e:
             logger.error(f"处理消息时发生错误: {e}")
             return None
@@ -123,10 +133,10 @@ class SendHandler:
         处理命令类
         """
         logger.debug("处理命令中")
-        message_info: Dict[str, Any] = envelope.get("message_info", {})
-        group_info: Optional[Dict[str, Any]] = message_info.get("group_info")
-        segment: SegPayload = envelope.get("message_segment", {})  # type: ignore[assignment]
-        seg_data: Dict[str, Any] = segment.get("data", {}) if isinstance(segment, dict) else {}
+        message_info: MessageInfoPayload = envelope.get("message_info", {}) or {}
+        group_info: Optional[GroupInfoPayload] = message_info.get("group_info")
+        segment: SegPayload = envelope.get("message_segment", {})  # type: ignore
+        seg_data: Dict[str, Any] = segment.get("data", {}) if isinstance(segment, dict) else {}  # type: ignore
         command_name: Optional[str] = seg_data.get("name")
         try:
             args = seg_data.get("args", {})
@@ -147,10 +157,10 @@ class SendHandler:
                 command, args_dict = self.handle_ai_voice_send_command(args, group_info)
             elif command_name == CommandType.SET_EMOJI_LIKE.name:
                 command, args_dict = self.handle_set_emoji_like_command(args)
-            elif command_name == CommandType.SEND_AT_MESSAGE.name:
-                command, args_dict = self.handle_at_message_command(args, group_info)
             elif command_name == CommandType.SEND_LIKE.name:
                 command, args_dict = self.handle_send_like_command(args)
+            elif command_name == CommandType.SEND_AT_MESSAGE.name:
+                command, args_dict = self.handle_at_message_command(args, group_info)
             else:
                 logger.error(f"未知命令: {command_name}")
                 return
@@ -176,8 +186,8 @@ class SendHandler:
         处理适配器命令类 - 用于直接向Napcat发送命令并返回结果
         """
         logger.info("处理适配器命令中")
-        segment: SegPayload = envelope.get("message_segment", {})  # type: ignore[assignment]
-        seg_data: Dict[str, Any] = segment.get("data", {}) if isinstance(segment, dict) else {}
+        segment: SegPayload = envelope.get("message_segment", {})  # type: ignore
+        seg_data: Dict[str, Any] = segment.get("data", {}) if isinstance(segment, dict) else {}  # type: ignore
 
         try:
             action = seg_data.get("action")
@@ -245,6 +255,9 @@ class SendHandler:
             if not text:
                 return payload
             new_payload = self.build_payload(payload, self.handle_text_message(str(text)), False)
+        elif seg_type == "at":
+            at_data: AtPayload = seg.get("data", {})  # type: ignore
+            new_payload = self.build_payload(payload, self.handle_at_message(at_data), False)
         elif seg_type == "face":
             logger.warning("MoFox-Bot 发送了qq原生表情，暂时不支持")
         elif seg_type == "image":
@@ -299,49 +312,20 @@ class SendHandler:
             payload.append(addon)
         return payload
 
-    async def handle_reply_message(self, message_id: str, user_info: UserInfoPayload) -> dict | list:
+    async def handle_reply_message(self, message_id: str, user_info: UserInfoPayload) -> dict:
         """处理回复消息"""
         logger.debug(f"开始处理回复消息，消息ID: {message_id}")
         reply_seg = {"type": "reply", "data": {"id": message_id}}
-
-        # 检查是否启用引用艾特功能
-        if not config_api.get_plugin_config(self.plugin_config, "features.enable_reply_at", False):
-            logger.info("引用艾特功能未启用，仅发送普通回复")
-            return reply_seg
-
-        try:
-            msg_info_response = await self.send_message_to_napcat("get_msg", {"message_id": message_id})
-            logger.debug(f"获取消息 {message_id} 的详情响应: {msg_info_response}")
-
-            replied_user_id = None
-            if msg_info_response and msg_info_response.get("status") == "ok":
-                sender_info = msg_info_response.get("data", {}).get("sender")
-                if sender_info:
-                    replied_user_id = sender_info.get("user_id")
-
-            if not replied_user_id:
-                logger.warning(f"无法获取消息 {message_id} 的发送者信息，跳过 @")
-                logger.debug(f"最终返回的回复段: {reply_seg}")
-                return reply_seg
-
-            if random.random() < config_api.get_plugin_config(self.plugin_config, "features.reply_at_rate", 0.5):
-                at_seg = {"type": "at", "data": {"qq": str(replied_user_id)}}
-                text_seg = {"type": "text", "data": {"text": " "}}
-                result_seg = [reply_seg, at_seg, text_seg]
-                logger.debug(f"最终返回的回复段: {result_seg}")
-                return result_seg
-
-        except Exception as e:
-            logger.error(f"处理引用回复并尝试@时出错: {e}")
-            logger.debug(f"最终返回的回复段: {reply_seg}")
-            return reply_seg
-
-        logger.debug(f"最终返回的回复段: {reply_seg}")
         return reply_seg
 
     def handle_text_message(self, message: str) -> dict:
         """处理文本消息"""
         return {"type": "text", "data": {"text": message}}
+
+    def handle_at_message(self, at_data: AtPayload) -> dict:
+        """处理@消息"""
+        user_id = at_data.get("user_id")
+        return {"type": "at", "data": {"qq": str(user_id)}}
 
     def handle_image_message(self, encoded_image: str) -> dict:
         """处理图片消息"""
@@ -370,14 +354,8 @@ class SendHandler:
 
     def handle_voice_message(self, encoded_voice: str) -> dict:
         """处理语音消息"""
-        use_tts = False
-        if self.plugin_config:
-            use_tts = config_api.get_plugin_config(self.plugin_config, "voice.use_tts", False)
-
-        if not use_tts:
-            logger.warning("未启用语音消息处理")
-            return {}
         if not encoded_voice:
+            logger.warning("接收到空的语音消息，跳过处理")
             return {}
         return {
             "type": "record",
@@ -416,7 +394,7 @@ class SendHandler:
         """处理删除消息命令"""
         return "delete_msg", {"message_id": args["message_id"]}
 
-    def handle_ban_command(self, args: Dict[str, Any], group_info: Optional[Dict[str, Any]]) -> tuple[str, Dict[str, Any]]:
+    def handle_ban_command(self, args: Dict[str, Any], group_info: Optional[GroupInfoPayload]) -> tuple[str, Dict[str, Any]]:
         """处理封禁命令"""
         duration: int = int(args["duration"])
         user_id: int = int(args["qq_id"])
@@ -436,7 +414,7 @@ class SendHandler:
             },
         )
 
-    def handle_whole_ban_command(self, args: Dict[str, Any], group_info: Optional[Dict[str, Any]]) -> tuple[str, Dict[str, Any]]:
+    def handle_whole_ban_command(self, args: Dict[str, Any], group_info: Optional[GroupInfoPayload]) -> tuple[str, Dict[str, Any]]:
         """处理全体禁言命令"""
         enable = args["enable"]
         assert isinstance(enable, bool), "enable参数必须是布尔值"
@@ -451,7 +429,7 @@ class SendHandler:
             },
         )
 
-    def handle_kick_command(self, args: Dict[str, Any], group_info: Optional[Dict[str, Any]]) -> tuple[str, Dict[str, Any]]:
+    def handle_kick_command(self, args: Dict[str, Any], group_info: Optional[GroupInfoPayload]) -> tuple[str, Dict[str, Any]]:
         """处理群成员踢出命令"""
         user_id: int = int(args["qq_id"])
         group_id: int = int(group_info["group_id"]) if group_info and group_info.get("group_id") else 0
@@ -468,7 +446,7 @@ class SendHandler:
             },
         )
 
-    def handle_poke_command(self, args: Dict[str, Any], group_info: Optional[Dict[str, Any]]) -> tuple[str, Dict[str, Any]]:
+    def handle_poke_command(self, args: Dict[str, Any], group_info: Optional[GroupInfoPayload]) -> tuple[str, Dict[str, Any]]:
         """处理戳一戳命令"""
         user_id: int = int(args["qq_id"])
         group_id: Optional[int] = None
@@ -515,31 +493,7 @@ class SendHandler:
             {"user_id": user_id, "times": times},
         )
 
-    def handle_at_message_command(self, args: Dict[str, Any], group_info: Optional[Dict[str, Any]]) -> tuple[str, Dict[str, Any]]:
-        """处理艾特并发送消息命令"""
-        at_user_id = args.get("qq_id")
-        text = args.get("text")
-
-        if not at_user_id or not text:
-            raise ValueError("艾特消息命令缺少 qq_id 或 text 参数")
-
-        if not group_info or not group_info.get("group_id"):
-            raise ValueError("艾特消息命令必须在群聊上下文中使用")
-
-        message_payload = [
-            {"type": "at", "data": {"qq": str(at_user_id)}},
-            {"type": "text", "data": {"text": " " + str(text)}},
-        ]
-
-        return (
-            "send_group_msg",
-            {
-                "group_id": group_info["group_id"],
-                "message": message_payload,
-            },
-        )
-
-    def handle_ai_voice_send_command(self, args: Dict[str, Any], group_info: Optional[Dict[str, Any]]) -> tuple[str, Dict[str, Any]]:
+    def handle_ai_voice_send_command(self, args: Dict[str, Any], group_info: Optional[GroupInfoPayload]) -> tuple[str, Dict[str, Any]]:
         """
         处理AI语音发送命令的逻辑。
         并返回 NapCat 兼容的 (action, params) 元组。
@@ -562,6 +516,30 @@ class SendHandler:
                 "group_id": group_id,
                 "text": text_content,
                 "character": character_id,
+            },
+        )
+
+    def handle_at_message_command(self, args: Dict[str, Any], group_info: Optional[GroupInfoPayload]) -> tuple[str, Dict[str, Any]]:
+        """处理艾特并发送消息命令"""
+        at_user_id = args.get("qq_id")
+        text = args.get("text")
+
+        if not at_user_id or not text:
+            raise ValueError("艾特消息命令缺少 qq_id 或 text 参数")
+
+        if not group_info or not group_info.get("group_id"):
+            raise ValueError("艾特消息命令必须在群聊上下文中使用")
+
+        message_payload = [
+            {"type": "at", "data": {"qq": str(at_user_id)}},
+            {"type": "text", "data": {"text": " " + str(text)}},
+        ]
+
+        return (
+            "send_group_msg",
+            {
+                "group_id": group_info["group_id"],
+                "message": message_payload,
             },
         )
 

@@ -37,6 +37,7 @@ class ReplyAction(BaseAction):
         "target_message_id": "要回复的目标消息ID（必需，来自未读消息的 <m...> 标签）",
         "content": "回复的具体内容（可选，由LLM生成）",
         "should_quote_reply": "是否引用原消息（可选，true/false，默认false。群聊中回复较早消息或需要明确指向时使用true）",
+        "at_user_id": "需要@的用户的QQ号（可选，string）。如果需要在回复中@某个用户，请提供此参数。",
     }
 
     # 动作使用场景
@@ -47,6 +48,7 @@ class ReplyAction(BaseAction):
         "私聊场景必须使用此动作（不支持 respond）",
         "群聊中需要明确回应某个特定用户或问题时使用",
         "关注单条消息的具体内容和上下文细节",
+        "如果回复时需要@某个用户，请在参数中提供'at_user_id'。",
     ]
 
     # 关联类型
@@ -83,6 +85,7 @@ class RespondAction(BaseAction):
     # 动作参数定义
     action_parameters: ClassVar = {
         "content": "回复的具体内容（可选，由LLM生成）",
+        "at_user_id": "需要@的用户的QQ号（可选，string）。如果需要在回复中@某个用户，请提供此参数。",
     }
 
     # 动作使用场景
@@ -93,6 +96,7 @@ class RespondAction(BaseAction):
         "关注对话流程、话题走向和整体氛围",
         "适合群聊中的自然对话流，无需精确指向特定消息",
         "可以同时回应多个话题或参与者",
+        "如果回复时需要@某个用户，请在参数中提供'at_user_id'。",
     ]
 
     # 关联类型

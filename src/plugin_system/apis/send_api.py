@@ -92,16 +92,20 @@ import traceback
 import uuid
 from typing import TYPE_CHECKING, Any
 
-from mofox_wire import MessageEnvelope
+from mofox_wire import MessageEnvelope, MessageInfoPayload, SegPayload
 from src.common.data_models.database_data_model import DatabaseUserInfo
 if TYPE_CHECKING:
     from src.common.data_models.database_data_model import DatabaseMessages
+    from src.config.config import Config
 
 # 导入依赖
 from src.chat.message_receive.chat_stream import ChatStream, get_chat_manager
 from src.chat.message_receive.uni_message_sender import HeartFCSender
 from src.common.logger import get_logger
 from src.config.config import global_config
+
+if TYPE_CHECKING:
+    assert global_config is not None
 
 # 日志记录器
 logger = get_logger("send_api")
@@ -193,32 +197,44 @@ def _build_message_envelope(
 ) -> MessageEnvelope:
     """构建发送的 MessageEnvelope 数据结构"""
     target_user_info = target_stream.user_info or bot_user_info
-    message_info: dict[str, Any] = {
+    message_info: MessageInfoPayload = {
         "message_id": message_id,
         "time": timestamp,
         "platform": target_stream.platform,
         "user_info": {
-            "user_id": target_user_info.user_id,
-            "user_nickname": target_user_info.user_nickname,
-            "user_cardname": getattr(target_user_info, "user_cardname", None),
-            "platform": target_user_info.platform,
+            "user_id": target_user_info.user_id or "",
+            "user_nickname": target_user_info.user_nickname or "",
+            "user_cardname": getattr(target_user_info, "user_cardname", "") or "",
+            "platform": target_user_info.platform or "",
         },
+        "group_info": None, # type: ignore
     }
 
     if target_stream.group_info:
         message_info["group_info"] = {
-            "group_id": target_stream.group_info.group_id,
-            "group_name": target_stream.group_info.group_name,
-            "platform": target_stream.group_info.platform,
+            "group_id": target_stream.group_info.group_id or "",
+            "group_name": target_stream.group_info.group_name or "",
+            "platform": target_stream.group_info.platform or "",
         }
 
-    return {
-        "id": str(uuid.uuid4()),
+    # Ensure message_segment is of the correct type
+    seg_payload: SegPayload
+    if isinstance(message_segment, list):
+        seg_payload = {"type": "seglist", "data": message_segment}
+    elif isinstance(message_segment, dict) and "type" in message_segment and "data" in message_segment:
+        seg_payload = message_segment # type: ignore
+    else:
+        # Fallback for simple string content or other unexpected formats
+        seg_payload = {"type": "text", "data": str(message_segment)}
+
+
+    envelope: MessageEnvelope = {
         "direction": "outgoing",
         "platform": target_stream.platform,
         "message_info": message_info,
-        "message_segment": message_segment,
+        "message_segment": seg_payload,
     }
+    return envelope
 
 
 
@@ -257,9 +273,18 @@ async def _send_to_target(
         current_time = time.time()
         message_id = f"send_api_{int(current_time * 1000)}"
 
+        # Use a safer way to get bot config
+        if not global_config:
+            logger.error("[SendAPI] Global config is not initialized!")
+            return False
+        bot_config = global_config.bot
+        if not bot_config:
+            logger.error("[SendAPI] Bot configuration not found!")
+            return False
+        
         bot_user_info = DatabaseUserInfo(
-            user_id=str(global_config.bot.qq_account),
-            user_nickname=global_config.bot.nickname,
+            user_id=str(bot_config.qq_account),
+            user_nickname=bot_config.nickname,
             platform=target_stream.platform,
         )
 
@@ -412,6 +437,30 @@ async def image_to_stream(
     )
 
 
+async def at_user_to_stream(
+    user_id: str,
+    stream_id: str,
+    display_text: str = "",
+    storage_message: bool = False,
+) -> bool:
+    """向指定流发送@用户消息
+    这是一个特殊的、独立的段，通常用于在发送文本之前先发送@信息
+
+    Args:
+        user_id: 要@的用户的ID
+        stream_id: 聊天流ID
+        display_text: 在数据库中存储的显示文本
+        storage_message: 是否存储此消息段到数据库
+
+    Returns:
+        bool: 是否发送成功
+    """
+    at_segment = {"qq": user_id}
+    return await _send_to_target(
+        "at", at_segment, stream_id, display_text, typing=False, storage_message=storage_message, set_reply=False
+    )
+
+
 async def command_to_stream(
     command: str | dict,
     stream_id: str,
@@ -518,9 +567,18 @@ async def adapter_command_to_stream(
         current_time = time.time()
         message_id = f"adapter_cmd_{int(current_time * 1000)}"
 
+        # Use a safer way to get bot config
+        if not global_config:
+            logger.error("[SendAPI] Global config is not initialized!")
+            return {"status": "error", "message": "Global config is not initialized"}
+        bot_config = global_config.bot
+        if not bot_config:
+            logger.error("[SendAPI] Bot configuration not found!")
+            return {"status": "error", "message": "Bot configuration not found"}
+
         bot_user_info = DatabaseUserInfo(
-            user_id=str(global_config.bot.qq_account),
-            user_nickname=global_config.bot.nickname,
+            user_id=str(bot_config.qq_account),
+            user_nickname=bot_config.nickname,
             platform=target_stream.platform,
         )
 

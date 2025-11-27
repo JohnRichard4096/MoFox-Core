@@ -38,6 +38,10 @@ from src.plugin_system.base.component_types import ActionInfo, EventType
 
 if TYPE_CHECKING:
     from src.chat.message_receive.chat_stream import ChatStream
+    from src.config.config import APIAdapterConfig, Config
+
+    global_config: "Config"
+    model_config: "APIAdapterConfig"
 
 logger = get_logger("replyer")
 
@@ -118,6 +122,10 @@ def init_prompt():
 {auth_role_prompt_block}
 
 {action_descriptions}
+
+- **关于@功能的重要说明**：
+  - 如果你需要在一个回复中`@`某个用户，**请不要**在你的回复内容中直接输出`@`符号或`艾特`等文字。
+  - 你应该使用`reply`或`respond`动作中的`at_user_id`参数。只需要将目标的QQ号填入该参数，系统就会自动为你完成`@`操作。
 
 ## 任务
 

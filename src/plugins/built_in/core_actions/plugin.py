@@ -63,7 +63,7 @@ class CoreActionsPlugin(BasePlugin):
         """返回插件包含的组件列表"""
 
         # --- 根据配置注册组件 ---
-        components: ClassVar = []
+        components = []
 
         # 注册 reply 动作
         if self.get_config("components.enable_reply", True):
