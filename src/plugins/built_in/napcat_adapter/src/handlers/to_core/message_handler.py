@@ -79,7 +79,7 @@ class MessageHandler:
 
             # 获取群聊配置
             group_list_type = features_config.get("group_list_type", "blacklist")
-            group_list = features_config.get("group_list", [])
+            group_list = [str(item) for item in features_config.get("group_list", [])]
 
             if group_list_type == "blacklist":
                 # 黑名单模式：如果在黑名单中就过滤
@@ -96,7 +96,7 @@ class MessageHandler:
         elif message_type == "private":
             # 获取私聊配置
             private_list_type = features_config.get("private_list_type", "blacklist")
-            private_list = features_config.get("private_list", [])
+            private_list = [str(item) for item in features_config.get("private_list", [])]
 
             if private_list_type == "blacklist":
                 # 黑名单模式：如果在黑名单中就过滤

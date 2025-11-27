@@ -50,6 +50,8 @@ class NapcatAdapter(BaseAdapter):
             host = config_api.get_plugin_config(plugin.config, "napcat_server.host", "localhost")
             port = config_api.get_plugin_config(plugin.config, "napcat_server.port", 8095)
             access_token = config_api.get_plugin_config(plugin.config, "napcat_server.access_token", "")
+            mode_str = config_api.get_plugin_config(plugin.config, "napcat_server.mode", "reverse")
+            ws_mode = "client" if mode_str == "direct" else "server"
 
             ws_url = f"ws://{host}:{port}"
             headers = {}
@@ -58,10 +60,11 @@ class NapcatAdapter(BaseAdapter):
         else:
             ws_url = "ws://127.0.0.1:8095"
             headers = {}
+            ws_mode = "server"
 
         # 配置 WebSocket 传输
         transport = WebSocketAdapterOptions(
-            mode="server",
+            mode=ws_mode,
             url=ws_url,
             headers=headers if headers else None,
         )
