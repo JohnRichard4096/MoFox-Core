@@ -1129,6 +1129,10 @@ class DefaultReplyer:
         if reply_to:
             # 兼容旧的reply_to
             sender, target = self._parse_reply_target(reply_to)
+            # 回退逻辑：为 'reply_to' 路径提供 platform 和 user_id 的回退值，以修复 UnboundLocalError
+            # 这样就不再强制要求必须有 user_id，解决了QQ空间插件等场景下的崩溃问题
+            platform = chat_stream.platform
+            user_id = ""
         else:
             # 对于 respond 动作，reply_message 可能为 None（统一回应未读消息）
             # 对于 reply 动作，reply_message 必须存在（针对特定消息回复）
