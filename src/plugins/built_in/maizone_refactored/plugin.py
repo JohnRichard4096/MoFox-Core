@@ -83,6 +83,9 @@ class MaiZoneRefactoredPlugin(BasePlugin):
             "http_fallback_port": ConfigField(type=int, default=9999, description="备用Cookie获取服务的端口"),
             "napcat_token": ConfigField(type=str, default="", description="Napcat服务的认证Token（可选）"),
         },
+        "cross_context": {
+            "user_id": ConfigField(type=str, default="", description="用于获取互通上下文的目标用户QQ号"),
+        },
     }
 
     permission_nodes: list[PermissionNodeField] = [
