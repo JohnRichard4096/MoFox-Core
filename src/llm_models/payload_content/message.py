@@ -1,4 +1,8 @@
+import base64
+import io
 from enum import Enum
+
+from PIL import Image
 
 # 设计这系列类的目的是为未来可能的扩展做准备
 
@@ -53,6 +57,35 @@ class MessageBuilder:
         self.__content.append(text)
         return self
 
+    def _convert_gif_to_png_frames(self, gif_base64: str, max_frames: int = 4) -> list[str]:
+        """将GIF的Base64编码分解为多个PNG帧的Base64编码列表"""
+        gif_bytes = base64.b64decode(gif_base64)
+        gif_image = Image.open(io.BytesIO(gif_bytes))
+        
+        frames = []
+        total_frames = getattr(gif_image, "n_frames", 1)
+        
+        # 如果总帧数小于等于最大帧数，则全部提取
+        if total_frames <= max_frames:
+            indices = range(total_frames)
+        else:
+            # 否则，在总帧数中均匀选取 max_frames 帧
+            indices = [int(i * (total_frames - 1) / (max_frames - 1)) for i in range(max_frames)]
+
+        for i in indices:
+            try:
+                gif_image.seek(i)
+                frame = gif_image.convert("RGBA")
+                
+                output_buffer = io.BytesIO()
+                frame.save(output_buffer, format="PNG")
+                png_bytes = output_buffer.getvalue()
+                frames.append(base64.b64encode(png_bytes).decode("utf-8"))
+            except EOFError:
+                # 到达文件末尾，停止提取
+                break
+        return frames
+
     def add_image_content(
         self,
         image_format: str,
@@ -60,18 +93,35 @@ class MessageBuilder:
         support_formats=None,  # 默认支持格式
     ) -> "MessageBuilder":
         """
-        添加图片内容
+        添加图片内容, 如果是GIF且模型不支持, 则会分解为最多4帧PNG图片。
         :param image_format: 图片格式
         :param image_base64: 图片的base64编码
         :return: MessageBuilder对象
         """
         if support_formats is None:
             support_formats = SUPPORTED_IMAGE_FORMATS
-        if image_format.lower() not in support_formats:
-            raise ValueError("不受支持的图片格式")
+
+        current_format = image_format.lower()
+
+        # 如果是GIF且模型不支持, 则分解为多个PNG帧
+        if current_format == "gif" and "gif" not in support_formats:
+            if "png" in support_formats:
+                png_frames_base64 = self._convert_gif_to_png_frames(image_base64)
+                for frame_base64 in png_frames_base64:
+                    if not frame_base64:
+                        continue
+                    self.__content.append(("png", frame_base64))
+                return self
+            else:
+                raise ValueError("模型不支持GIF, 且无法转换为PNG")
+
+        # 对于其他格式或模型支持GIF的情况
+        if current_format not in support_formats:
+            raise ValueError(f"不受支持的图片格式: {current_format}")
         if not image_base64:
             raise ValueError("图片的base64编码不能为空")
-        self.__content.append((image_format, image_base64))
+
+        self.__content.append((current_format, image_base64))
         return self
 
     def add_tool_call(self, tool_call_id: str) -> "MessageBuilder":

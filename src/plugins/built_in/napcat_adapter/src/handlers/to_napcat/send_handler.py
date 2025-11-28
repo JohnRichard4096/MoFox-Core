@@ -370,14 +370,8 @@ class SendHandler:
 
     def handle_voice_message(self, encoded_voice: str) -> dict:
         """处理语音消息"""
-        use_tts = False
-        if self.plugin_config:
-            use_tts = config_api.get_plugin_config(self.plugin_config, "voice.use_tts", False)
-
-        if not use_tts:
-            logger.warning("未启用语音消息处理")
-            return {}
         if not encoded_voice:
+            logger.warning("接收到空的语音消息，跳过处理")
             return {}
         return {
             "type": "record",
