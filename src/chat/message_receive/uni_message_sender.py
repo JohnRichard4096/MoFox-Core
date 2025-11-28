@@ -13,7 +13,7 @@ from mofox_wire import MessageEnvelope
 from src.chat.message_receive.message_processor import process_message_from_dict
 from src.chat.message_receive.storage import MessageStorage
 from src.chat.utils.utils import calculate_typing_time, truncate_message
-from src.common.data_models.database_data_model import DatabaseMessages
+from src.common.data_models.database_data_model import DatabaseMessages, DatabaseUserInfo
 from src.common.logger import get_logger
 from src.config.config import global_config
 
@@ -27,13 +27,13 @@ logger = get_logger("sender")
 
 async def send_envelope(
     envelope: MessageEnvelope,
-    chat_stream: "ChatStream" | None = None,
+    chat_stream: ChatStream | None = None,
     db_message: DatabaseMessages | None = None,
     show_log: bool = True,
 ) -> bool:
     """发送消息"""
     message_preview = truncate_message(
-        (db_message.processed_plain_text if db_message else str(envelope.get("message_segment", ""))),
+        (db_message.processed_plain_text or "" if db_message else str(envelope.get("message_segment", ""))),
         max_length=120,
     )
 
@@ -81,6 +81,7 @@ class HeartFCSender:
         show_log: bool = True,
         thinking_start_time: float = 0.0,
         display_message: str | None = None,
+        storage_user_info: "DatabaseUserInfo | None" = None,
     ) -> bool:
         if not chat_stream:
             logger.error("消息缺少 chat_stream，无法发送")
@@ -92,6 +93,13 @@ class HeartFCSender:
                 stream_id=chat_stream.stream_id,
                 platform=chat_stream.platform,
             )
+
+            # 如果提供了用于存储的用户信息，则覆盖
+            if storage_message and storage_user_info:
+                db_message.user_info.user_id = storage_user_info.user_id
+                db_message.user_info.user_nickname = storage_user_info.user_nickname
+                db_message.user_info.user_cardname = storage_user_info.user_cardname
+                db_message.user_info.platform = storage_user_info.platform
 
             # 使用调用方指定的展示文本
             if display_message:
@@ -125,9 +133,13 @@ class HeartFCSender:
 
                 # 将发送的消息写入上下文历史
                 try:
-                    if chat_stream.context:
+                    if chat_stream and chat_stream.context and global_config.chat:
                         context = chat_stream.context
-                        max_context_size = getattr(global_config.chat, "max_context_size", 40)
+                        chat_config = global_config.chat
+                        if chat_config:
+                            max_context_size = getattr(chat_config, "max_context_size", 40)
+                        else:
+                            max_context_size = 40
 
                         if len(context.history_messages) >= max_context_size:
                             context.history_messages = context.history_messages[1:]

@@ -54,6 +54,7 @@ class ImageManager:
             self._ensure_image_dir()
 
             self._initialized = True
+            assert model_config is not None
             self.vlm = LLMRequest(model_set=model_config.model_task_config.vlm, request_type="image")
 
             # try:
@@ -189,7 +190,7 @@ class ImageManager:
                 return "[表情包(描述生成失败)]"
 
             # 4. (可选) 如果启用了“偷表情包”，则将图片和完整描述存入待注册区
-            if global_config.emoji.steal_emoji:
+            if global_config and global_config.emoji and global_config.emoji.steal_emoji:
                 logger.debug(f"偷取表情包功能已开启，保存待注册表情包: {image_hash}")
                 try:
                     image_format = (Image.open(io.BytesIO(image_bytes)).format or "jpeg").lower()
@@ -226,6 +227,22 @@ class ImageManager:
             image_bytes = base64.b64decode(image_base64)
             image_hash = hashlib.md5(image_bytes).hexdigest()
 
+            # 1.5. 如果是GIF，先转换为JPG
+            try:
+                image_format_check = (Image.open(io.BytesIO(image_bytes)).format or "jpeg").lower()
+                if image_format_check == "gif":
+                    logger.info(f"检测到GIF图片 (Hash: {image_hash[:8]}...)，正在转换为JPG...")
+                    if transformed_b64 := self.transform_gif(image_base64):
+                        image_base64 = transformed_b64
+                        image_bytes = base64.b64decode(image_base64)
+                        logger.info("GIF转换成功，将使用转换后的图片进行描述")
+                    else:
+                        logger.error("GIF转换失败，无法生成描述")
+                        return "[图片(GIF转换失败)]"
+            except Exception as e:
+                logger.warning(f"图片格式检测失败: {e!s}，将按原格式处理")
+
+
             # 2. 优先查询 Images 表缓存
             async with get_db_session() as session:
                 result = await session.execute(select(Images).where(Images.emoji_hash == image_hash))
@@ -242,6 +259,8 @@ class ImageManager:
             # 4. 如果都未命中，则同步调用VLM生成新描述
             logger.info(f"[新图片识别] 无缓存 (Hash: {image_hash[:8]}...)，调用VLM生成描述")
             description = None
+            assert global_config is not None
+            assert global_config.custom_prompt is not None
             prompt = global_config.custom_prompt.image_prompt
             logger.info(f"[识图VLM调用] Prompt: {prompt}")
             for i in range(3):  # 重试3次

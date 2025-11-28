@@ -1107,28 +1107,22 @@ class EmojiManager:
                 if emoji_base64 is None:  # 再次检查读取
                     logger.error(f"[注册失败] 无法读取图片以生成描述: {filename}")
                     return False
-                task = asyncio.create_task(self.build_emoji_description(emoji_base64))
                 
-                def after_built_description(fut: asyncio.Future):
-                    if fut.cancelled():
-                        logger.error(f"[注册失败] 描述生成任务被取消: {filename}")
-                    elif fut.exception():
-                        logger.error(f"[注册失败] 描述生成任务出错 ({filename}): {fut.exception()}")
-                    else:
-                        description, emotions = fut.result()
+                # 等待描述生成完成
+                description, emotions = await self.build_emoji_description(emoji_base64)
 
-                        if not description:  # 检查描述是否成功生成或审核通过
-                            logger.warning(f"[注册失败] 未能生成有效描述或审核未通过: {filename}")
-                            # 删除未能生成描述的文件
-                            try:
-                                os.remove(file_full_path)
-                                logger.info(f"[清理] 删除描述生成失败的文件: {filename}")
-                            except Exception as e:
-                                logger.error(f"[错误] 删除描述生成失败文件时出错: {e!s}")
-                            return False
-                        new_emoji.description = description
-                        new_emoji.emotion = emotions
-                task.add_done_callback(after_built_description)
+                if not description:  # 检查描述是否成功生成或审核通过
+                    logger.warning(f"[注册失败] 未能生成有效描述或审核未通过: {filename}")
+                    # 删除未能生成描述的文件
+                    try:
+                        os.remove(file_full_path)
+                        logger.info(f"[清理] 删除描述生成失败的文件: {filename}")
+                    except Exception as e:
+                        logger.error(f"[错误] 删除描述生成失败文件时出错: {e!s}")
+                    return False
+                
+                new_emoji.description = description
+                new_emoji.emotion = emotions
             except Exception as build_desc_error:
                 logger.error(f"[注册失败] 生成描述/情感时出错 ({filename}): {build_desc_error}")
                 # 同样考虑删除文件

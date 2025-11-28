@@ -126,6 +126,12 @@ async def get_db_session_direct() -> AsyncGenerator[AsyncSession, None]:
     用于特殊场景，如需要完全独立的连接时。
     一般情况下应使用 get_db_session()。
 
+    事务管理说明：
+    - 正常退出时自动提交事务
+    - 发生异常时自动回滚事务
+    - 如果用户代码已手动调用 commit/rollback，再次调用是安全的
+    - 适用于所有数据库类型（SQLite, MySQL, PostgreSQL）
+
     Yields:
         AsyncSession: SQLAlchemy异步会话对象
     """
@@ -139,8 +145,16 @@ async def get_db_session_direct() -> AsyncGenerator[AsyncSession, None]:
             await _apply_session_settings(session, global_config.database.database_type)
 
             yield session
+
+            # 正常退出时提交事务
+            # 这对所有数据库都很重要，因为 SQLAlchemy 默认不是 autocommit 模式
+            # 检查事务是否活动，避免在已回滚的事务上提交
+            if session.is_active:
+                await session.commit()
         except Exception:
-            await session.rollback()
+            # 检查是否需要回滚（事务是否活动）
+            if session.is_active:
+                await session.rollback()
             raise
         finally:
             await session.close()

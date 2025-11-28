@@ -49,14 +49,6 @@ class EmojiAction(BaseAction):
     ----------------------------------------
     """
 
-    # ========== 以下使用旧的激活配置（已废弃但兼容） ==========
-    # 激活设置
-    if global_config.emoji.emoji_activate_type == "llm":
-        activation_type = ActionActivationType.LLM_JUDGE
-        random_activation_probability = 0
-    else:
-        activation_type = ActionActivationType.RANDOM
-        random_activation_probability = global_config.emoji.emoji_chance
     mode_enable = ChatMode.ALL
     parallel_action = True
 
@@ -88,6 +80,15 @@ class EmojiAction(BaseAction):
     # 关联类型
     associated_types: ClassVar[list[str]] = ["emoji"]
 
+    async def go_activate(self, chat_content: str = "", llm_judge_model=None) -> bool:
+        """根据配置选择激活方式"""
+        assert global_config is not None
+        if global_config.emoji.emoji_activate_type == "llm":
+            return await self._llm_judge_activation(
+                judge_prompt=self.llm_judge_prompt, llm_judge_model=llm_judge_model
+            )
+        return await self._random_activation(global_config.emoji.emoji_chance)
+
     async def execute(self) -> tuple[bool, str]:
         """执行表情动作"""
         logger.info(f"{self.log_prefix} 决定发送表情")
@@ -95,6 +96,7 @@ class EmojiAction(BaseAction):
         try:
             # 1. 获取发送表情的原因
             reason = self.action_data.get("reason", "表达当前情绪")
+            main_reply_content = self.action_data.get("main_reply_content", "")
             logger.info(f"{self.log_prefix} 发送表情原因: {reason}")
 
             # 2. 获取所有有效的表情包对象
@@ -108,7 +110,7 @@ class EmojiAction(BaseAction):
 
             # 3. 根据历史记录筛选表情
             try:
-                recent_emojis_desc = get_recent_emojis(self.chat_id, limit=10)
+                recent_emojis_desc = get_recent_emojis(self.chat_id, limit=20)
                 if recent_emojis_desc:
                     filtered_emojis = [emoji for emoji in all_emojis_obj if emoji.description not in recent_emojis_desc]
                     if filtered_emojis:
@@ -120,8 +122,8 @@ class EmojiAction(BaseAction):
                 logger.error(f"{self.log_prefix} 获取或处理表情发送历史时出错: {e}")
 
             # 4. 准备情感数据和后备列表
-            emotion_map: ClassVar = {}
-            all_emojis_data: ClassVar = []
+            emotion_map = {}
+            all_emojis_data = []
 
             for emoji in all_emojis_obj:
                 b64 = image_path_to_base64(emoji.full_path)
@@ -146,14 +148,15 @@ class EmojiAction(BaseAction):
             chosen_emotion = "表情包"  # 默认描述，避免变量未定义错误
 
             # 4. 根据配置选择不同的表情选择模式
+            assert global_config is not None
             if global_config.emoji.emoji_selection_mode == "emotion":
                 # --- 情感标签选择模式 ---
                 if not available_emotions:
                     logger.warning(f"{self.log_prefix} 获取到的表情包均无情感标签, 将随机发送")
                     emoji_base64, emoji_description = random.choice(all_emojis_data)
                 else:
-                    # 获取最近的5条消息内容用于判断
-                    recent_messages = await message_api.get_recent_messages(chat_id=self.chat_id, limit=5)
+                    # 获取最近的20条消息内容用于判断
+                    recent_messages = await message_api.get_recent_messages(chat_id=self.chat_id, limit=20)
                     messages_text = ""
                     if recent_messages:
                         messages_text = await message_api.build_readable_messages(
@@ -164,8 +167,15 @@ class EmojiAction(BaseAction):
                         )
 
                     # 构建prompt让LLM选择情感
+                    prompt_addition = ""
+                    if main_reply_content:
+                        prompt_addition = f"""
+                    这是你刚刚生成、准备发送的消息：
+                    "{main_reply_content}"
+                    """
                     prompt = f"""
-                    你是一个正在进行聊天的网友，你需要根据一个理由和最近的聊天记录，从一个情感标签列表中选择最匹配的一个。
+                    你是一个正在进行聊天的网友，你需要根据一个理由、最近的聊天记录以及你自己将要发送的消息，从一个情感标签列表中选择最匹配的一个。
+                    {prompt_addition}
                     这是最近的聊天记录：
                     {messages_text}
 
@@ -174,10 +184,8 @@ class EmojiAction(BaseAction):
                     请直接返回最匹配的那个情感标签，不要进行任何解释或添加其他多余的文字。
                     """
 
-                    if global_config.debug.show_prompt:
-                        logger.info(f"{self.log_prefix} 生成的LLM Prompt: {prompt}")
-                    else:
-                        logger.debug(f"{self.log_prefix} 生成的LLM Prompt: {prompt}")
+                    assert global_config is not None
+                    logger.debug(f"{self.log_prefix} 生成的LLM Prompt: {prompt}")
 
                     # 调用LLM
                     models = llm_api.get_available_models()
@@ -211,10 +219,11 @@ class EmojiAction(BaseAction):
                             )
                             emoji_base64, emoji_description = random.choice(all_emojis_data)
 
-            elif global_config.emoji.emoji_selection_mode == "description":
+            assert global_config is not None
+            if global_config.emoji.emoji_selection_mode == "description":
                 # --- 详细描述选择模式 ---
                 # 获取最近的5条消息内容用于判断
-                recent_messages = await message_api.get_recent_messages(chat_id=self.chat_id, limit=5)
+                recent_messages = await message_api.get_recent_messages(chat_id=self.chat_id, limit=20)
                 messages_text = ""
                 if recent_messages:
                     messages_text = await message_api.build_readable_messages(
@@ -234,8 +243,15 @@ class EmojiAction(BaseAction):
                 emoji_descriptions = [extract_refined_info(desc) for _, desc in all_emojis_data]
 
                 # 构建prompt让LLM选择描述
+                prompt_addition = ""
+                if main_reply_content:
+                    prompt_addition = f"""
+                这是你刚刚生成、准备发送的消息：
+                "{main_reply_content}"
+                """
                 prompt = f"""
-                你是一个正在进行聊天的网友，你需要根据一个理由和最近的聊天记录，从一个表情包描述列表中选择最匹配的一个。
+                你是一个正在进行聊天的网友，你需要根据一个理由、最近的聊天记录以及你自己将要发送的消息，从一个表情包描述列表中选择最匹配的一个。
+                {prompt_addition}
                 这是最近的聊天记录：
                 {messages_text}
 
@@ -264,44 +280,22 @@ class EmojiAction(BaseAction):
                     chosen_emotion = chosen_description  # 在描述模式下，用描述作为情感标签
                     logger.info(f"{self.log_prefix} LLM选择的描述: {chosen_description}")
 
-                    # 优化匹配逻辑：优先在精炼描述中精确匹配，然后进行关键词匹配
-                    def extract_refined_info(full_desc: str) -> str:
-                        return full_desc.split(" Desc:")[0].strip()
-
-                    # 1. 尝试在精炼描述中找到最匹配的表情
-                    # 我们假设LLM返回的是精炼描述的一部分或全部
+                    # 使用更鲁棒的子字符串匹配逻辑
                     matched_emoji = None
-                    best_match_score = 0
-
-                    for item in all_emojis_data:
-                        refined_info = extract_refined_info(item[1])
-                        # 计算一个简单的匹配分数
-                        score = 0
-                        if chosen_description.lower() in refined_info.lower():
-                            score += 2 # 包含匹配
-                        if refined_info.lower() in chosen_description.lower():
-                            score += 2 # 包含匹配
-
-                        # 关键词匹配加分
-                        chosen_keywords = re.findall(r"\w+", chosen_description.lower())
-                        item_keywords = re.findall(r"\[(.*?)\]", refined_info)
-                        if item_keywords:
-                            item_keywords_set = {k.strip().lower() for k in item_keywords[0].split(",")}
-                            for kw in chosen_keywords:
-                                if kw in item_keywords_set:
-                                    score += 1
-
-                        if score > best_match_score:
-                            best_match_score = score
-                            matched_emoji = item
+                    for b64, desc in all_emojis_data:
+                        # 检查LLM返回的描述是否是数据库中某个表情完整描述的一部分
+                        if chosen_description in desc:
+                            matched_emoji = (b64, desc)
+                            break
 
                     if matched_emoji:
                         emoji_base64, emoji_description = matched_emoji
-                        logger.info(f"{self.log_prefix} 找到匹配描述的表情包: {extract_refined_info(emoji_description)}")
+                        logger.info(f"{self.log_prefix} 找到匹配描述的表情包: {emoji_description}")
                     else:
                         logger.warning(f"{self.log_prefix} LLM选择的描述无法匹配任何表情包, 将随机选择")
                         emoji_base64, emoji_description = random.choice(all_emojis_data)
             else:
+                assert global_config is not None
                 logger.error(f"{self.log_prefix} 无效的表情选择模式: {global_config.emoji.emoji_selection_mode}")
                 return False, "无效的表情选择模式"
 

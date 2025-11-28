@@ -17,7 +17,7 @@ from typing import Any, TypeVar
 
 from sqlalchemy import delete, insert, select, update
 
-from src.common.database.core.session import get_db_session
+from src.common.database.core.session import get_db_session_direct
 from src.common.logger import get_logger
 from src.common.memory_utils import estimate_size_smart
 
@@ -330,7 +330,7 @@ class AdaptiveBatchScheduler:
         operations: list[BatchOperation],
     ) -> None:
         """批量执行查询操作"""
-        async with get_db_session() as session:
+        async with get_db_session_direct() as session:
             for op in operations:
                 try:
                     # 构建查询
@@ -371,7 +371,7 @@ class AdaptiveBatchScheduler:
         operations: list[BatchOperation],
     ) -> None:
         """批量执行插入操作"""
-        async with get_db_session() as session:
+        async with get_db_session_direct() as session:
             try:
                 # 收集数据，并过滤掉 id=None 的情况（让数据库自动生成）
                 all_data = []
@@ -387,7 +387,7 @@ class AdaptiveBatchScheduler:
                 # 批量插入
                 stmt = insert(operations[0].model_class).values(all_data)
                 await session.execute(stmt)
-                await session.commit()
+                # 注意：commit 由 get_db_session_direct 上下文管理器自动处理
 
                 # 设置结果
                 for op in operations:
@@ -402,20 +402,21 @@ class AdaptiveBatchScheduler:
 
             except Exception as e:
                 logger.error(f"批量插入失败: {e}")
-                await session.rollback()
+                # 注意：rollback 由 get_db_session_direct 上下文管理器自动处理
                 for op in operations:
                     if op.future and not op.future.done():
                         op.future.set_exception(e)
+                raise  # 重新抛出异常以触发 rollback
 
     async def _execute_update_batch(
         self,
         operations: list[BatchOperation],
     ) -> None:
         """批量执行更新操作"""
-        async with get_db_session() as session:
+        async with get_db_session_direct() as session:
             results = []
             try:
-                # 🔧 修复：收集所有操作后一次性commit，而不是循环中多次commit
+                # 🔧 收集所有操作后一次性commit，而不是循环中多次commit
                 for op in operations:
                     # 构建更新语句
                     stmt = update(op.model_class)
@@ -430,8 +431,7 @@ class AdaptiveBatchScheduler:
                     result = await session.execute(stmt)
                     results.append((op, result.rowcount))
 
-                # 所有操作成功后，一次性commit
-                await session.commit()
+                # 注意：commit 由 get_db_session_direct 上下文管理器自动处理
 
                 # 设置所有操作的结果
                 for op, rowcount in results:
@@ -446,21 +446,22 @@ class AdaptiveBatchScheduler:
 
             except Exception as e:
                 logger.error(f"批量更新失败: {e}")
-                await session.rollback()
+                # 注意：rollback 由 get_db_session_direct 上下文管理器自动处理
                 # 所有操作都失败
                 for op in operations:
                     if op.future and not op.future.done():
                         op.future.set_exception(e)
+                raise  # 重新抛出异常以触发 rollback
 
     async def _execute_delete_batch(
         self,
         operations: list[BatchOperation],
     ) -> None:
         """批量执行删除操作"""
-        async with get_db_session() as session:
+        async with get_db_session_direct() as session:
             results = []
             try:
-                # 🔧 修复：收集所有操作后一次性commit，而不是循环中多次commit
+                # 🔧 收集所有操作后一次性commit，而不是循环中多次commit
                 for op in operations:
                     # 构建删除语句
                     stmt = delete(op.model_class)
@@ -472,8 +473,7 @@ class AdaptiveBatchScheduler:
                     result = await session.execute(stmt)
                     results.append((op, result.rowcount))
 
-                # 所有操作成功后，一次性commit
-                await session.commit()
+                # 注意：commit 由 get_db_session_direct 上下文管理器自动处理
 
                 # 设置所有操作的结果
                 for op, rowcount in results:
@@ -488,11 +488,12 @@ class AdaptiveBatchScheduler:
 
             except Exception as e:
                 logger.error(f"批量删除失败: {e}")
-                await session.rollback()
+                # 注意：rollback 由 get_db_session_direct 上下文管理器自动处理
                 # 所有操作都失败
                 for op in operations:
                     if op.future and not op.future.done():
                         op.future.set_exception(e)
+                raise  # 重新抛出异常以触发 rollback
 
     async def _adjust_parameters(self) -> None:
         """根据性能自适应调整参数"""

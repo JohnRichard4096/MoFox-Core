@@ -192,6 +192,7 @@ def _build_message_envelope(
     timestamp: float,
 ) -> MessageEnvelope:
     """构建发送的 MessageEnvelope 数据结构"""
+    # 这里的 user_info 决定了消息要发给谁，所以在私聊场景下必须是目标用户
     target_user_info = target_stream.user_info or bot_user_info
     message_info: dict[str, Any] = {
         "message_id": message_id,
@@ -212,7 +213,7 @@ def _build_message_envelope(
             "platform": target_stream.group_info.platform,
         }
 
-    return {
+    return {  # type: ignore
         "id": str(uuid.uuid4()),
         "direction": "outgoing",
         "platform": target_stream.platform,
@@ -257,9 +258,14 @@ async def _send_to_target(
         current_time = time.time()
         message_id = f"send_api_{int(current_time * 1000)}"
 
+        bot_config = global_config.bot
+        if not bot_config:
+            logger.error("机器人配置丢失，无法构建机器人用户信息")
+            return False
+
         bot_user_info = DatabaseUserInfo(
-            user_id=str(global_config.bot.qq_account),
-            user_nickname=global_config.bot.nickname,
+            user_id=str(bot_config.qq_account),
+            user_nickname=bot_config.nickname,
             platform=target_stream.platform,
         )
 
@@ -328,6 +334,7 @@ async def _send_to_target(
             show_log=show_log,
             thinking_start_time=current_time,
             display_message=display_message_for_db,
+            storage_user_info=bot_user_info,
         )
 
         if sent_msg:

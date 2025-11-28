@@ -134,7 +134,7 @@ class MessageHandler:
             predicate=_is_adapter_response,
             handler=self._handle_adapter_response_route,
             name="adapter_response_handler",
-            message_type="adapter_response",
+            priority=100
         )
 
         # 注册 notice 消息处理器（处理通知消息，如戳一戳、禁言等）
@@ -152,7 +152,7 @@ class MessageHandler:
             predicate=_is_notice_message,
             handler=self._handle_notice_message,
             name="notice_message_handler",
-            message_type="notice",
+            priority=90
         )
 
         # 注册默认消息处理器（处理所有其他消息）
@@ -160,6 +160,7 @@ class MessageHandler:
             predicate=lambda _: True,  # 匹配所有消息
             handler=self._handle_normal_message,
             name="default_message_handler",
+            priority=50
         )
 
         logger.info("MessageHandler 已向 MessageRuntime 注册处理器和钩子")
@@ -314,7 +315,7 @@ class MessageHandler:
             # 触发 notice 事件（可供插件监听）
             await event_manager.trigger_event(
                 EventType.ON_NOTICE_RECEIVED,
-                permission_group="USER",
+                permission_group="SYSTEM",
                 message=message,
                 notice_type=notice_type,
                 chat_stream=chat,

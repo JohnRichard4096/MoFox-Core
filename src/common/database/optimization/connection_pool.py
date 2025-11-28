@@ -123,6 +123,12 @@ class ConnectionPoolManager:
         """
         获取数据库会话的透明包装器
         如果有可用连接则复用，否则创建新连接
+
+        事务管理说明：
+        - 正常退出时自动提交事务
+        - 发生异常时自动回滚事务
+        - 如果用户代码已手动调用 commit/rollback，再次调用是安全的（空操作）
+        - 支持所有数据库类型：SQLite、MySQL、PostgreSQL
         """
         connection_info = None
 
@@ -151,21 +157,30 @@ class ConnectionPoolManager:
 
             yield connection_info.session
 
-            # 🔧 修复：正常退出时提交事务
-            # 这对SQLite至关重要，因为SQLite没有autocommit
+            # 🔧 正常退出时提交事务
+            # 这对所有数据库（SQLite、MySQL、PostgreSQL）都很重要
+            # 因为 SQLAlchemy 默认使用事务模式，不会自动提交
+            # 注意：如果用户代码已调用 commit()，这里的 commit() 是安全的空操作
             if connection_info and connection_info.session:
                 try:
-                    await connection_info.session.commit()
+                    # 检查事务是否处于活动状态，避免在已回滚的事务上提交
+                    if connection_info.session.is_active:
+                        await connection_info.session.commit()
                 except Exception as commit_error:
                     logger.warning(f"提交事务时出错: {commit_error}")
-                    await connection_info.session.rollback()
+                    try:
+                        await connection_info.session.rollback()
+                    except Exception:
+                        pass  # 忽略回滚错误，因为事务可能已经结束
                     raise
 
         except Exception:
             # 发生错误时回滚连接
             if connection_info and connection_info.session:
                 try:
-                    await connection_info.session.rollback()
+                    # 检查是否需要回滚（事务是否活动）
+                    if connection_info.session.is_active:
+                        await connection_info.session.rollback()
                 except Exception as rollback_error:
                     logger.warning(f"回滚连接时出错: {rollback_error}")
             raise
