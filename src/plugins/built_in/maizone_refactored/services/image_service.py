@@ -44,7 +44,14 @@ class ImageService:
             api_key = str(self.get_config("models.siliconflow_apikey", ""))
             image_dir = str(self.get_config("send.image_directory", "./data/plugins/maizone_refactored/images"))
             image_num_raw = self.get_config("send.ai_image_number", 1)
-            image_num = int(image_num_raw if image_num_raw is not None else 1)
+            
+            # 安全地处理图片数量配置，并限制在API允许的范围内
+            try:
+                image_num = int(image_num_raw) if image_num_raw not in [None, ""] else 1
+                image_num = max(1, min(image_num, 4))  # SiliconFlow API限制：1 <= batch_size <= 4
+            except (ValueError, TypeError):
+                logger.warning(f"无效的图片数量配置: {image_num_raw}，使用默认值1")
+                image_num = 1
 
             if not enable_ai_image:
                 return True  # 未启用AI配图，视为成功
@@ -128,7 +135,7 @@ class ImageService:
         :param api_key: SiliconFlow API密钥。
         :param image_prompt: 用于生成图片的提示词。
         :param image_dir: 图片保存目录。
-        :param batch_size: 生成图片的数量。
+        :param batch_size: 生成图片的数量（1-4）。
         :return: API调用是否成功。
         """
         url = "https://api.siliconflow.cn/v1/images/generations"
@@ -155,8 +162,9 @@ class ImageService:
                 try:
                     image = Image.open(ref_images[0])
                     encoded_image = self._encode_image_to_base64(image)
-                    data["image"] = encoded_image
-                    logger.info("已添加参考图片到生成参数")
+                    if encoded_image:  # 只有在编码成功时才添加
+                        data["image"] = encoded_image
+                        logger.info("已添加参考图片到生成参数")
                 except Exception as e:
                     logger.warning(f"加载参考图片失败: {e}")
 
@@ -173,6 +181,7 @@ class ImageService:
                     json_data = await response.json()
                     image_urls = [img["url"] for img in json_data["images"]]
 
+                    success_count = 0
                     # 下载并保存图片
                     for i, img_url in enumerate(image_urls):
                         try:
@@ -182,19 +191,33 @@ class ImageService:
                                 img_data = await img_response.read()
 
                             # 处理图片
-                            image = Image.open(BytesIO(img_data))
-                            
-                            # 保存图片
-                            filename = f"image_{i}.png"
-                            save_path = Path(image_dir) / filename
-                            image.save(save_path)
-                            logger.info(f"图片已保存至: {save_path}")
+                            try:
+                                image = Image.open(BytesIO(img_data))
+                                
+                                # 保存图片为PNG格式（确保兼容性）
+                                filename = f"image_{i}.png"
+                                save_path = Path(image_dir) / filename
+                                
+                                # 转换为RGB模式如果必要（避免RGBA等模式的问题）
+                                if image.mode in ('RGBA', 'LA', 'P'):
+                                    background = Image.new('RGB', image.size, (255, 255, 255))
+                                    background.paste(image, mask=image.split()[-1] if image.mode == 'RGBA' else None)
+                                    image = background
+                                
+                                image.save(save_path, format='PNG')
+                                logger.info(f"图片已保存至: {save_path}")
+                                success_count += 1
+                                
+                            except Exception as e:
+                                logger.error(f"处理图片失败: {str(e)}")
+                                continue
 
                         except Exception as e:
-                            logger.error(f"下载图片失败: {str(e)}")
-                            return False
+                            logger.error(f"下载第{i+1}张图片失败: {str(e)}")
+                            continue
 
-                    return True
+                    # 只要至少有一张图片成功就返回True
+                    return success_count > 0
 
         except Exception as e:
             logger.error(f"调用AI生图API时发生异常: {e}")
@@ -205,16 +228,26 @@ class ImageService:
         将PIL.Image对象编码为base64 data URL
         
         :param img: PIL图片对象
-        :return: base64 data URL字符串
+        :return: base64 data URL字符串，失败时返回空字符串
         """
         try:
-            img_format = (img.format or "PNG").upper()
+            # 强制转换为PNG格式，因为SiliconFlow API要求data:image/png
             buffer = BytesIO()
-            img.save(buffer, format=img_format)
+            
+            # 转换为RGB模式如果必要
+            if img.mode in ('RGBA', 'LA', 'P'):
+                background = Image.new('RGB', img.size, (255, 255, 255))
+                background.paste(img, mask=img.split()[-1] if img.mode == 'RGBA' else None)
+                img = background
+            
+            # 保存为PNG格式
+            img.save(buffer, format="PNG")
             byte_data = buffer.getvalue()
-            mime_type = f"image/{img_format.lower()}"
+            
+            # Base64编码，使用固定的data:image/png
             encoded_string = base64.b64encode(byte_data).decode("utf-8")
-            return f"data:{mime_type};base64,{encoded_string}"
+            return f"data:image/png;base64,{encoded_string}"
+            
         except Exception as e:
             logger.error(f"编码图片为base64失败: {e}")
             return ""
