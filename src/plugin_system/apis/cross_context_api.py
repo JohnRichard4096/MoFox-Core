@@ -4,6 +4,7 @@
 
 import time
 from typing import Any, TYPE_CHECKING
+from src.common.message_repository import find_messages
 
 from src.chat.message_receive.chat_stream import get_chat_manager
 from src.chat.utils.chat_message_builder import (
@@ -177,5 +178,93 @@ async def build_cross_context_s4u(
     logger.debug(f"[S4U] Successfully generated S4U context. Total length: {len(final_context)}.")
     return final_context
 
+async def build_cross_context_for_user(
+    user_id: str,
+    platform: str,
+    limit_per_stream: int,
+    stream_limit: int,
+) -> str:
+    """
+    构建指定用户的跨群聊/私聊上下文（简化版API）。
+    """
+    logger.debug(f"[S4U_SIMPLE] Starting simplified S4U context build for user {user_id} on {platform}.")
 
+    if not global_config or not global_config.cross_context or not global_config.bot:
+        logger.error("全局配置尚未初始化或缺少关键配置，无法构建S4U上下文。")
+        return ""
 
+    chat_manager = get_chat_manager()
+
+    private_context_block = ""
+    group_context_blocks = []
+
+    # --- 1. 优先处理私聊上下文 ---
+    private_stream_id = chat_manager.get_stream_id(platform, user_id, is_group=False)
+    if private_stream_id:
+        try:
+            user_ids_to_fetch = [str(user_id), str(global_config.bot.qq_account)]
+            messages_by_stream = await get_user_messages_from_streams(
+                user_ids=user_ids_to_fetch,
+                stream_ids=[private_stream_id],
+                timestamp_after=time.time() - (3 * 24 * 60 * 60),
+                limit_per_stream=limit_per_stream,
+            )
+            if private_messages := messages_by_stream.get(private_stream_id):
+                chat_name = await chat_manager.get_stream_name(private_stream_id) or "私聊"
+                title = f'[以下是您与"{chat_name}"的近期私聊记录]\n'
+                formatted, _ = await build_readable_messages_with_id(private_messages, timestamp_mode="relative")
+                private_context_block = f"{title}{formatted}"
+        except Exception as e:
+            logger.error(f"[S4U_SIMPLE] 处理私聊记录失败: {e}")
+
+    # --- 2. 处理其他群聊上下文 ---
+    streams_to_scan = [
+        stream_id for stream_id in chat_manager.streams
+        if stream_id != private_stream_id
+    ]
+
+    if streams_to_scan:
+        messages_by_stream = await get_user_messages_from_streams(
+            user_ids=[str(user_id)],
+            stream_ids=streams_to_scan,
+            timestamp_after=time.time() - (3 * 24 * 60 * 60),
+            limit_per_stream=limit_per_stream,
+        )
+
+        all_group_messages = []
+        for stream_id, user_messages in messages_by_stream.items():
+            if user_messages:
+                latest_timestamp = max(msg.get("time", 0) for msg in user_messages)
+                all_group_messages.append(
+                    {"stream_id": stream_id, "messages": user_messages, "latest_timestamp": latest_timestamp}
+                )
+
+        all_group_messages.sort(key=lambda x: x["latest_timestamp"], reverse=True)
+
+        remaining_limit = stream_limit - (1 if private_context_block else 0)
+        limited_group_messages = all_group_messages[:remaining_limit]
+
+        for item in limited_group_messages:
+            try:
+                chat_name = await chat_manager.get_stream_name(item["stream_id"]) or "未知群聊"
+                user_name = user_id # 简化处理
+                title = f'[以下是"{user_name}"在"{chat_name}"的近期发言]\n'
+                formatted, _ = await build_readable_messages_with_id(item["messages"], timestamp_mode="relative")
+                group_context_blocks.append(f"{title}{formatted}")
+            except Exception as e:
+                logger.error(f"[S4U_SIMPLE] 格式化群聊消息失败 (stream: {item['stream_id']}): {e}")
+
+    # --- 3. 组合最终上下文 ---
+    if not private_context_block and not group_context_blocks:
+        return ""
+
+    final_context_parts = []
+    if private_context_block:
+        final_context_parts.append(private_context_block)
+    if group_context_blocks:
+        group_context_str = "\n\n".join(group_context_blocks)
+        final_context_parts.append(f"### 其他群聊中的聊天记录\n{group_context_str}")
+
+    final_context = "\n\n".join(final_context_parts) + "\n"
+    logger.debug(f"[S4U_SIMPLE] Successfully generated context for user {user_id}. Total length: {len(final_context)}.")
+    return final_context
