@@ -433,6 +433,7 @@ class EventManager:
             EventType.AFTER_LLM,
             EventType.POST_SEND,
             EventType.AFTER_SEND,
+            EventType.ON_NOTICE_RECEIVED
         ]
 
         for event_name in default_events:
