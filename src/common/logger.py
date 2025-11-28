@@ -345,10 +345,12 @@ def load_log_config():  # sourcery skip: use-contextlib-suppress
             "websockets",
             "httpcore",
             "requests",
+            "aiosqlite",
             "peewee",
             "openai",
             "uvicorn",
             "rjieba",
+            "message_bus",
         ],
         "library_log_levels": {"aiohttp": "WARNING"},
     }
