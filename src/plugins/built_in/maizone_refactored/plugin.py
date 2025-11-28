@@ -51,7 +51,7 @@ class MaiZoneRefactoredPlugin(BasePlugin):
             "enable_image": ConfigField(type=bool, default=False, description="是否启用说说配图"),
             "enable_ai_image": ConfigField(type=bool, default=False, description="是否启用AI生成配图"),
             "enable_reply": ConfigField(type=bool, default=True, description="完成后是否回复"),
-            "ai_image_number": ConfigField(type=int, default=1, description="AI生成图片数量"),
+            "ai_image_number": ConfigField(type=int, default=1, description="AI生成图片数量（1-4张）"),
             "image_number": ConfigField(type=int, default=1, description="本地配图数量（1-9张）"),
             "image_directory": ConfigField(
                 type=str, default=(Path(__file__).parent / "images").as_posix(), description="图片存储目录"
