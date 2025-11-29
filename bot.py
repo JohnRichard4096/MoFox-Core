@@ -26,6 +26,30 @@ SHUTDOWN_TIMEOUT = 10.0
 EULA_CHECK_INTERVAL = 2
 MAX_EULA_CHECK_ATTEMPTS = 30
 MAX_ENV_FILE_SIZE = 1024 * 1024  # 1MB限制
+WEBUI_STARTUP_TIMEOUT = 60.0
+WEBUI_SHUTDOWN_TIMEOUT = 5.0
+
+# WebUI 启动检测关键词
+WEBUI_SUCCESS_KEYWORDS = [
+    "compiled successfully",
+    "ready in",
+    "local:",
+    "listening on",
+    "running at:",
+    "started server",
+    "app running at:",
+    "ready - started server",
+    "vite v",
+]
+WEBUI_FAILURE_KEYWORDS = [
+    "err!",
+    "error",
+    "eaddrinuse",
+    "address already in use",
+    "syntaxerror",
+    "fatal",
+    "npm ERR!",
+]
 
 # 设置工作目录为脚本所在目录
 script_dir = os.path.dirname(os.path.abspath(__file__))
@@ -167,28 +191,39 @@ class TaskManager:
         remaining_tasks = [t for t in asyncio.all_tasks(loop) if t is not asyncio.current_task(loop) and not t.done()]
 
         if not remaining_tasks:
-            logger.info("没有待取消的任务")
+            logger.debug("没有待取消的任务")
             return True
 
         logger.info(f"正在取消 {len(remaining_tasks)} 个剩余任务...")
 
         # 取消任务
+        cancelled_count = 0
         for task in remaining_tasks:
-            task.cancel()
+            if not task.done():
+                task.cancel()
+                cancelled_count += 1
+        
+        logger.debug(f"已发送取消信号到 {cancelled_count} 个任务")
 
         # 等待任务完成
         try:
             results = await asyncio.wait_for(asyncio.gather(*remaining_tasks, return_exceptions=True), timeout=timeout)
 
-            # 检查任务结果
-            for i, result in enumerate(results):
-                if isinstance(result, Exception):
-                    logger.warning(f"任务 {i} 取消时发生异常: {result}")
-
-            logger.info("所有剩余任务已成功取消")
+            # 统计任务结果
+            success_count = sum(1 for r in results if isinstance(r, asyncio.CancelledError) or r is None)
+            error_count = sum(1 for r in results if isinstance(r, Exception) and not isinstance(r, asyncio.CancelledError))
+            
+            if error_count > 0:
+                logger.warning(f"任务取消完成: {success_count} 个成功, {error_count} 个异常")
+                for i, result in enumerate(results):
+                    if isinstance(result, Exception) and not isinstance(result, asyncio.CancelledError):
+                        logger.debug(f"任务 {i} 异常: {result}")
+            else:
+                logger.info(f"所有 {success_count} 个任务已成功取消")
+            
             return True
         except asyncio.TimeoutError:
-            logger.warning("等待任务取消超时，强制继续关闭")
+            logger.warning(f"等待任务取消超时（{timeout}s），强制继续关闭")
             return False
         except Exception as e:
             logger.error(f"等待任务取消时发生异常: {e}")
@@ -430,27 +465,6 @@ class WebUIManager:
             )
             WebUIManager._process = proc
 
-            success_keywords = [
-                "compiled successfully",
-                "ready in",
-                "local:",
-                "listening on",
-                "running at:",
-                "started server",
-                "app running at:",
-                "ready - started server",
-                "vite v",  # Vite 一般会输出版本与 ready in
-            ]
-            failure_keywords = [
-                "err!",
-                "error",
-                "eaddrinuse",
-                "address already in use",
-                "syntaxerror",
-                "fatal",
-                "npm ERR!",
-            ]
-
             start_ts = time.time()
             detected_success = False
 
@@ -471,10 +485,10 @@ class WebUIManager:
                     text = line.decode(errors="ignore").rstrip()
                     logger.info(f"[webui] {text}")
                     low = text.lower()
-                    if any(k in low for k in success_keywords):
+                    if any(k in low for k in WEBUI_SUCCESS_KEYWORDS):
                         detected_success = True
                         break
-                    if any(k in low for k in failure_keywords):
+                    if any(k in low for k in WEBUI_FAILURE_KEYWORDS):
                         detected_success = False
                         break
 
@@ -505,7 +519,7 @@ class WebUIManager:
             return False
 
     @staticmethod
-    async def stop_dev_server(timeout: float = 5.0) -> bool:
+    async def stop_dev_server(timeout: float = WEBUI_SHUTDOWN_TIMEOUT) -> bool:
         """停止 WebUI 开发服务器（如果在运行）。"""
         proc = WebUIManager._process
         if not proc:
@@ -514,26 +528,38 @@ class WebUIManager:
             if proc.returncode is None:
                 try:
                     proc.terminate()
+                    logger.debug("已发送 SIGTERM 信号到 WebUI 进程")
                 except ProcessLookupError:
-                    pass
+                    logger.debug("WebUI 进程已不存在")
                 except Exception as e:
-                    logger.debug(f"发送终止信号失败: {e}")
+                    logger.warning(f"发送终止信号失败: {e}")
 
                 try:
                     await asyncio.wait_for(proc.wait(), timeout=timeout)
+                    logger.debug(f"WebUI 进程已优雅退出，退出码: {proc.returncode}")
                 except asyncio.TimeoutError:
+                    logger.warning(f"WebUI 进程未在 {timeout}s 内退出，强制终止")
                     try:
                         proc.kill()
-                    except Exception:
-                        pass
+                        await proc.wait()
+                    except Exception as e:
+                        logger.error(f"强制终止 WebUI 进程失败: {e}")
+            
+            # 清理日志读取任务
             if WebUIManager._drain_task and not WebUIManager._drain_task.done():
                 WebUIManager._drain_task.cancel()
                 try:
                     await WebUIManager._drain_task
-                except Exception:
+                except asyncio.CancelledError:
                     pass
-            logger.info("WebUI 开发服务器已停止")
+                except Exception as e:
+                    logger.debug(f"取消 WebUI 日志读取任务时出错: {e}")
+            
+            logger.info("WebUI 开发服务器已完全停止")
             return True
+        except Exception as e:
+            logger.error(f"停止 WebUI 开发服务器时发生异常: {e}")
+            return False
         finally:
             WebUIManager._process = None
             WebUIManager._drain_task = None
@@ -556,18 +582,16 @@ class MaiBotMain:
             logger.warning(f"时区设置失败: {e}")
 
     async def initialize_database_async(self):
-        """异步初始化数据库表结构"""
-        logger.info("正在初始化数据库表结构...")
+        """异步初始化数据库（轻量级验证）"""
+        # 数据库已在 DatabaseManager 中初始化，此处仅做验证
+        logger.debug("验证数据库连接状态...")
         try:
-            start_time = time.time()
-            from src.common.database.core import check_and_migrate_database
-
-            await check_and_migrate_database()
-            elapsed_time = time.time() - start_time
-            logger.info(f"数据库表结构初始化完成，耗时: {elapsed_time:.2f}秒")
+            from src.config.config import global_config
+            
+            db_type = global_config.database.database_type
+            logger.debug(f"当前数据库类型: {db_type}")
         except Exception as e:
-            logger.error(f"数据库表结构初始化失败: {e}")
-            raise
+            logger.warning(f"数据库配置读取失败（非致命）: {e}")
 
     def create_main_system(self):
         """创建MainSystem实例"""
@@ -620,23 +644,33 @@ async def main_async():
     """主异步函数"""
     exit_code = 0
     main_task = None
+    webui_task = None
 
     async with create_event_loop_context():
         try:
             # 确保环境文件存在
             ConfigManager.ensure_env_file()
 
-            # 启动 WebUI 开发服务器（成功/失败都继续后续步骤）
-            webui_ok = await WebUIManager.start_dev_server(timeout=60)
-            if webui_ok:
-                logger.info("WebUI 启动成功，继续下一步骤")
-            else:
-                logger.error("WebUI 启动失败，继续下一步骤")
+            # 在后台启动 WebUI（不阻塞主流程）
+            logger.info("正在后台启动 WebUI 开发服务器...")
+            webui_task = asyncio.create_task(
+                WebUIManager.start_dev_server(timeout=WEBUI_STARTUP_TIMEOUT)
+            )
 
-            # 创建主程序实例并执行初始化
+            # 创建主程序实例并执行初始化（与 WebUI 启动并行）
             maibot = MaiBotMain()
             main_system = await maibot.run_sync_init()
-            await maibot.run_async_init(main_system)
+            
+            # 等待数据库初始化（如果使用了 DatabaseManager）
+            async with DatabaseManager():
+                await maibot.run_async_init(main_system)
+            
+            # 检查 WebUI 启动结果（非阻塞）
+            if webui_task.done():
+                webui_ok = webui_task.result()
+                logger.info(f"WebUI 启动{'成功' if webui_ok else '失败'}")
+            else:
+                logger.info("WebUI 仍在启动中，主系统继续运行")
 
             # 运行主任务
             main_task = asyncio.create_task(main_system.schedule_tasks())
@@ -663,10 +697,23 @@ async def main_async():
             logger.warning("收到中断信号，正在优雅关闭...")
             if main_task and not main_task.done():
                 main_task.cancel()
+                try:
+                    await main_task
+                except asyncio.CancelledError:
+                    logger.debug("主任务已成功取消")
         except Exception as e:
             logger.error(f"主程序发生异常: {e}")
             logger.debug(f"异常详情: {traceback.format_exc()}")
             exit_code = 1
+        finally:
+            # 确保 WebUI 任务被清理
+            if webui_task and not webui_task.done():
+                webui_task.cancel()
+                try:
+                    await webui_task
+                except asyncio.CancelledError:
+                    pass
+            logger.debug("所有后台任务已清理完成")
 
     return exit_code
 
