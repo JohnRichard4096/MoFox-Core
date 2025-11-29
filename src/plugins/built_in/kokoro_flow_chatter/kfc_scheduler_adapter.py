@@ -5,16 +5,19 @@ Kokoro Flow Chatter 调度器适配器
 不再自己创建后台循环，而是复用全局调度器的基础设施。
 
 核心功能：
-1. 会话等待超时检测
-2. 连续思考触发
-3. 与 UnifiedScheduler 的集成
+1. 会话等待超时检测（短期）
+2. 连续思考触发（等待期间的内心活动）
+3. 主动思考检测（长期沉默后主动发起对话）
+4. 与 UnifiedScheduler 的集成
 """
 
 import asyncio
 import time
+from datetime import datetime
 from typing import TYPE_CHECKING, Any, Callable, Coroutine, Optional
 
 from src.common.logger import get_logger
+from src.config.config import global_config
 from src.plugin_system.apis.unified_scheduler import (
     TriggerType,
     unified_scheduler,
@@ -41,9 +44,10 @@ class KFCSchedulerAdapter:
     使用 UnifiedScheduler 实现 KFC 的定时任务功能，不再自行管理后台循环。
     
     核心功能：
-    1. 定期检查处于 WAITING 状态的会话
-    2. 在特定时间点触发"连续思考"
-    3. 处理等待超时并触发决策
+    1. 定期检查处于 WAITING 状态的会话（短期等待超时）
+    2. 在特定时间点触发"连续思考"（等待期间内心活动）
+    3. 定期检查长期沉默的会话，触发"主动思考"（长期主动发起）
+    4. 处理等待超时并触发决策
     """
     
     # 连续思考触发点（等待进度的百分比）
@@ -51,37 +55,78 @@ class KFCSchedulerAdapter:
     
     # 任务名称常量
     TASK_NAME_WAITING_CHECK = "kfc_waiting_check"
+    TASK_NAME_PROACTIVE_CHECK = "kfc_proactive_check"
+    
+    # 主动思考检查间隔（5分钟）
+    PROACTIVE_CHECK_INTERVAL = 300.0
     
     def __init__(
         self,
         check_interval: float = 10.0,
         on_timeout_callback: Optional[Callable[[KokoroSession], Coroutine[Any, Any, None]]] = None,
         on_continuous_thinking_callback: Optional[Callable[[KokoroSession], Coroutine[Any, Any, None]]] = None,
+        on_proactive_thinking_callback: Optional[Callable[[KokoroSession, str], Coroutine[Any, Any, None]]] = None,
     ):
         """
         初始化调度器适配器
         
         Args:
-            check_interval: 检查间隔（秒）
+            check_interval: 等待检查间隔（秒）
             on_timeout_callback: 超时回调函数
             on_continuous_thinking_callback: 连续思考回调函数
+            on_proactive_thinking_callback: 主动思考回调函数，接收 (session, trigger_reason)
         """
         self.check_interval = check_interval
         self.on_timeout_callback = on_timeout_callback
         self.on_continuous_thinking_callback = on_continuous_thinking_callback
+        self.on_proactive_thinking_callback = on_proactive_thinking_callback
         
         self._registered = False
         self._schedule_id: Optional[str] = None
+        self._proactive_schedule_id: Optional[str] = None
+        
+        # 加载主动思考配置
+        self._load_proactive_config()
         
         # 统计信息
         self._stats = {
             "total_checks": 0,
             "timeouts_triggered": 0,
             "continuous_thinking_triggered": 0,
+            "proactive_thinking_triggered": 0,
+            "proactive_checks": 0,
             "last_check_time": 0.0,
         }
         
         logger.info("KFCSchedulerAdapter 初始化完成")
+    
+    def _load_proactive_config(self) -> None:
+        """加载主动思考相关配置"""
+        try:
+            if global_config and hasattr(global_config, 'kokoro_flow_chatter'):
+                proactive_cfg = global_config.kokoro_flow_chatter.proactive_thinking
+                self.proactive_enabled = proactive_cfg.enabled
+                self.silence_threshold = proactive_cfg.silence_threshold_seconds
+                self.min_interval = proactive_cfg.min_interval_between_proactive
+                self.min_affinity = getattr(proactive_cfg, 'min_affinity_for_proactive', 0.3)
+                self.quiet_hours_start = getattr(proactive_cfg, 'quiet_hours_start', "23:00")
+                self.quiet_hours_end = getattr(proactive_cfg, 'quiet_hours_end', "07:00")
+            else:
+                # 默认值
+                self.proactive_enabled = True
+                self.silence_threshold = 7200  # 2小时
+                self.min_interval = 1800  # 30分钟
+                self.min_affinity = 0.3
+                self.quiet_hours_start = "23:00"
+                self.quiet_hours_end = "07:00"
+        except Exception as e:
+            logger.warning(f"加载主动思考配置失败，使用默认值: {e}")
+            self.proactive_enabled = True
+            self.silence_threshold = 7200
+            self.min_interval = 1800
+            self.min_affinity = 0.3
+            self.quiet_hours_start = "23:00"
+            self.quiet_hours_end = "07:00"
     
     async def start(self) -> None:
         """启动调度器（注册到 UnifiedScheduler）"""
@@ -89,7 +134,7 @@ class KFCSchedulerAdapter:
             logger.warning("KFC 调度器已在运行中")
             return
         
-        # 注册周期性检查任务
+        # 注册周期性等待检查任务（每10秒）
         self._schedule_id = await unified_scheduler.create_schedule(
             callback=self._check_waiting_sessions,
             trigger_type=TriggerType.TIME,
@@ -97,8 +142,21 @@ class KFCSchedulerAdapter:
             is_recurring=True,
             task_name=self.TASK_NAME_WAITING_CHECK,
             force_overwrite=True,
-            timeout=30.0,  # 单次检查超时 30 秒
+            timeout=30.0,
         )
+        
+        # 如果启用了主动思考，注册主动思考检查任务（每5分钟）
+        if self.proactive_enabled:
+            self._proactive_schedule_id = await unified_scheduler.create_schedule(
+                callback=self._check_proactive_sessions,
+                trigger_type=TriggerType.TIME,
+                trigger_config={"delay_seconds": self.PROACTIVE_CHECK_INTERVAL},
+                is_recurring=True,
+                task_name=self.TASK_NAME_PROACTIVE_CHECK,
+                force_overwrite=True,
+                timeout=120.0,  # 主动思考可能需要更长时间（涉及 LLM 调用）
+            )
+            logger.info(f"KFC 主动思考调度已注册: schedule_id={self._proactive_schedule_id}")
         
         self._registered = True
         logger.info(f"KFC 调度器已注册到 UnifiedScheduler: schedule_id={self._schedule_id}")
@@ -111,12 +169,16 @@ class KFCSchedulerAdapter:
         try:
             if self._schedule_id:
                 await unified_scheduler.remove_schedule(self._schedule_id)
-                logger.info(f"KFC 调度器已从 UnifiedScheduler 注销: schedule_id={self._schedule_id}")
+                logger.info(f"KFC 等待检查调度已注销: schedule_id={self._schedule_id}")
+            if self._proactive_schedule_id:
+                await unified_scheduler.remove_schedule(self._proactive_schedule_id)
+                logger.info(f"KFC 主动思考调度已注销: schedule_id={self._proactive_schedule_id}")
         except Exception as e:
             logger.error(f"停止 KFC 调度器时出错: {e}")
         finally:
             self._registered = False
             self._schedule_id = None
+            self._proactive_schedule_id = None
     
     async def _check_waiting_sessions(self) -> None:
         """检查所有等待中的会话（由 UnifiedScheduler 调用）
@@ -344,6 +406,223 @@ class KFCSchedulerAdapter:
         
         return random.choice(thoughts)
     
+    # ========================================
+    # 主动思考相关方法（长期沉默后主动发起对话）
+    # ========================================
+    
+    async def _check_proactive_sessions(self) -> None:
+        """
+        检查所有会话是否需要触发主动思考（由 UnifiedScheduler 定期调用）
+        
+        主动思考的触发条件：
+        1. 会话处于 IDLE 状态（不在等待回复中）
+        2. 距离上次活动超过 silence_threshold
+        3. 距离上次主动思考超过 min_interval
+        4. 不在勿扰时段
+        5. 与用户的关系亲密度足够
+        """
+        if not self.proactive_enabled:
+            return
+        
+        # 检查是否在勿扰时段
+        if self._is_quiet_hours():
+            logger.debug("[KFC] 当前处于勿扰时段，跳过主动思考检查")
+            return
+        
+        self._stats["proactive_checks"] += 1
+        
+        session_manager = get_session_manager()
+        all_sessions = await session_manager.get_all_sessions()
+        
+        current_time = time.time()
+        
+        for session in all_sessions:
+            try:
+                # 检查是否满足主动思考条件（异步获取全局关系分数）
+                trigger_reason = await self._should_trigger_proactive(session, current_time)
+                if trigger_reason:
+                    logger.info(
+                        f"[KFC] 触发主动思考: user={session.user_id}, reason={trigger_reason}"
+                    )
+                    await self._handle_proactive_thinking(session, trigger_reason)
+            except Exception as e:
+                logger.error(f"检查主动思考条件时出错 (user={session.user_id}): {e}")
+    
+    def _is_quiet_hours(self) -> bool:
+        """
+        检查当前是否处于勿扰时段
+        
+        支持跨午夜的时段（如 23:00 到 07:00）
+        """
+        try:
+            now = datetime.now()
+            current_minutes = now.hour * 60 + now.minute
+            
+            # 解析开始时间
+            start_parts = self.quiet_hours_start.split(":")
+            start_minutes = int(start_parts[0]) * 60 + int(start_parts[1])
+            
+            # 解析结束时间
+            end_parts = self.quiet_hours_end.split(":")
+            end_minutes = int(end_parts[0]) * 60 + int(end_parts[1])
+            
+            # 处理跨午夜的情况
+            if start_minutes <= end_minutes:
+                # 不跨午夜（如 09:00 到 17:00）
+                return start_minutes <= current_minutes < end_minutes
+            else:
+                # 跨午夜（如 23:00 到 07:00）
+                return current_minutes >= start_minutes or current_minutes < end_minutes
+                
+        except Exception as e:
+            logger.warning(f"解析勿扰时段配置失败: {e}")
+            return False
+    
+    async def _should_trigger_proactive(
+        self, 
+        session: KokoroSession, 
+        current_time: float
+    ) -> Optional[str]:
+        """
+        检查是否应该触发主动思考
+        
+        使用全局关系数据库中的关系分数（而不是 KFC 内部的 emotional_state）
+        
+        概率机制：关系越亲密，触发概率越高
+        - 亲密度 0.3 → 触发概率 10%
+        - 亲密度 0.5 → 触发概率 30%
+        - 亲密度 0.7 → 触发概率 55%
+        - 亲密度 1.0 → 触发概率 90%
+        
+        Args:
+            session: 会话
+            current_time: 当前时间戳
+            
+        Returns:
+            触发原因字符串，如果不触发则返回 None
+        """
+        import random
+        
+        # 条件1：必须处于 IDLE 状态
+        if session.status != SessionStatus.IDLE:
+            return None
+        
+        # 条件2：距离上次活动超过沉默阈值
+        silence_duration = current_time - session.last_activity_at
+        if silence_duration < self.silence_threshold:
+            return None
+        
+        # 条件3：距离上次主动思考超过最小间隔
+        if session.last_proactive_at is not None:
+            time_since_last_proactive = current_time - session.last_proactive_at
+            if time_since_last_proactive < self.min_interval:
+                return None
+        
+        # 条件4：从数据库获取全局关系分数
+        relationship_score = await self._get_global_relationship_score(session.user_id)
+        if relationship_score < self.min_affinity:
+            logger.debug(
+                f"主动思考跳过（关系分数不足）: user={session.user_id}, "
+                f"score={relationship_score:.2f}, min={self.min_affinity:.2f}"
+            )
+            return None
+        
+        # 条件5：基于关系分数的概率判断
+        # 公式：probability = 0.1 + 0.8 * ((score - min_affinity) / (1.0 - min_affinity))^1.5
+        # 这样分数从 min_affinity 到 1.0 映射到概率 10% 到 90%
+        # 使用1.5次幂让曲线更陡峭，高亲密度时概率增长更快
+        normalized_score = (relationship_score - self.min_affinity) / (1.0 - self.min_affinity)
+        probability = 0.1 + 0.8 * (normalized_score ** 1.5)
+        probability = min(probability, 0.9)  # 最高90%，永远不是100%确定
+        
+        if random.random() > probability:
+            # 这次检查没触发，但记录一下（用于调试）
+            logger.debug(
+                f"主动思考概率检查未通过: user={session.user_id}, "
+                f"score={relationship_score:.2f}, probability={probability:.1%}"
+            )
+            return None
+        
+        # 所有条件满足，生成触发原因
+        silence_hours = silence_duration / 3600
+        logger.info(
+            f"主动思考触发: user={session.user_id}, "
+            f"silence={silence_hours:.1f}h, score={relationship_score:.2f}, prob={probability:.1%}"
+        )
+        return f"沉默了{silence_hours:.1f}小时，想主动关心一下对方"
+    
+    async def _get_global_relationship_score(self, user_id: str) -> float:
+        """
+        从全局关系数据库获取关系分数
+        
+        Args:
+            user_id: 用户ID
+            
+        Returns:
+            关系分数 (0.0-1.0)，如果没有记录返回默认值 0.3
+        """
+        try:
+            from src.common.database.api.specialized import get_user_relationship
+            
+            # 从 user_id 解析 platform（格式通常是 "platform_userid"）
+            # 这里假设 user_id 中包含 platform 信息，需要根据实际情况调整
+            # 先尝试直接查询，如果失败再用默认值
+            relationship = await get_user_relationship(
+                platform="qq",  # TODO: 从 session 或 stream_id 获取真实 platform
+                user_id=user_id,
+                target_id="bot",
+            )
+            
+            if relationship and hasattr(relationship, 'relationship_score'):
+                return relationship.relationship_score
+            
+            # 没有找到关系记录，返回默认值
+            return 0.3
+            
+        except Exception as e:
+            logger.warning(f"获取全局关系分数失败 (user={user_id}): {e}")
+            return 0.3  # 出错时返回较低的默认值
+    
+    async def _handle_proactive_thinking(
+        self, 
+        session: KokoroSession, 
+        trigger_reason: str
+    ) -> None:
+        """
+        处理主动思考
+        
+        Args:
+            session: 会话
+            trigger_reason: 触发原因
+        """
+        self._stats["proactive_thinking_triggered"] += 1
+        
+        # 更新会话状态
+        session.last_proactive_at = time.time()
+        session.proactive_count += 1
+        
+        # 添加主动思考日志
+        proactive_entry = MentalLogEntry(
+            event_type=MentalLogEventType.PROACTIVE_THINKING,
+            timestamp=time.time(),
+            thought=trigger_reason,
+            content="主动思考触发",
+            emotional_snapshot=session.emotional_state.to_dict(),
+            metadata={"trigger_reason": trigger_reason},
+        )
+        session.add_mental_log_entry(proactive_entry)
+        
+        # 保存会话状态
+        session_manager = get_session_manager()
+        await session_manager.save_session(session.user_id)
+        
+        # 调用主动思考回调（由 chatter 处理实际的 LLM 调用和动作执行）
+        if self.on_proactive_thinking_callback:
+            try:
+                await self.on_proactive_thinking_callback(session, trigger_reason)
+            except Exception as e:
+                logger.error(f"执行主动思考回调时出错 (user={session.user_id}): {e}")
+    
     def set_timeout_callback(
         self,
         callback: Callable[[KokoroSession], Coroutine[Any, Any, None]],
@@ -357,6 +636,13 @@ class KFCSchedulerAdapter:
     ) -> None:
         """设置连续思考回调函数"""
         self.on_continuous_thinking_callback = callback
+    
+    def set_proactive_thinking_callback(
+        self,
+        callback: Callable[[KokoroSession, str], Coroutine[Any, Any, None]],
+    ) -> None:
+        """设置主动思考回调函数"""
+        self.on_proactive_thinking_callback = callback
     
     def get_stats(self) -> dict[str, Any]:
         """获取统计信息"""
@@ -388,6 +674,7 @@ async def initialize_scheduler(
     check_interval: float = 10.0,
     on_timeout_callback: Optional[Callable[[KokoroSession], Coroutine[Any, Any, None]]] = None,
     on_continuous_thinking_callback: Optional[Callable[[KokoroSession], Coroutine[Any, Any, None]]] = None,
+    on_proactive_thinking_callback: Optional[Callable[[KokoroSession, str], Coroutine[Any, Any, None]]] = None,
 ) -> KFCSchedulerAdapter:
     """
     初始化并启动调度器
@@ -396,6 +683,7 @@ async def initialize_scheduler(
         check_interval: 检查间隔
         on_timeout_callback: 超时回调
         on_continuous_thinking_callback: 连续思考回调
+        on_proactive_thinking_callback: 主动思考回调
         
     Returns:
         KFCSchedulerAdapter: 调度器适配器实例
@@ -405,6 +693,7 @@ async def initialize_scheduler(
         check_interval=check_interval,
         on_timeout_callback=on_timeout_callback,
         on_continuous_thinking_callback=on_continuous_thinking_callback,
+        on_proactive_thinking_callback=on_proactive_thinking_callback,
     )
     await _scheduler_adapter.start()
     return _scheduler_adapter

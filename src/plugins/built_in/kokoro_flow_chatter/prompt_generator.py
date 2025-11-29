@@ -205,23 +205,31 @@ class PromptGenerator:
 {narrative_history}
 
 ## 当前情况
+现在是 {current_time}。
+距离你们上次对话已经过去了 {silence_duration}。
+
+{relation_block}
+
 {trigger_context}
 
-## 触发类型
-{trigger_type}
-
 ## 你的任务
-这是一次"主动思考"触发。你不是因为收到消息才行动，而是因为内心的某种驱动力。
-现在你需要：
-1. 感受一下现在的心情和想法
-2. 思考是否需要主动联系对方
-3. 如果决定主动，想好要说什么或做什么
-4. 如果决定不主动，也要有明确的理由
+这是一次"主动思考"——你突然想起了对方，想了想要不要联系ta。
 
-注意：主动联系应该是自然的、符合你们关系的。不要显得过于依赖或强迫。
-你可以选择发消息、发图片、唱首歌、或者只是在心里想想然后什么都不做。
+请像真人一样思考：
+1. **感受一下此刻的心情**：你真的想联系对方吗？还是只是习惯性地想起？
+2. **考虑对方的情况**：现在这个时间，对方可能在干嘛？方便被打扰吗？
+3. **回忆上次对话**：你们聊了什么？对话是怎么结束的？
+4. **做出决定**：
+   - 如果决定联系：想好说什么，要自然，不要刻意
+   - 如果决定不联系：这也完全ok，不打扰也是一种温柔
 
-请以JSON格式输出你的完整心理活动和决策。"""
+**重要提醒**：
+- 你不是必须发消息的，"算了，不打扰了"是完全合理的选择
+- 如果决定联系，内容要自然——可以是分享、关心、延续话题，但不要生硬
+- 避免机械式的问候（如固定的"早安""晚安"），除非你们的关系真的会这样打招呼
+
+请以JSON格式输出你的完整心理活动和决策。
+如果决定不打扰，actions 里放一个 `{{"type": "do_nothing"}}` 就好。"""
 
     def __init__(self, persona_description: str = ""):
         """
@@ -663,34 +671,72 @@ class PromptGenerator:
     def generate_proactive_thinking_prompt(
         self,
         session: KokoroSession,
-        trigger_type: str,
         trigger_context: str,
         available_actions: Optional[dict[str, ActionInfo]] = None,
+        context_data: Optional[dict[str, str]] = None,
+        chat_stream: Optional["ChatStream"] = None,
     ) -> tuple[str, str]:
         """
         生成主动思考场景的提示词
         
         这是私聊专属的功能，用于实现"主动找话题、主动关心用户"。
+        主动思考不是"必须发消息"，而是"想一想要不要联系对方"。
         
         Args:
             session: 当前会话
-            trigger_type: 触发类型（如 silence_timeout, memory_event 等）
-            trigger_context: 触发上下文描述
+            trigger_context: 触发上下文描述（如"沉默了2小时"）
             available_actions: 可用动作字典
+            context_data: S4U上下文数据（包含全局关系信息）
+            chat_stream: 聊天流
             
         Returns:
             tuple[str, str]: (系统提示词, 用户提示词)
         """
-        system_prompt = self.generate_system_prompt(session, available_actions)
+        from datetime import datetime
+        import time
+        
+        # 生成系统提示词（使用 context_data 获取完整的关系和记忆信息）
+        system_prompt = self.generate_system_prompt(
+            session, 
+            available_actions,
+            context_data=context_data,
+            chat_stream=chat_stream,
+        )
         
         narrative_history = self._format_narrative_history(
             session.mental_log,
             max_entries=10,  # 主动思考时使用较少的历史
         )
         
+        # 计算沉默时长
+        silence_seconds = time.time() - session.last_activity_at
+        if silence_seconds < 3600:
+            silence_duration = f"{silence_seconds / 60:.0f}分钟"
+        else:
+            silence_duration = f"{silence_seconds / 3600:.1f}小时"
+        
+        # 当前时间
+        current_time = datetime.now().strftime("%Y年%m月%d日 %H:%M")
+        
+        # 从 context_data 获取全局关系信息（这是正确的来源）
+        relation_block = ""
+        if context_data:
+            relation_info = context_data.get("relation_info", "")
+            if relation_info:
+                relation_block = f"### 你与对方的关系\n{relation_info}"
+        
+        if not relation_block:
+            # 回退：使用 session 的情感状态（不太准确但有总比没有好）
+            es = session.emotional_state
+            relation_block = f"""### 你与对方的关系
+- 当前心情：{es.mood}
+- 对对方的印象：{es.impression_of_user or "还在慢慢了解中"}"""
+        
         user_prompt = self.PROACTIVE_THINKING_USER_PROMPT_TEMPLATE.format(
             narrative_history=narrative_history,
-            trigger_type=trigger_type,
+            current_time=current_time,
+            silence_duration=silence_duration,
+            relation_block=relation_block,
             trigger_context=trigger_context,
         )
         

@@ -699,6 +699,42 @@ async def execute_proactive_thinking(stream_id: str):
 
         try:
             # 0. 前置检查
+            
+            # 0.-1 检查是否是私聊且 KFC 主动思考已启用（让 KFC 接管私聊主动思考）
+            try:
+                from src.chat.message_receive.chat_stream import get_chat_manager
+                chat_manager = get_chat_manager()
+                chat_stream = await chat_manager.get_stream(stream_id)
+                
+                # 判断是否是私聊（使用 chat_type 枚举或从 stream_id 判断）
+                is_private = False
+                if chat_stream:
+                    try:
+                        is_private = chat_stream.chat_type.name == "private"
+                    except Exception:
+                        # 回退：从 stream_id 判断（私聊通常不包含 "group"）
+                        is_private = "group" not in stream_id.lower()
+                
+                if is_private:
+                    # 这是一个私聊，检查 KFC 是否启用且其主动思考是否启用
+                    try:
+                        from src.config.config import global_config
+                        kfc_config = getattr(global_config, 'kokoro_flow_chatter', None)
+                        if kfc_config:
+                            kfc_enabled = getattr(kfc_config, 'enable', False)
+                            proactive_config = getattr(kfc_config, 'proactive_thinking', None)
+                            proactive_enabled = getattr(proactive_config, 'enabled', False) if proactive_config else False
+                            
+                            if kfc_enabled and proactive_enabled:
+                                logger.debug(
+                                    f"[主动思考] 私聊 {stream_id} 由 KFC 主动思考接管，跳过通用主动思考"
+                                )
+                                return
+                    except Exception as e:
+                        logger.debug(f"检查 KFC 配置时出错，继续执行通用主动思考: {e}")
+            except Exception as e:
+                logger.warning(f"检查私聊/KFC 状态时出错: {e}，继续执行")
+            
             # 0.0 检查聊天流是否正在处理消息（双重保护）
             try:
                 from src.chat.message_receive.chat_stream import get_chat_manager

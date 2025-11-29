@@ -47,6 +47,7 @@ class MentalLogEventType(Enum):
     TIMEOUT_DECISION = "timeout_decision"  # 超时决策事件
     STATE_CHANGE = "state_change"          # 状态变更事件
     CONTINUOUS_THINKING = "continuous_thinking"  # 连续思考事件
+    PROACTIVE_THINKING = "proactive_thinking"    # 主动思考事件（长期沉默后主动发起）
     
     def __str__(self) -> str:
         return self.value
@@ -222,6 +223,10 @@ class KokoroSession:
     continuous_thinking_count: int = 0
     last_continuous_thinking_at: Optional[float] = None
     
+    # 主动思考相关（长期沉默后主动发起对话）
+    last_proactive_at: Optional[float] = None  # 上次主动思考的时间
+    proactive_count: int = 0  # 主动思考的次数（累计）
+    
     def add_mental_log_entry(self, entry: MentalLogEntry, max_log_size: int = 100) -> None:
         """
         添加心理活动日志条目
@@ -284,6 +289,8 @@ class KokoroSession:
             "total_interactions": self.total_interactions,
             "continuous_thinking_count": self.continuous_thinking_count,
             "last_continuous_thinking_at": self.last_continuous_thinking_at,
+            "last_proactive_at": self.last_proactive_at,
+            "proactive_count": self.proactive_count,
         }
     
     @classmethod
@@ -320,6 +327,8 @@ class KokoroSession:
             total_interactions=data.get("total_interactions", 0),
             continuous_thinking_count=data.get("continuous_thinking_count", 0),
             last_continuous_thinking_at=data.get("last_continuous_thinking_at"),
+            last_proactive_at=data.get("last_proactive_at"),
+            proactive_count=data.get("proactive_count", 0),
         )
 
 

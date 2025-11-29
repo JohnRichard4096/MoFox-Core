@@ -143,6 +143,12 @@ class KokoroFlowChatter(BaseChatter):
             self.scheduler.set_continuous_thinking_callback(
                 self._on_continuous_thinking
             )
+        
+        # 设置主动思考回调
+        if self.enable_proactive:
+            self.scheduler.set_proactive_thinking_callback(
+                self._on_proactive_thinking
+            )
     
     async def execute(self, context: StreamContext) -> dict:
         """
@@ -572,6 +578,106 @@ class KokoroFlowChatter(BaseChatter):
         
         # 简单模式：更新焦虑程度（已在scheduler中处理）
         # 这里可以添加额外的逻辑
+    
+    async def _on_proactive_thinking(self, session: KokoroSession, trigger_reason: str) -> None:
+        """
+        主动思考回调
+        
+        当长时间沉默后触发，让 LLM 决定是否主动联系用户。
+        这不是"必须发消息"，而是"想一想要不要联系对方"。
+        
+        Args:
+            session: 会话
+            trigger_reason: 触发原因描述
+        """
+        logger.info(f"[KFC] 处理主动思考: user={session.user_id}, reason={trigger_reason}")
+        
+        try:
+            # 创建正确的 ActionExecutor（使用 session 的 stream_id）
+            from .action_executor import ActionExecutor
+            proactive_action_executor = ActionExecutor(session.stream_id)
+            
+            # 加载可用动作
+            available_actions = await proactive_action_executor.load_actions()
+            
+            # 获取 chat_stream 用于构建上下文
+            chat_stream = await self._get_chat_stream(session.stream_id)
+            
+            # 构建 S4U 上下文数据（包含全局关系信息）
+            context_data: dict[str, str] = {}
+            if chat_stream:
+                try:
+                    from .context_builder import KFCContextBuilder
+                    context_builder = KFCContextBuilder(chat_stream)
+                    context_data = await context_builder.build_all_context(
+                        sender_name=session.user_id,  # 主动思考时用 user_id
+                        target_message="",  # 没有目标消息
+                        context=None,
+                    )
+                    logger.debug(f"[KFC] 主动思考上下文构建完成: {list(context_data.keys())}")
+                except Exception as e:
+                    logger.warning(f"[KFC] 主动思考构建S4U上下文失败: {e}")
+            
+            # 生成主动思考提示词（传入 context_data 以获取全局关系信息）
+            system_prompt, user_prompt = self.prompt_generator.generate_proactive_thinking_prompt(
+                session,
+                trigger_context=trigger_reason,
+                available_actions=available_actions,
+                context_data=context_data,
+                chat_stream=chat_stream,
+            )
+            
+            # 调用 LLM
+            llm_response = await self._call_llm(system_prompt, user_prompt)
+            self.stats["llm_calls"] += 1
+            
+            # 解析响应
+            parsed_response = proactive_action_executor.parse_llm_response(llm_response)
+            
+            # 检查是否决定不打扰（do_nothing）
+            is_do_nothing = (
+                len(parsed_response.actions) == 0 or 
+                (len(parsed_response.actions) == 1 and parsed_response.actions[0].type == "do_nothing")
+            )
+            
+            if is_do_nothing:
+                logger.info(f"[KFC] 主动思考决定不打扰: user={session.user_id}, thought={parsed_response.thought[:50]}...")
+                # 记录这次"决定不打扰"的思考
+                entry = MentalLogEntry(
+                    event_type=MentalLogEventType.PROACTIVE_THINKING,
+                    timestamp=time.time(),
+                    thought=parsed_response.thought,
+                    content="决定不打扰",
+                    emotional_snapshot=session.emotional_state.to_dict(),
+                    metadata={"trigger_reason": trigger_reason, "action": "do_nothing"},
+                )
+                session.add_mental_log_entry(entry)
+                await self.session_manager.save_session(session.user_id)
+                return
+            
+            # 执行决定的动作
+            execution_result = await proactive_action_executor.execute_actions(
+                parsed_response,
+                session,
+                chat_stream
+            )
+            
+            logger.info(f"[KFC] 主动思考执行完成: user={session.user_id}, has_reply={execution_result.get('has_reply')}")
+            
+            # 如果发送了消息，进入等待状态
+            if execution_result.get("has_reply"):
+                session.start_waiting(
+                    expected_reaction=parsed_response.expected_user_reaction,
+                    max_wait=parsed_response.max_wait_seconds
+                )
+            
+            # 保存会话
+            await self.session_manager.save_session(session.user_id)
+            
+        except Exception as e:
+            logger.error(f"[KFC] 主动思考处理失败: {e}")
+            import traceback
+            traceback.print_exc()
     
     def _build_result(
         self,

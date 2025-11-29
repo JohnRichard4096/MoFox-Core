@@ -421,6 +421,17 @@ class SessionManager:
         
         return waiting_sessions
     
+    async def get_all_sessions(self) -> list[KokoroSession]:
+        """
+        获取所有内存中的会话
+        
+        用于主动思考检查等需要遍历所有会话的场景
+        
+        Returns:
+            list[KokoroSession]: 所有会话列表
+        """
+        return list(self._sessions.values())
+    
     async def get_session_statistics(self) -> dict:
         """
         获取会话统计信息
