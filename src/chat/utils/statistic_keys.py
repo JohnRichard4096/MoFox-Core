@@ -61,3 +61,18 @@ PIE_CHART_COST_BY_PROVIDER = "pie_chart_cost_by_provider"
 PIE_CHART_REQ_BY_PROVIDER = "pie_chart_req_by_provider"
 BAR_CHART_COST_BY_MODEL = "bar_chart_cost_by_model"
 BAR_CHART_REQ_BY_MODEL = "bar_chart_req_by_model"
+
+# 新增消息分析指标
+MSG_CNT_BY_USER = "messages_by_user"  # 按用户的消息数
+ACTIVE_CHATS_CNT = "active_chats_count"  # 活跃聊天数
+MOST_ACTIVE_CHAT = "most_active_chat"  # 最活跃的聊天
+AVG_MSG_PER_CHAT = "avg_messages_per_chat"  # 平均每个聊天的消息数
+
+# 新增大模型效率指标
+AVG_COST_PER_MSG = "avg_cost_per_message"  # 平均每条消息成本
+AVG_TOKENS_PER_MSG = "avg_tokens_per_message"  # 平均每条消息Token数
+AVG_TOKENS_PER_REQ = "avg_tokens_per_request"  # 平均每次请求Token数
+MSG_TO_REQ_RATIO = "message_to_request_ratio"  # 消息/请求比率
+COST_PER_ONLINE_HOUR = "cost_per_online_hour"  # 每小时在线成本
+REQ_PER_ONLINE_HOUR = "requests_per_online_hour"  # 每小时请求数
+TOKEN_EFFICIENCY = "token_efficiency"  # Token效率 (输出/输入比率)
