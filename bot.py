@@ -296,8 +296,10 @@ class DatabaseManager:
             # 使用线程执行器运行潜在的阻塞操作
             await initialize_sql_database()
             elapsed_time = time.time() - start_time
+            
+            db_type = global_config.database.database_type if global_config else "unknown"
             logger.info(
-                f"数据库连接初始化成功，使用 {global_config.database.database_type} 数据库，耗时: {elapsed_time:.2f}秒"
+                f"数据库连接初始化成功，使用 {db_type} 数据库，耗时: {elapsed_time:.2f}秒"
             )
 
             return self
@@ -320,6 +322,10 @@ class ConfigurationValidator:
         """验证关键配置"""
         try:
             from src.config.config import global_config
+
+            if global_config is None:
+                logger.error("全局配置未初始化")
+                return False
 
             # 检查必要的配置节
             required_sections = ["database", "bot"]

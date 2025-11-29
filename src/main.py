@@ -7,7 +7,7 @@ import time
 import traceback
 from collections.abc import Callable, Coroutine
 from random import choices
-from typing import Any
+from typing import Any, cast
 
 from rich.traceback import install
 
@@ -171,6 +171,9 @@ class MainSystem:
                     if not issubclass(component_class, BaseInterestCalculator):
                         logger.warning(f"{calc_name} 不是 BaseInterestCalculator 的有效子类")
                         continue
+
+                    # 显式转换类型以修复 Pyright 错误
+                    component_class = cast(type[BaseInterestCalculator], component_class)
 
                     # 创建组件实例
                     calculator_instance = component_class()
