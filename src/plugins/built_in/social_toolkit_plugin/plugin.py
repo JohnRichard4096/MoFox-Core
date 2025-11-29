@@ -135,6 +135,103 @@ def get_emoji_id(emoji_input: str) -> str | None:
 # ===== Action组件 =====
 
 
+class SendLikeAction(BaseAction):
+    """发送名片点赞动作"""
+
+    # === 基本信息（必须填写）===
+    action_name = "send_like"
+    action_description = """可以给其他用户的QQ名片点赞，是一种表达好感和支持的方式。
+    判定条件：
+    1. **用户请求**: 当用户明确要求你给某人点赞时。
+    2. **表达好感**: 当你想主动表达对某用户的喜爱或感谢时，可以给他/她点赞。
+    3. **互动回馈**: 当用户对你表示友好或帮助了你，可以作为回馈给对方点赞。
+    4. **频率限制**: 每个用户每天最多被点赞20次，请不要过于频繁地使用。
+
+    请根据上述规则，回答"是"或"否"。"""
+    activation_type = ActionActivationType.ALWAYS
+    parallel_action = True
+
+    # === 功能描述（必须填写）===
+    action_parameters: ClassVar[dict] = {
+        "user_name": "需要点赞的用户的名字 (可选)",
+        "user_id": "需要点赞的用户的ID (可选，优先级更高)",
+        "times": "点赞次数 (默认为 10，最大为 20)",
+    }
+    action_require: ClassVar[list] = ["当需要给某个用户的QQ名片点赞时使用", "当你想表达对某用户的好感或感谢时使用"]
+    llm_judge_prompt = """
+    判定是否需要使用点赞动作的条件：
+    1. **用户请求**: 当用户明确要求你给某人点赞时。
+    2. **表达好感**: 当你想主动表达对某用户的喜爱或感谢时，可以给他/她点赞。
+    3. **互动回馈**: 当用户对你表示友好或帮助了你，可以作为回馈给对方点赞。
+    4. **频率限制**: 每个用户每天最多被点赞20次，如果最近已经点赞过，请回答"否"。
+
+    请根据上述规则，回答"是"或"否"。
+    """
+    associated_types: ClassVar[list[str]] = ["text"]
+
+    async def execute(self) -> tuple[bool, str]:
+        """执行点赞动作"""
+        user_id = self.action_data.get("user_id")
+        user_name = self.action_data.get("user_name")
+
+        try:
+            times = int(self.action_data.get("times", 10))
+            if times > 20:
+                times = 20
+            if times < 1:
+                times = 1
+        except (ValueError, TypeError):
+            times = 10
+
+        # 优先使用 user_id
+        if not user_id:
+            if not user_name:
+                # 如果都没有提供，则给当前对话用户点赞
+                user_id = self.user_id
+                user_name = self.user_nickname
+            else:
+                # 备用方案：通过 user_name 查找
+                user_info = await get_person_info_manager().get_person_info_by_name(user_name)
+                if not user_info or not user_info.get("user_id"):
+                    logger.info(f"找不到名为 '{user_name}' 的用户，将尝试给当前用户点赞。")
+                    user_id = self.user_id
+                    user_name = self.user_nickname
+                else:
+                    user_id = user_info.get("user_id")
+
+        display_name = user_name or user_id
+
+        # 构建点赞的参数
+        like_args = {"qq_id": str(user_id), "times": times}
+
+        logger.info(f"正在给 {display_name} ({user_id}) 点赞 {times} 次...")
+
+        try:
+            success = await self.send_command(
+                "SEND_LIKE",
+                args=like_args,
+                display_message=f"给 {display_name} 点赞 {times} 次",
+            )
+
+            if success:
+                success_message = f"已给 {display_name} 点赞 {times} 次。"
+                await self.store_action_info(
+                    action_build_into_prompt=True, action_prompt_display=success_message, action_done=True
+                )
+                return True, success_message
+            else:
+                error_message = f"给 {display_name} 点赞失败。"
+                await self.store_action_info(
+                    action_build_into_prompt=True, action_prompt_display=error_message, action_done=False
+                )
+                return False, error_message
+
+        except Exception as e:
+            logger.error(f"执行点赞动作时发生异常: {e}")
+            await self.store_action_info(action_prompt_display=f"点赞失败: {e}", action_done=False)
+            return False, f"点赞失败: {e}"
+
+
 class PokeAction(BaseAction):
     """发送戳一戳动作"""
 
@@ -147,7 +244,7 @@ class PokeAction(BaseAction):
     3. **上下文需求**: 当上下文明确需要你戳一个或多个人时。
     4. **频率与情绪**: 如果最近已经戳过，或者感觉对方情绪不高，请避免使用，不要打扰到别人哦。
 
-    请根据上述规则，回答“是”或“否”。"""
+    请根据上述规则，回答"是"或"否"。"""
     activation_type = ActionActivationType.ALWAYS
     parallel_action = True
 
@@ -573,6 +670,7 @@ class SetEmojiLikePlugin(BasePlugin):
             "action_set_emoji_like": ConfigField(type=bool, default=True, description="是否启用设置表情回应功能"),
             "action_poke_enable": ConfigField(type=bool, default=True, description="是否启用戳一戳功能"),
             "action_set_reminder_enable": ConfigField(type=bool, default=True, description="是否启用定时提醒功能"),
+            "action_send_like_enable": ConfigField(type=bool, default=True, description="是否启用点赞功能"),
         },
     }
 
@@ -584,4 +682,6 @@ class SetEmojiLikePlugin(BasePlugin):
             enable_components.append((PokeAction.get_action_info(), PokeAction))
         if self.get_config("components.action_set_reminder_enable"):
             enable_components.append((RemindAction.get_action_info(), RemindAction))
+        if self.get_config("components.action_send_like_enable"):
+            enable_components.append((SendLikeAction.get_action_info(), SendLikeAction))
         return enable_components
