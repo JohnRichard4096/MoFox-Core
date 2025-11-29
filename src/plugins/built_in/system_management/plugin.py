@@ -31,6 +31,7 @@ from src.plugin_system.base.component_types import (
 from src.plugin_system.base.config_types import ConfigField
 from src.plugin_system.base.plus_command import PlusCommand
 from src.plugin_system.utils.permission_decorators import require_permission
+from src.plugin_system.apis.permission_api import permission_api
 
 logger = get_logger("SystemManagement")
 
@@ -48,9 +49,15 @@ class SystemCommand(PlusCommand):
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
 
-    @require_permission("access", deny_message="❌ 你没有权限使用此命令")
     async def execute(self, args: CommandArgs) -> tuple[bool, str | None, bool]:
         """执行系统管理命令"""
+        if not self.chat_stream.user_info:
+            logger.error("chat_stream缺失用户信息,请报告开发者")
+            return False, "chat_stream缺失用户信息,请报告开发者", True
+        has_permission = await permission_api.check_permission(platform=self.chat_stream.platform,user_id=self.chat_stream.user_info.user_id,permission_node="access")
+        if has_permission:
+            logger.warning("没有权限使用此命令")
+            return False, "没有权限使用此命令", True
         if args.is_empty:
             await self._show_help("all")
             return True, "显示帮助信息", True
