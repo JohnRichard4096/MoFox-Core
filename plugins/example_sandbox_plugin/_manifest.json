@@ -1,0 +1,25 @@
+{
+  "name": "example_sandbox_plugin",
+  "display_name": "示例沙盒插件",
+  "version": "1.0.0",
+  "description": "一个演示沙盒插件功能的示例插件，在受限环境中安全执行",
+  "author": "MoFox Team",
+  "dependencies": [],
+  "python_dependencies": [],
+  "api_version": "1.0",
+  "enable_by_default": true,
+  "trust_level": "sandboxed",
+  "sandbox_config": {
+    "max_execution_time": 5.0,
+    "max_memory_mb": 128,
+    "allow_network": false,
+    "allow_file_access": false,
+    "allowed_modules": [
+      "json",
+      "re",
+      "datetime",
+      "math",
+      "random"
+    ]
+  }
+}

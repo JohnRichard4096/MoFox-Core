@@ -1,0 +1,29 @@
+{
+  "manifest_version": 1,
+  "name": "GPT-SoVITS 多情感语音合成插件",
+  "version": "1.0.0",
+  "description": "基于 GPT-SoVITS 的多情感语音合成插件，支持自动情感分析和语音风格切换，与情绪系统联动实现更自然的语音表达。",
+  "author": {
+    "name": "MoFox Studio"
+  },
+  "license": "MIT",
+  "keywords": [
+    "tts",
+    "gpt-sovits",
+    "emotion",
+    "voice",
+    "语音合成",
+    "情感"
+  ],
+  "categories": [
+    "official",
+    "voice",
+    "tts"
+  ],
+  "dependencies": [],
+  "python_dependencies": [
+    "aiohttp",
+    "soundfile",
+    "pedalboard"
+  ]
+}
