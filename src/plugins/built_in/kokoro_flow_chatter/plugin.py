@@ -121,7 +121,7 @@ class KokoroFlowChatterPlugin(BasePlugin):
             )
             
             # 初始化调度器
-            from .scheduler import initialize_scheduler
+            from .kfc_scheduler_adapter import initialize_scheduler
             
             # 从 global_config 读取配置
             check_interval = 10.0
@@ -153,7 +153,7 @@ class KokoroFlowChatterPlugin(BasePlugin):
             
             # 停止调度器
             if self._scheduler:
-                from .scheduler import shutdown_scheduler
+                from .kfc_scheduler_adapter import shutdown_scheduler
                 await shutdown_scheduler()
                 self._scheduler = None
             

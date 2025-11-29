@@ -10,6 +10,7 @@ Kokoro Flow Chatter 调度器适配器
 3. 与 UnifiedScheduler 的集成
 """
 
+import asyncio
 import time
 from typing import TYPE_CHECKING, Any, Callable, Coroutine, Optional
 
@@ -118,7 +119,10 @@ class KFCSchedulerAdapter:
             self._schedule_id = None
     
     async def _check_waiting_sessions(self) -> None:
-        """检查所有等待中的会话（由 UnifiedScheduler 调用）"""
+        """检查所有等待中的会话（由 UnifiedScheduler 调用）
+        
+        优化：使用 asyncio.create_task 并行处理多个会话，避免顺序阻塞
+        """
         session_manager = get_session_manager()
         waiting_sessions = await session_manager.get_all_waiting_sessions()
         
@@ -128,11 +132,31 @@ class KFCSchedulerAdapter:
         if not waiting_sessions:
             return
         
+        # 并行处理所有等待中的会话，避免一个会话阻塞其他会话
+        tasks = []
         for session in waiting_sessions:
-            try:
-                await self._process_waiting_session(session)
-            except Exception as e:
-                logger.error(f"处理等待会话 {session.user_id} 时出错: {e}")
+            task = asyncio.create_task(
+                self._safe_process_waiting_session(session),
+                name=f"kfc_session_check_{session.user_id}"
+            )
+            tasks.append(task)
+        
+        # 等待所有任务完成，但每个任务都有独立的异常处理
+        if tasks:
+            await asyncio.gather(*tasks, return_exceptions=True)
+    
+    async def _safe_process_waiting_session(self, session: KokoroSession) -> None:
+        """安全地处理等待会话，带有超时保护"""
+        try:
+            # 给每个会话处理设置 60 秒超时（LLM 调用可能需要较长时间）
+            await asyncio.wait_for(
+                self._process_waiting_session(session),
+                timeout=60.0
+            )
+        except asyncio.TimeoutError:
+            logger.error(f"处理等待会话 {session.user_id} 超时（60秒）")
+        except Exception as e:
+            logger.error(f"处理等待会话 {session.user_id} 时出错: {e}")
     
     async def _process_waiting_session(self, session: KokoroSession) -> None:
         """

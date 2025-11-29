@@ -427,16 +427,23 @@ class KokoroFlowChatter(BaseChatter):
             # 返回一个默认的JSON响应
             return '{"thought": "出现了技术问题", "expected_user_reaction": "", "max_wait_seconds": 60, "actions": [{"type": "do_nothing"}]}'
     
-    async def _get_chat_stream(self):
-        """获取聊天流对象"""
+    async def _get_chat_stream(self, stream_id: Optional[str] = None):
+        """
+        获取聊天流对象
+        
+        Args:
+            stream_id: 可选的stream_id，若不提供则使用self.stream_id
+                       在超时回调中应使用session.stream_id以避免发送到错误的用户
+        """
+        target_stream_id = stream_id or self.stream_id
         try:
             from src.chat.message_receive.chat_stream import get_chat_manager
             
             chat_manager = get_chat_manager()
             if chat_manager:
-                return await chat_manager.get_stream(self.stream_id)
+                return await chat_manager.get_stream(target_stream_id)
         except Exception as e:
-            logger.warning(f"[KFC] 获取chat_stream失败: {e}")
+            logger.warning(f"[KFC] 获取chat_stream失败 (stream_id={target_stream_id}): {e}")
         return None
     
     async def _on_session_timeout(self, session: KokoroSession) -> None:
@@ -445,15 +452,23 @@ class KokoroFlowChatter(BaseChatter):
         
         当等待超时时，触发后续决策流程
         
+        注意：此回调由全局调度器触发，可能会在任意Chatter实例上执行。
+        因此必须使用session.stream_id而非self.stream_id来确保消息发送给正确的用户。
+        
         Args:
             session: 超时的会话
         """
-        logger.info(f"[KFC] 处理超时决策: user={session.user_id}")
+        logger.info(f"[KFC] 处理超时决策: user={session.user_id}, stream_id={session.stream_id}")
         self.stats["timeout_decisions"] += 1
         
         try:
+            # 关键修复：使用 session 的 stream_id 创建正确的 ActionExecutor
+            # 因为全局调度器的回调可能在任意 Chatter 实例上执行
+            from .action_executor import ActionExecutor
+            timeout_action_executor = ActionExecutor(session.stream_id)
+            
             # V2: 加载可用动作
-            available_actions = await self.action_executor.load_actions()
+            available_actions = await timeout_action_executor.load_actions()
             
             # 生成超时决策提示词（V2: 传递可用动作）
             system_prompt, user_prompt = self.prompt_generator.generate_timeout_decision_prompt(
@@ -466,11 +481,11 @@ class KokoroFlowChatter(BaseChatter):
             self.stats["llm_calls"] += 1
             
             # 解析响应
-            parsed_response = self.action_executor.parse_llm_response(llm_response)
+            parsed_response = timeout_action_executor.parse_llm_response(llm_response)
             
-            # 执行动作
-            chat_stream = await self._get_chat_stream()
-            execution_result = await self.action_executor.execute_actions(
+            # 关键修复：使用 session.stream_id 获取正确的 chat_stream
+            chat_stream = await self._get_chat_stream(session.stream_id)
+            execution_result = await timeout_action_executor.execute_actions(
                 parsed_response,
                 session,
                 chat_stream
