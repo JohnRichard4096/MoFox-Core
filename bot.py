@@ -331,8 +331,9 @@ class DatabaseManager:
             # 使用线程执行器运行潜在的阻塞操作
             await initialize_sql_database()
             elapsed_time = time.time() - start_time
+            db_type = global_config.database.database_type if global_config.database else "unknown"
             logger.info(
-                f"数据库连接初始化成功，使用 {global_config.database.database_type} 数据库，耗时: {elapsed_time:.2f}秒"
+                f"数据库连接初始化成功，使用 {db_type} 数据库，耗时: {elapsed_time:.2f}秒"
             )
 
             return self
@@ -365,7 +366,7 @@ class ConfigurationValidator:
 
             # 验证数据库配置
             db_config = global_config.database
-            if not hasattr(db_config, "database_type") or not db_config.database_type:
+            if not db_config or not hasattr(db_config, "database_type") or not db_config.database_type:
                 logger.error("数据库配置缺少database_type字段")
                 return False
 
@@ -425,10 +426,10 @@ class WebUIManager:
                     p = (Path(__file__).resolve().parent / p).resolve()
                 if p.exists():
                     return p
-            script_dir = Path(__file__).resolve().parent
+            base_dir = Path(__file__).resolve().parent
             candidates = [
-                script_dir / "webui",             # MoFox_Bot/webui（优先）
-                script_dir.parent / "webui",       # 上级目录/webui（兼容最初需求）
+                base_dir / "webui",             # MoFox_Bot/webui（优先）
+                base_dir.parent / "webui",       # 上级目录/webui（兼容最初需求）
             ]
             for c in candidates:
                 if c.exists():
@@ -588,7 +589,7 @@ class MaiBotMain:
         try:
             from src.config.config import global_config
             
-            db_type = global_config.database.database_type
+            db_type = global_config.database.database_type if global_config.database else "unknown"
             logger.debug(f"当前数据库类型: {db_type}")
         except Exception as e:
             logger.warning(f"数据库配置读取失败（非致命）: {e}")
@@ -680,7 +681,7 @@ async def main_async():
             user_input_done = asyncio.create_task(wait_for_user_input())
 
             # 使用wait等待任意一个任务完成
-            done, pending = await asyncio.wait([main_task, user_input_done], return_when=asyncio.FIRST_COMPLETED)
+            done, _ = await asyncio.wait([main_task, user_input_done], return_when=asyncio.FIRST_COMPLETED)
 
             # 如果用户输入任务完成（用户按了Ctrl+C），取消主任务
             if user_input_done in done and main_task not in done:
