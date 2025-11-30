@@ -337,6 +337,45 @@ kfc_REPLYER_CONTEXT_PROACTIVE = Prompt(
 你决定主动打破沉默，找 {user_name} 聊点什么。想一个自然的开场白，不要太突兀。""",
 )
 
+# =================================================================================================
+# 等待思考提示词模板（用于生成等待中的心理活动）
+# =================================================================================================
+
+kfc_WAITING_THOUGHT = Prompt(
+    name="kfc_waiting_thought",
+    template="""# 等待中的心理活动
+
+## 你是谁
+{persona_block}
+
+## 你与 {user_name} 的关系
+{relation_block}
+
+## 当前情况
+你刚才给 {user_name} 发了消息，现在正在等待对方回复。
+
+**你发的消息**：{last_bot_message}
+**你期待的反应**：{expected_reaction}
+**已等待时间**：{elapsed_minutes:.1f} 分钟
+**计划最多等待**：{max_wait_minutes:.1f} 分钟
+**等待进度**：{progress_percent}%
+
+## 任务
+请描述你此刻等待时的内心想法。这是你私下的心理活动，不是要发送的消息。
+
+**要求**：
+- 用第一人称描述你的感受和想法
+- 要符合你的性格和你们的关系
+- 根据等待进度自然表达情绪变化：
+  - 初期（0-40%）：可能比较平静，稍微期待
+  - 中期（40-70%）：可能开始有点在意，但还好
+  - 后期（70-100%）：可能有点焦虑、担心，或者想主动做点什么
+- 不要太长，1-2句话即可
+- 不要输出 JSON，直接输出你的想法
+
+现在，请直接输出你等待时的内心想法：""",
+)
+
 # 导出所有模板名称，方便外部引用
 PROMPT_NAMES = {
     "main": "kfc_main",
@@ -347,6 +386,7 @@ PROMPT_NAMES = {
     "replyer_context_in_time": "kfc_replyer_context_in_time",
     "replyer_context_late": "kfc_replyer_context_late",
     "replyer_context_proactive": "kfc_replyer_context_proactive",
+    "waiting_thought": "kfc_waiting_thought",
     "situation_new_message": "kfc_situation_new_message",
     "situation_reply_in_time": "kfc_situation_reply_in_time",
     "situation_reply_late": "kfc_situation_reply_late",

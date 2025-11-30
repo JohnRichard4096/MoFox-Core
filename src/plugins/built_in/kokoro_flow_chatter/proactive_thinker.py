@@ -22,7 +22,7 @@ from src.plugin_system.apis.unified_scheduler import TriggerType, unified_schedu
 
 from .models import EventType, SessionStatus
 from .planner import generate_plan
-from .replyer import generate_reply_text
+from .replyer import _clean_reply_text, generate_reply_text
 from .session import KokoroSession, get_session_manager
 
 if TYPE_CHECKING:
@@ -211,13 +211,16 @@ class ProactiveThinker:
         """处理连续思考"""
         self._stats["continuous_thinking_triggered"] += 1
         
-        # 生成等待中的想法
-        thought = self._generate_waiting_thought(session, progress)
+        # 获取用户名
+        user_name = await self._get_user_name(session.user_id, session.stream_id)
+        
+        # 调用 LLM 生成等待中的想法
+        thought = await self._generate_waiting_thought(session, user_name, progress)
         
         # 记录到 mental_log
         session.add_waiting_update(
             waiting_thought=thought,
-            mood="",  # 可以根据进度设置心情
+            mood="",  # 心情已融入 thought 中
         )
         
         # 更新思考计数
@@ -232,10 +235,104 @@ class ProactiveThinker:
             f"progress={progress:.1%}, thought={thought[:30]}..."
         )
     
-    def _generate_waiting_thought(self, session: KokoroSession, progress: float) -> str:
-        """生成等待中的想法"""
-        elapsed_minutes = session.waiting_config.get_elapsed_minutes()
-        
+    async def _generate_waiting_thought(
+        self,
+        session: KokoroSession,
+        user_name: str,
+        progress: float,
+    ) -> str:
+        """调用 LLM 生成等待中的想法"""
+        try:
+            from src.chat.utils.prompt import global_prompt_manager
+            from src.plugin_system.apis import llm_api
+            
+            from .prompt.builder import get_prompt_builder
+            from .prompt.prompts import PROMPT_NAMES
+            
+            # 使用 PromptBuilder 构建人设块
+            prompt_builder = get_prompt_builder()
+            persona_block = prompt_builder._build_persona_block()
+            
+            # 获取关系信息
+            relation_block = f"你与 {user_name} 还不太熟悉。"
+            try:
+                from src.person_info.relationship_manager import relationship_manager
+                
+                person_info_manager = await self._get_person_info_manager()
+                if person_info_manager:
+                    platform = global_config.bot.platform if global_config else "qq"
+                    person_id = person_info_manager.get_person_id(platform, session.user_id)
+                    relationship = await relationship_manager.get_relationship(person_id)
+                    if relationship:
+                        relation_block = f"你与 {user_name} 的亲密度是 {relationship.intimacy}。{relationship.description or ''}"
+            except Exception as e:
+                logger.debug(f"获取关系信息失败: {e}")
+            
+            # 获取上次发送的消息
+            last_bot_message = "（未知）"
+            for entry in reversed(session.mental_log):
+                if entry.event_type == EventType.BOT_PLANNING and entry.actions:
+                    for action in entry.actions:
+                        if action.get("type") == "kfc_reply":
+                            content = action.get("content", "")
+                            if content:
+                                last_bot_message = content[:100] + ("..." if len(content) > 100 else "")
+                                break
+                    if last_bot_message != "（未知）":
+                        break
+            
+            # 构建提示词
+            elapsed_minutes = session.waiting_config.get_elapsed_minutes()
+            max_wait_minutes = session.waiting_config.max_wait_seconds / 60
+            expected_reaction = session.waiting_config.expected_reaction or "对方能回复点什么"
+            
+            prompt = await global_prompt_manager.format_prompt(
+                PROMPT_NAMES["waiting_thought"],
+                persona_block=persona_block,
+                user_name=user_name,
+                relation_block=relation_block,
+                last_bot_message=last_bot_message,
+                expected_reaction=expected_reaction,
+                elapsed_minutes=elapsed_minutes,
+                max_wait_minutes=max_wait_minutes,
+                progress_percent=int(progress * 100),
+            )
+            
+            # 调用情绪模型
+            models = llm_api.get_available_models()
+            emotion_config = models.get("emotion") or models.get("replyer")
+            
+            if not emotion_config:
+                logger.warning("[ProactiveThinker] 未找到 emotion/replyer 模型配置，使用默认想法")
+                return self._get_fallback_thought(elapsed_minutes, progress)
+            
+            success, raw_response, _, model_name = await llm_api.generate_with_model(
+                prompt=prompt,
+                model_config=emotion_config,
+                request_type="kokoro_flow_chatter.waiting_thought",
+            )
+            
+            if not success or not raw_response:
+                logger.warning(f"[ProactiveThinker] LLM 调用失败: {raw_response}")
+                return self._get_fallback_thought(elapsed_minutes, progress)
+            
+            # 使用统一的文本清理函数
+            thought = _clean_reply_text(raw_response)
+            
+            logger.debug(f"[ProactiveThinker] LLM 生成等待想法 (model={model_name}): {thought[:50]}...")
+            return thought
+            
+        except Exception as e:
+            logger.error(f"[ProactiveThinker] 生成等待想法失败: {e}")
+            import traceback
+            traceback.print_exc()
+            return self._get_fallback_thought(
+                session.waiting_config.get_elapsed_minutes(),
+                progress
+            )
+    
+    def _get_fallback_thought(self, elapsed_minutes: float, progress: float) -> str:
+        """获取备用的等待想法（当 LLM 调用失败时使用）"""
         if progress < 0.4:
             thoughts = [
                 f"已经等了 {elapsed_minutes:.0f} 分钟了，对方可能在忙吧...",
@@ -254,8 +351,15 @@ class ProactiveThinker:
                 "要不要主动说点什么呢...",
                 "快到时间了，对方还是没回",
             ]
-        
         return random.choice(thoughts)
+    
+    async def _get_person_info_manager(self):
+        """获取 person_info_manager"""
+        try:
+            from src.person_info.person_info import get_person_info_manager
+            return get_person_info_manager()
+        except Exception:
+            return None
     
     async def _handle_timeout(self, session: KokoroSession) -> None:
         """处理等待超时"""
@@ -577,10 +681,7 @@ class ProactiveThinker:
             from src.person_info.person_info import get_person_info_manager
             
             person_info_manager = get_person_info_manager()
-            # 从 stream_id 提取 platform（格式通常是 platform_xxx）
-            platform = "qq"  # 默认平台
-            if "_" in stream_id:
-                platform = stream_id.split("_")[0]
+            platform = global_config.bot.platform if global_config else "qq"
             
             person_id = person_info_manager.get_person_id(platform, user_id)
             person_name = await person_info_manager.get_value(person_id, "person_name")

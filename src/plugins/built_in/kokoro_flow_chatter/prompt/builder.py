@@ -149,8 +149,8 @@ class PromptBuilder:
         # 3. 构建活动流
         activity_stream = await self._build_activity_stream(session, user_name)
         
-        # 4. 构建当前情况（简化版，不需要那么详细）
-        current_situation = await self._build_current_situation(
+        # 4. 构建当前情况（回复器专用，简化版，不包含决策语言）
+        current_situation = await self._build_replyer_situation(
             session, user_name, situation_type, extra_context
         )
         
@@ -315,9 +315,15 @@ class PromptBuilder:
             if not history_messages:
                 return "（暂无聊天记录）"
             
+            # 过滤非文本消息（如戳一戳、禁言等系统通知）
+            text_messages = self._filter_text_messages(history_messages)
+            
+            if not text_messages:
+                return "（暂无聊天记录）"
+            
             # 构建可读消息
             chat_content, _ = await build_readable_messages_with_id(
-                messages=[msg.flatten() for msg in history_messages[-30:]],  # 最多30条
+                messages=[msg.flatten() for msg in text_messages[-30:]],  # 最多30条
                 timestamp_mode="normal_no_YMD",
                 truncate=False,
                 show_actions=False,
@@ -328,6 +334,33 @@ class PromptBuilder:
         except Exception as e:
             logger.warning(f"构建聊天历史块失败: {e}")
             return "（获取聊天记录失败）"
+    
+    def _filter_text_messages(self, messages: list) -> list:
+        """
+        过滤非文本消息
+        
+        移除系统通知消息（如戳一戳、禁言等），只保留正常的文本聊天消息
+        
+        Args:
+            messages: 消息列表（DatabaseMessages 对象）
+            
+        Returns:
+            过滤后的消息列表
+        """
+        filtered = []
+        for msg in messages:
+            # 跳过系统通知消息（戳一戳、禁言等）
+            if getattr(msg, "is_notify", False):
+                continue
+            
+            # 跳过没有实际文本内容的消息
+            content = getattr(msg, "processed_plain_text", "") or getattr(msg, "display_message", "")
+            if not content or not content.strip():
+                continue
+            
+            filtered.append(msg)
+        
+        return filtered
     
     async def _build_activity_stream(
         self,
@@ -667,6 +700,66 @@ class PromptBuilder:
 }
 
 注意：kfc_reply 动作不需要填写 content 字段，回复内容会单独生成。"""
+    
+    async def _build_replyer_situation(
+        self,
+        session: KokoroSession,
+        user_name: str,
+        situation_type: str,
+        extra_context: dict,
+    ) -> str:
+        """
+        构建回复器专用的当前情况描述
+        
+        与 Planner 的 _build_current_situation 不同，这里不包含决策性语言，
+        只描述当前的情景背景
+        """
+        from datetime import datetime
+        current_time = datetime.now().strftime("%Y年%m月%d日 %H:%M")
+        
+        if situation_type == "new_message":
+            return f"现在是 {current_time}。{user_name} 刚给你发了消息。"
+        
+        elif situation_type == "reply_in_time":
+            elapsed = session.waiting_config.get_elapsed_seconds()
+            max_wait = session.waiting_config.max_wait_seconds
+            return (
+                f"现在是 {current_time}。\n"
+                f"你之前发了消息后在等 {user_name} 的回复。"
+                f"等了大约 {elapsed / 60:.1f} 分钟（你原本打算最多等 {max_wait / 60:.1f} 分钟）。"
+                f"现在 {user_name} 回复了！"
+            )
+        
+        elif situation_type == "reply_late":
+            elapsed = session.waiting_config.get_elapsed_seconds()
+            max_wait = session.waiting_config.max_wait_seconds
+            return (
+                f"现在是 {current_time}。\n"
+                f"你之前发了消息后在等 {user_name} 的回复。"
+                f"你原本打算最多等 {max_wait / 60:.1f} 分钟，但实际等了 {elapsed / 60:.1f} 分钟才收到回复。"
+                f"虽然有点迟，但 {user_name} 终于回复了。"
+            )
+        
+        elif situation_type == "timeout":
+            elapsed = session.waiting_config.get_elapsed_seconds()
+            max_wait = session.waiting_config.max_wait_seconds
+            return (
+                f"现在是 {current_time}。\n"
+                f"你之前发了消息后一直在等 {user_name} 的回复。"
+                f"你原本打算最多等 {max_wait / 60:.1f} 分钟，现在已经等了 {elapsed / 60:.1f} 分钟了，对方还是没回。"
+                f"你决定主动说点什么。"
+            )
+        
+        elif situation_type == "proactive":
+            silence = extra_context.get("silence_duration", "一段时间")
+            return (
+                f"现在是 {current_time}。\n"
+                f"你和 {user_name} 已经有一段时间没聊天了（沉默了 {silence}）。"
+                f"你决定主动找 {user_name} 聊点什么。"
+            )
+        
+        # 默认
+        return f"现在是 {current_time}。"
     
     async def _build_reply_context(
         self,

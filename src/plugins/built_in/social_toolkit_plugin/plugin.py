@@ -195,7 +195,7 @@ class PokeAction(BaseAction):
         for i in range(times):
             logger.info(f"正在向 {display_name} ({user_id}) 发送第 {i + 1}/{times} 次戳一戳...")
             await self.send_command(
-                "SEND_POKE", args=poke_args, display_message=f"戳了戳 {display_name} ({i + 1}/{times})"
+                "SEND_POKE", args=poke_args, display_message=f"(系统动作)戳了戳 {display_name} ({i + 1}/{times})"
             )
             # 添加一个延迟，避免因发送过快导致后续戳一戳失败
             await asyncio.sleep(1.5)
