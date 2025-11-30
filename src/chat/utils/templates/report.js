@@ -6,6 +6,8 @@ if (tab_links.length > 0) tab_links[0].classList.add("active");
 
 // 跟踪哪些tab的图表已经初始化
 const initializedTabs = new Set();
+// 存储ECharts实例以便销毁和resize
+const chartInstances = {};
 // 存储初始化函数的引用，以便在showTab中调用
 let initializeStaticChartsForPeriod = null;
 
@@ -30,9 +32,30 @@ function showTab(evt, tabName) {
         }
         initializedTabs.add(tabName);
     }
+    
+    // Resize当前tab的图表以确保正确显示
+    setTimeout(() => {
+        Object.values(chartInstances).forEach(chart => {
+            if (chart && chart.resize) chart.resize();
+        });
+    }, 100);
 }
 
+// 窗口resize时调整所有图表
+window.addEventListener('resize', function() {
+    Object.values(chartInstances).forEach(chart => {
+        if (chart && chart.resize) chart.resize();
+    });
+});
+
 document.addEventListener('DOMContentLoaded', function () {
+    // ECharts 通用配色
+    const colors = [
+        '#2563eb', '#3b82f6', '#60a5fa', '#0891b2', '#06b6d4',
+        '#059669', '#10b981', '#7c3aed', '#8b5cf6', '#ec4899',
+        '#f97316', '#eab308', '#84cc16', '#14b8a6', '#6366f1'
+    ];
+    
     // Chart data is injected by python via the HTML template.
     let allChartData = null;
     function getAllChartData() {
@@ -47,12 +70,11 @@ document.addEventListener('DOMContentLoaded', function () {
         return allChartData || {};
     }
 
-    let currentCharts = {};
     const chartConfigs = {
-        totalCost: { id: 'totalCostChart', title: '总花费趋势', yAxisLabel: '花费 (¥)', dataKey: 'total_cost_data', fill: true },
-        costByModule: { id: 'costByModuleChart', title: '各模块花费对比', yAxisLabel: '花费 (¥)', dataKey: 'cost_by_module', fill: false },
-        costByModel: { id: 'costByModelChart', title: '各模型花费对比', yAxisLabel: '花费 (¥)', dataKey: 'cost_by_model', fill: false },
-        messageByChat: { id: 'messageByChatChart', title: '各聊天流消息统计', yAxisLabel: '消息数', dataKey: 'message_by_chat', fill: false }
+        totalCost: { id: 'totalCostChart', title: '总花费趋势', yAxisLabel: '花费 (¥)', dataKey: 'total_cost_data' },
+        costByModule: { id: 'costByModuleChart', title: '各模块花费对比', yAxisLabel: '花费 (¥)', dataKey: 'cost_by_module' },
+        costByModel: { id: 'costByModelChart', title: '各模型花费对比', yAxisLabel: '花费 (¥)', dataKey: 'cost_by_model' },
+        messageByChat: { id: 'messageByChatChart', title: '各聊天流消息统计', yAxisLabel: '消息数', dataKey: 'message_by_chat' }
     };
 
     window.switchTimeRange = function(timeRange) {
@@ -65,8 +87,6 @@ document.addEventListener('DOMContentLoaded', function () {
     }
 
     function updateAllCharts(data, timeRange) {
-        Object.values(currentCharts).forEach(chart => chart && chart.destroy());
-        currentCharts = {};
         Object.keys(chartConfigs).forEach(type => createChart(type, data, timeRange));
     }
 
@@ -74,138 +94,159 @@ document.addEventListener('DOMContentLoaded', function () {
         const config = chartConfigs[chartType];
         if (!data || !data[config.dataKey]) return;
         
-        // Modern Theme Colors
-        const colors = [
-            '#2563eb', '#3b82f6', '#60a5fa', '#93c5fd', // Blue
-            '#0891b2', '#06b6d4', '#22d3ee', '#67e8f9', // Cyan
-            '#059669', '#10b981', '#34d399', '#6ee7b7', // Emerald
-            '#7c3aed', '#8b5cf6', '#a78bfa', '#c4b5fd'  // Violet
-        ];
+        const container = document.getElementById(config.id);
+        if (!container) return;
         
-        let datasets = [];
+        // 销毁已存在的实例
+        if (chartInstances[config.id]) {
+            chartInstances[config.id].dispose();
+        }
+        
+        const chart = echarts.init(container);
+        chartInstances[config.id] = chart;
+        
+        let series = [];
+        let legendData = [];
+        
         if (chartType === 'totalCost') {
-            datasets = [{ 
-                label: config.title, 
-                data: data[config.dataKey], 
-                borderColor: '#2563eb', 
-                backgroundColor: 'rgba(37, 99, 235, 0.1)', 
-                tension: 0.4, 
-                fill: config.fill,
-                borderWidth: 2,
-                pointRadius: 0,
-                pointHoverRadius: 6,
-                pointBackgroundColor: '#2563eb',
-                pointBorderColor: '#fff',
-                pointBorderWidth: 2
+            series = [{
+                name: config.title,
+                type: 'line',
+                data: data[config.dataKey],
+                smooth: 0.4,
+                areaStyle: {
+                    color: new echarts.graphic.LinearGradient(0, 0, 0, 1, [
+                        { offset: 0, color: 'rgba(37, 99, 235, 0.3)' },
+                        { offset: 1, color: 'rgba(37, 99, 235, 0.05)' }
+                    ])
+                },
+                lineStyle: { width: 2, color: '#2563eb' },
+                itemStyle: { color: '#2563eb' },
+                showSymbol: false,
+                emphasis: { focus: 'series' }
             }];
         } else {
             let i = 0;
             Object.entries(data[config.dataKey]).forEach(([name, chartData]) => {
-                datasets.push({ 
-                    label: name, 
-                    data: chartData, 
-                    borderColor: colors[i % colors.length], 
-                    backgroundColor: colors[i % colors.length] + '20', 
-                    tension: 0.4, 
-                    fill: config.fill,
-                    borderWidth: 2,
-                    pointRadius: 0,
-                    pointHoverRadius: 6,
-                    pointBackgroundColor: colors[i % colors.length],
-                    pointBorderColor: '#fff',
-                    pointBorderWidth: 2
+                legendData.push(name);
+                series.push({
+                    name: name,
+                    type: 'line',
+                    data: chartData,
+                    smooth: 0.4,
+                    lineStyle: { width: 2, color: colors[i % colors.length] },
+                    itemStyle: { color: colors[i % colors.length] },
+                    showSymbol: false,
+                    emphasis: { focus: 'series' }
                 });
                 i++;
             });
         }
-        const canvas = document.getElementById(config.id);
-        if (!canvas) return;
         
-        // Destroy existing chart if any
-        if (currentCharts[chartType]) {
-            currentCharts[chartType].destroy();
-        }
-
-        currentCharts[chartType] = new Chart(canvas, {
-            type: 'line',
-            data: { labels: data.time_labels, datasets: datasets },
-            options: {
-                responsive: true,
-                maintainAspectRatio: false,
-                plugins: { 
-                    title: { 
-                        display: true, 
-                        text: `${config.title}`, 
-                        font: { size: 16, weight: '600', family: "'Inter', sans-serif" },
-                        color: '#0f172a',
-                        padding: { top: 10, bottom: 20 },
-                        align: 'start'
-                    }, 
-                    legend: { 
-                        display: chartType !== 'totalCost', 
-                        position: 'top',
-                        align: 'end',
-                        labels: {
-                            usePointStyle: true,
-                            padding: 20,
-                            font: { size: 12, family: "'Inter', sans-serif" },
-                            boxWidth: 8,
-                            boxHeight: 8
-                        }
-                    },
-                    tooltip: {
-                        backgroundColor: '#ffffff',
-                        titleColor: '#0f172a',
-                        bodyColor: '#475569',
-                        borderColor: '#e2e8f0',
-                        borderWidth: 1,
-                        padding: 12,
-                        titleFont: { size: 13, weight: '600' },
-                        bodyFont: { size: 12 },
-                        cornerRadius: 8,
-                        displayColors: true,
-                        boxPadding: 4
-                    }
-                },
-                scales: { 
-                    x: { 
-                        grid: { display: false },
-                        ticks: { 
-                            maxTicksLimit: 8,
-                            color: '#94a3b8',
-                            font: { size: 11 }
-                        },
-                        border: { display: false }
-                    }, 
-                    y: { 
-                        title: { 
-                            display: true, 
-                            text: config.yAxisLabel,
-                            color: '#94a3b8',
-                            font: { size: 11, weight: '500' }
-                        },
-                        beginAtZero: true,
-                        grid: { 
-                            color: '#f1f5f9',
-                            borderDash: [4, 4]
-                        },
-                        ticks: {
-                            color: '#94a3b8',
-                            font: { size: 11 }
-                        },
-                        border: { display: false }
-                    } 
-                },
-                interaction: { 
-                    intersect: false, 
-                    mode: 'index' 
-                },
-                animation: {
-                    duration: 800,
-                    easing: 'easeOutQuart'
+        // 动态计算图例和布局
+        const hasLegend = chartType !== 'totalCost';
+        const legendItemCount = legendData.length;
+        const needsScrollLegend = legendItemCount > 5;
+        
+        const option = {
+            title: {
+                text: config.title,
+                left: 'left',
+                textStyle: {
+                    fontSize: 16,
+                    fontWeight: 600,
+                    fontFamily: "'Inter', sans-serif",
+                    color: '#0f172a'
                 }
-            }
-        });
+            },
+            tooltip: {
+                trigger: 'axis',
+                backgroundColor: '#ffffff',
+                borderColor: '#e2e8f0',
+                borderWidth: 1,
+                padding: 12,
+                textStyle: { color: '#475569', fontSize: 12 },
+                axisPointer: { type: 'cross', crossStyle: { color: '#999' } },
+                confine: true // 防止tooltip溢出容器
+            },
+            legend: {
+                show: hasLegend,
+                data: legendData,
+                type: 'scroll',
+                orient: needsScrollLegend ? 'vertical' : 'horizontal',
+                right: needsScrollLegend ? 10 : 'center',
+                top: needsScrollLegend ? 50 : 35,
+                left: needsScrollLegend ? 'auto' : 'center',
+                width: needsScrollLegend ? '20%' : 'auto',
+                icon: 'circle',
+                itemWidth: 8,
+                itemHeight: 8,
+                textStyle: { 
+                    fontSize: 11,
+                    width: needsScrollLegend ? 80 : 'auto',
+                    overflow: 'truncate',
+                    ellipsis: '...'
+                },
+                pageButtonItemGap: 5,
+                pageButtonGap: 5,
+                pageIconColor: '#2563eb',
+                pageIconInactiveColor: '#aaa',
+                pageTextStyle: { fontSize: 10 },
+                formatter: function(name) {
+                    return name.length > 15 ? name.substring(0, 15) + '...' : name;
+                },
+                tooltip: { show: true } // 鼠标悬停显示完整名称
+            },
+            grid: {
+                left: '3%',
+                right: needsScrollLegend && hasLegend ? '22%' : '4%',
+                bottom: '12%',
+                top: chartType === 'totalCost' ? 60 : (needsScrollLegend ? 60 : 80),
+                containLabel: true
+            },
+            dataZoom: [
+                {
+                    type: 'inside',
+                    xAxisIndex: 0,
+                    filterMode: 'none',
+                    zoomOnMouseWheel: 'shift', // 按shift滚轮缩放
+                    moveOnMouseMove: true
+                },
+                {
+                    type: 'slider',
+                    xAxisIndex: 0,
+                    height: 20,
+                    bottom: 5,
+                    handleSize: '100%',
+                    showDetail: false,
+                    brushSelect: false
+                }
+            ],
+            xAxis: {
+                type: 'category',
+                data: data.time_labels,
+                boundaryGap: false,
+                axisLine: { show: false },
+                axisTick: { show: false },
+                axisLabel: { color: '#94a3b8', fontSize: 11 },
+                splitLine: { show: false }
+            },
+            yAxis: {
+                type: 'value',
+                name: config.yAxisLabel,
+                nameTextStyle: { color: '#94a3b8', fontSize: 11 },
+                axisLine: { show: false },
+                axisTick: { show: false },
+                axisLabel: { color: '#94a3b8', fontSize: 11 },
+                splitLine: { lineStyle: { color: '#f1f5f9', type: 'dashed' } }
+            },
+            series: series,
+            animation: true,
+            animationDuration: 800,
+            animationEasing: 'cubicOut'
+        };
+        
+        chart.setOption(option);
     }
 
     // Function to initialize charts tab
@@ -213,7 +254,6 @@ document.addEventListener('DOMContentLoaded', function () {
         const data = getAllChartData();
         if (data['24h']) {
             updateAllCharts(data['24h'], '24h');
-            // Activate the 24h button by default
             document.querySelectorAll('.time-range-btn').forEach(btn => {
                 if (btn.textContent.includes('24小时')) {
                     btn.classList.add('active');
@@ -238,810 +278,781 @@ document.addEventListener('DOMContentLoaded', function () {
         return staticChartData || {};
     }
 
+    // ECharts 扩展调色板
+    const extendedColors = [
+        '#1976D2', '#42A5F5', '#2196F3', '#64B5F6', '#90CAF9',
+        '#00BCD4', '#26C6DA', '#4DD0E1', '#009688', '#26A69A',
+        '#4CAF50', '#66BB6A', '#81C784', '#FF9800', '#FFA726',
+        '#FF5722', '#FF7043', '#9C27B0', '#AB47BC', '#E91E63',
+        '#EC407A', '#607D8B', '#78909C'
+    ];
+
     // 懒加载函数：只初始化指定tab的静态图表
-    // 将函数赋值给外部变量，使得showTab可以调用
     initializeStaticChartsForPeriod = function(period_id) {
         const data = getStaticChartData();
         if (!data[period_id]) {
             console.warn(`No static chart data for period: ${period_id}`);
             return;
         }
+        
         const providerCostData = data[period_id].provider_cost_data;
         const moduleCostData = data[period_id].module_cost_data;
         const modelCostData = data[period_id].model_cost_data;
-        // 扩展的Material Design调色板 - 包含多种蓝色系和其他配色
-        const colors = [
-            '#1976D2', '#42A5F5', '#2196F3', '#64B5F6', '#90CAF9', '#BBDEFB',  // 蓝色系
-            '#1565C0', '#0D47A1', '#82B1FF', '#448AFF',  // 深蓝色系
-            '#00BCD4', '#26C6DA', '#4DD0E1', '#80DEEA',  // 青色系
-            '#009688', '#26A69A', '#4DB6AC', '#80CBC4',  // 青绿色系
-            '#4CAF50', '#66BB6A', '#81C784', '#A5D6A7',  // 绿色系
-            '#FF9800', '#FFA726', '#FFB74D', '#FFCC80',  // 橙色系
-            '#FF5722', '#FF7043', '#FF8A65', '#FFAB91',  // 深橙色系
-            '#9C27B0', '#AB47BC', '#BA68C8', '#CE93D8',  // 紫色系
-            '#E91E63', '#EC407A', '#F06292', '#F48FB1',  // 粉色系
-            '#607D8B', '#78909C', '#90A4AE', '#B0BEC5'   // 蓝灰色系
-        ];
 
-        // Provider Cost Pie Chart
-        const providerCtx = document.getElementById(`providerCostPieChart_${period_id}`);
-        if (providerCtx && providerCostData && providerCostData.data && providerCostData.data.length > 0) {
-            new Chart(providerCtx, {
-                type: 'doughnut',
-                data: {
-                    labels: providerCostData.labels,
-                    datasets: [{
-                        label: '按供应商花费',
-                        data: providerCostData.data,
-                        backgroundColor: colors,
-                        borderColor: '#FFFFFF',
-                        borderWidth: 2,
-                        hoverOffset: 8
-                    }]
-                },
-                options: {
-                    responsive: true,
-                    maintainAspectRatio: false,
-                    plugins: {
-                        title: { 
-                            display: false
-                        },
-                        legend: { 
-                            position: 'right',
-                            align: 'center',
-                            labels: {
-                                usePointStyle: true,
-                                padding: 8,
-                                font: { size: 10 },
-                                boxWidth: 12,
-                                boxHeight: 12,
-                                color: function(context) {
-                                    const chart = context.chart;
-                                    const meta = chart.getDatasetMeta(0);
-                                    const index = context.index;
-                                    return meta.data[index] && meta.data[index].hidden ? '#CCCCCC' : '#666666';
-                                },
-                                generateLabels: function(chart) {
-                                    const data = chart.data;
-                                    if (data.labels.length && data.datasets.length) {
-                                        const dataset = data.datasets[0];
-                                        const labels = data.labels.slice(0, 10);
-                                        return labels.map((label, i) => {
-                                            const meta = chart.getDatasetMeta(0);
-                                            const style = meta.controller.getStyle(i);
-                                            const isHidden = meta.data[i] && meta.data[i].hidden;
-                                            return {
-                                                text: label.length > 15 ? label.substring(0, 15) + '...' : label,
-                                                fillStyle: isHidden ? '#E0E0E0' : style.backgroundColor,
-                                                strokeStyle: isHidden ? '#E0E0E0' : style.borderColor,
-                                                lineWidth: style.borderWidth,
-                                                fontColor: isHidden ? '#CCCCCC' : '#666666',
-                                                hidden: isNaN(dataset.data[i]) || isHidden,
-                                                index: i
-                                            };
-                                        });
-                                    }
-                                    return [];
-                                }
-                            },
-                            onClick: function(e, legendItem, legend) {
-                                const index = legendItem.index;
-                                const chart = legend.chart;
-                                const meta = chart.getDatasetMeta(0);
-                                
-                                // 切换该扇区的可见性
-                                meta.data[index].hidden = !meta.data[index].hidden;
-                                chart.update();
-                            }
-                        },
-                        tooltip: {
-                            backgroundColor: 'rgba(0, 0, 0, 0.8)',
-                            padding: 12,
-                            titleFont: { size: 13 },
-                            bodyFont: { size: 12 },
-                            cornerRadius: 8,
-                            callbacks: {
-                                label: function(context) {
-                                    let label = context.label || '';
-                                    if (label) {
-                                        label += ': ';
-                                    }
-                                    label += context.parsed.toFixed(4) + ' ¥';
-                                    const total = context.dataset.data.reduce((a, b) => a + b, 0);
-                                    const percentage = ((context.parsed / total) * 100).toFixed(2);
-                                    label += ` (${percentage}%)`;
-                                    return label;
-                                }
-                            }
-                        }
-                    },
-                    animation: {
-                        animateRotate: true,
-                        animateScale: true,
-                        duration: 1000,
-                        easing: 'easeInOutQuart'
-                    }
-                }
-            });
-        }
-
-        // Module Cost Pie Chart
-        const moduleCtx = document.getElementById(`moduleCostPieChart_${period_id}`);
-        if (moduleCtx && moduleCostData && moduleCostData.data && moduleCostData.data.length > 0) {
-            new Chart(moduleCtx, {
-                type: 'doughnut',
-                data: {
-                    labels: moduleCostData.labels,
-                    datasets: [{
-                        label: '按模块花费',
-                        data: moduleCostData.data,
-                        backgroundColor: colors,
-                        borderColor: '#FFFFFF',
-                        borderWidth: 2,
-                        hoverOffset: 8
-                    }]
-                },
-                options: {
-                    responsive: true,
-                    maintainAspectRatio: false,
-                    plugins: {
-                        title: { 
-                            display: false
-                        },
-                        legend: { 
-                            position: 'right',
-                            align: 'center',
-                            labels: {
-                                usePointStyle: true,
-                                padding: 8,
-                                font: { size: 10 },
-                                boxWidth: 12,
-                                boxHeight: 12,
-                                color: function(context) {
-                                    const chart = context.chart;
-                                    const meta = chart.getDatasetMeta(0);
-                                    const index = context.index;
-                                    return meta.data[index] && meta.data[index].hidden ? '#CCCCCC' : '#666666';
-                                },
-                                generateLabels: function(chart) {
-                                    const data = chart.data;
-                                    if (data.labels.length && data.datasets.length) {
-                                        const dataset = data.datasets[0];
-                                        return data.labels.map((label, i) => {
-                                            const meta = chart.getDatasetMeta(0);
-                                            const style = meta.controller.getStyle(i);
-                                            const isHidden = meta.data[i] && meta.data[i].hidden;
-                                            return {
-                                                text: label.length > 15 ? label.substring(0, 15) + '...' : label,
-                                                fillStyle: isHidden ? '#E0E0E0' : style.backgroundColor,
-                                                strokeStyle: isHidden ? '#E0E0E0' : style.borderColor,
-                                                lineWidth: style.borderWidth,
-                                                fontColor: isHidden ? '#CCCCCC' : '#666666',
-                                                hidden: isNaN(dataset.data[i]) || isHidden,
-                                                index: i
-                                            };
-                                        });
-                                    }
-                                    return [];
-                                }
-                            },
-                            onClick: function(e, legendItem, legend) {
-                                const index = legendItem.index;
-                                const chart = legend.chart;
-                                const meta = chart.getDatasetMeta(0);
-                                
-                                meta.data[index].hidden = !meta.data[index].hidden;
-                                chart.update();
-                            }
-                        },
-                        tooltip: {
-                            backgroundColor: 'rgba(0, 0, 0, 0.8)',
-                            padding: 12,
-                            titleFont: { size: 13 },
-                            bodyFont: { size: 12 },
-                            cornerRadius: 8,
-                            callbacks: {
-                                label: function(context) {
-                                    let label = context.label || '';
-                                    if (label) {
-                                        label += ': ';
-                                    }
-                                    label += context.parsed.toFixed(4) + ' ¥';
-                                    const total = context.dataset.data.reduce((a, b) => a + b, 0);
-                                    const percentage = ((context.parsed / total) * 100).toFixed(2);
-                                    label += ` (${percentage}%)`;
-                                    return label;
-                                }
-                            }
-                        }
-                    },
-                    animation: {
-                        animateRotate: true,
-                        animateScale: true,
-                        duration: 1000,
-                        easing: 'easeInOutQuart'
-                    }
-                }
-            });
-        }
-
-        // Model Cost Bar Chart
-        const modelCtx = document.getElementById(`modelCostBarChart_${period_id}`);
-        if (modelCtx && modelCostData && modelCostData.data && modelCostData.data.length > 0) {
-            // 动态计算高度：每个条目至少25px
-            const minHeight = Math.max(250, modelCostData.labels.length * 25);
-            modelCtx.parentElement.style.minHeight = minHeight + 'px';
+        // 1. Provider Cost Pie Chart
+        const providerContainer = document.getElementById(`providerCostPieChart_${period_id}`);
+        if (providerContainer && providerCostData && providerCostData.data && providerCostData.data.length > 0) {
+            if (chartInstances[`providerCostPieChart_${period_id}`]) {
+                chartInstances[`providerCostPieChart_${period_id}`].dispose();
+            }
+            const chart = echarts.init(providerContainer);
+            chartInstances[`providerCostPieChart_${period_id}`] = chart;
             
-            // 为每个柱子创建单独的数据集以支持单独隐藏
-            const datasets = modelCostData.labels.map((label, idx) => ({
-                label: label,
-                data: modelCostData.labels.map((_, i) => i === idx ? modelCostData.data[idx] : null),
-                backgroundColor: colors[idx % colors.length],
-                borderColor: colors[idx % colors.length],
-                borderWidth: 2,
-                borderRadius: 6,
-                hoverBackgroundColor: colors[idx % colors.length] + 'dd'
+            const pieData = providerCostData.labels.map((label, idx) => ({
+                name: label,
+                value: providerCostData.data[idx]
             }));
             
-            new Chart(modelCtx, {
-                type: 'bar',
-                data: {
-                    labels: modelCostData.labels,
-                    datasets: datasets
-                },
-                options: {
-                    responsive: true,
-                    maintainAspectRatio: false,
-                    plugins: {
-                        title: { 
-                            display: false
-                        },
-                        legend: { 
-                            display: true,
-                            position: 'top',
-                            align: 'start',
-                            labels: {
-                                usePointStyle: true,
-                                padding: 6,
-                                font: { size: 9 },
-                                boxWidth: 10,
-                                boxHeight: 10
-                            },
-                            onClick: function(e, legendItem, legend) {
-                                const index = legendItem.datasetIndex;
-                                const chart = legend.chart;
-                                const meta = chart.getDatasetMeta(index);
-                                meta.hidden = meta.hidden === null ? !chart.data.datasets[index].hidden : null;
-                                chart.update();
-                            }
-                        },
-                        tooltip: {
-                            backgroundColor: 'rgba(0, 0, 0, 0.8)',
-                            padding: 12,
-                            titleFont: { size: 13 },
-                            bodyFont: { size: 12 },
-                            cornerRadius: 8,
-                            callbacks: {
-                                label: function(context) {
-                                    if (context.parsed.y !== null) {
-                                        return context.dataset.label + ': ' + context.parsed.y.toFixed(4) + ' ¥';
-                                    }
-                                    return '';
-                                }
-                            },
-                            filter: function(tooltipItem) {
-                                return tooltipItem.parsed.y !== null;
-                            }
-                        }
-                    },
-                    scales: {
-                        x: {
-                            stacked: false,
-                            grid: { display: false },
-                            ticks: {
-                                font: { size: 9 },
-                                maxRotation: 45,
-                                minRotation: 0,
-                                callback: function(value, index, ticks) {
-                                    const chart = this.chart;
-                                    // 检查该索引位置是否有可见的数据
-                                    let hasVisibleData = false;
-                                    for (let i = 0; i < chart.data.datasets.length; i++) {
-                                        const meta = chart.getDatasetMeta(i);
-                                        if (!meta.hidden && chart.data.datasets[i].data[index] !== null) {
-                                            hasVisibleData = true;
-                                            break;
-                                        }
-                                    }
-                                    // 只显示有可见数据的标签
-                                    return hasVisibleData ? chart.data.labels[index] : '';
-                                }
-                            }
-                        },
-                        y: { 
-                            beginAtZero: true, 
-                            title: { 
-                                display: true, 
-                                text: '💰 花费 (¥)',
-                                font: { size: 11, weight: 'bold' }
-                            },
-                            grid: { color: 'rgba(0, 0, 0, 0.05)' },
-                            ticks: {
-                                font: { size: 10 }
-                            }
-                        }
-                    },
-                    animation: {
-                        duration: 1000,
-                        easing: 'easeInOutQuart'
+            const itemCount = pieData.length;
+            const useBottomLegend = itemCount > 8;
+            
+            chart.setOption({
+                tooltip: {
+                    trigger: 'item',
+                    backgroundColor: 'rgba(0, 0, 0, 0.8)',
+                    padding: 12,
+                    borderRadius: 8,
+                    textStyle: { color: '#fff' },
+                    confine: true,
+                    formatter: function(params) {
+                        return `${params.name}<br/>花费: ${params.value.toFixed(4)} ¥<br/>占比: ${params.percent.toFixed(2)}%`;
                     }
-                }
+                },
+                legend: {
+                    type: 'scroll',
+                    orient: useBottomLegend ? 'horizontal' : 'vertical',
+                    right: useBottomLegend ? 'center' : 10,
+                    top: useBottomLegend ? 'auto' : 'middle',
+                    bottom: useBottomLegend ? 10 : 'auto',
+                    left: useBottomLegend ? 'center' : 'auto',
+                    width: useBottomLegend ? '90%' : '30%',
+                    height: useBottomLegend ? 'auto' : '80%',
+                    icon: 'circle',
+                    itemWidth: 8,
+                    itemHeight: 8,
+                    itemGap: useBottomLegend ? 12 : 8,
+                    textStyle: { 
+                        fontSize: 10,
+                        width: useBottomLegend ? 70 : 80,
+                        overflow: 'truncate',
+                        ellipsis: '...'
+                    },
+                    pageButtonItemGap: 5,
+                    pageButtonGap: 5,
+                    pageIconColor: '#2563eb',
+                    pageIconInactiveColor: '#aaa',
+                    pageTextStyle: { fontSize: 10 },
+                    tooltip: { show: true }
+                },
+                series: [{
+                    type: 'pie',
+                    radius: ['35%', '60%'],
+                    center: useBottomLegend ? ['50%', '40%'] : ['35%', '50%'],
+                    avoidLabelOverlap: true,
+                    itemStyle: {
+                        borderColor: '#fff',
+                        borderWidth: 2,
+                        borderRadius: 4
+                    },
+                    label: { show: false },
+                    emphasis: {
+                        label: { show: true, fontSize: 12, fontWeight: 'bold' },
+                        itemStyle: { shadowBlur: 10, shadowOffsetX: 0, shadowColor: 'rgba(0, 0, 0, 0.5)' }
+                    },
+                    data: pieData,
+                    color: extendedColors
+                }],
+                animation: true,
+                animationDuration: 1000
+            });
+        }
+
+        // 2. Module Cost Pie Chart
+        const moduleContainer = document.getElementById(`moduleCostPieChart_${period_id}`);
+        if (moduleContainer && moduleCostData && moduleCostData.data && moduleCostData.data.length > 0) {
+            if (chartInstances[`moduleCostPieChart_${period_id}`]) {
+                chartInstances[`moduleCostPieChart_${period_id}`].dispose();
+            }
+            const chart = echarts.init(moduleContainer);
+            chartInstances[`moduleCostPieChart_${period_id}`] = chart;
+            
+            const pieData = moduleCostData.labels.map((label, idx) => ({
+                name: label,
+                value: moduleCostData.data[idx]
+            }));
+            
+            const itemCount = pieData.length;
+            const useBottomLegend = itemCount > 8;
+            
+            chart.setOption({
+                tooltip: {
+                    trigger: 'item',
+                    backgroundColor: 'rgba(0, 0, 0, 0.8)',
+                    padding: 12,
+                    borderRadius: 8,
+                    textStyle: { color: '#fff' },
+                    confine: true,
+                    formatter: function(params) {
+                        return `${params.name}<br/>花费: ${params.value.toFixed(4)} ¥<br/>占比: ${params.percent.toFixed(2)}%`;
+                    }
+                },
+                legend: {
+                    type: 'scroll',
+                    orient: useBottomLegend ? 'horizontal' : 'vertical',
+                    right: useBottomLegend ? 'center' : 10,
+                    top: useBottomLegend ? 'auto' : 'middle',
+                    bottom: useBottomLegend ? 10 : 'auto',
+                    left: useBottomLegend ? 'center' : 'auto',
+                    width: useBottomLegend ? '90%' : '30%',
+                    height: useBottomLegend ? 'auto' : '80%',
+                    icon: 'circle',
+                    itemWidth: 8,
+                    itemHeight: 8,
+                    itemGap: useBottomLegend ? 12 : 8,
+                    textStyle: { 
+                        fontSize: 10,
+                        width: useBottomLegend ? 70 : 80,
+                        overflow: 'truncate',
+                        ellipsis: '...'
+                    },
+                    pageButtonItemGap: 5,
+                    pageButtonGap: 5,
+                    pageIconColor: '#2563eb',
+                    pageIconInactiveColor: '#aaa',
+                    pageTextStyle: { fontSize: 10 },
+                    tooltip: { show: true }
+                },
+                series: [{
+                    type: 'pie',
+                    radius: ['35%', '60%'],
+                    center: useBottomLegend ? ['50%', '40%'] : ['35%', '50%'],
+                    avoidLabelOverlap: true,
+                    itemStyle: {
+                        borderColor: '#fff',
+                        borderWidth: 2,
+                        borderRadius: 4
+                    },
+                    label: { show: false },
+                    emphasis: {
+                        label: { show: true, fontSize: 12, fontWeight: 'bold' },
+                        itemStyle: { shadowBlur: 10, shadowOffsetX: 0, shadowColor: 'rgba(0, 0, 0, 0.5)' }
+                    },
+                    data: pieData,
+                    color: extendedColors
+                }],
+                animation: true,
+                animationDuration: 1000
+            });
+        }
+
+        // 3. Model Cost Bar Chart
+        const modelContainer = document.getElementById(`modelCostBarChart_${period_id}`);
+        if (modelContainer && modelCostData && modelCostData.data && modelCostData.data.length > 0) {
+            if (chartInstances[`modelCostBarChart_${period_id}`]) {
+                chartInstances[`modelCostBarChart_${period_id}`].dispose();
+            }
+            
+            // 动态调整高度，限制最大高度并使用滚动
+            const itemCount = modelCostData.labels.length;
+            const needsZoom = itemCount > 15;
+            const minHeight = needsZoom ? 450 : Math.max(350, itemCount * 25);
+            modelContainer.style.height = minHeight + 'px';
+            
+            const chart = echarts.init(modelContainer);
+            chartInstances[`modelCostBarChart_${period_id}`] = chart;
+            
+            // 计算显示范围（如果数据太多只显示前15个，其余通过滚动查看）
+            const displayEnd = needsZoom ? Math.min(100, Math.round(15 / itemCount * 100)) : 100;
+            
+            chart.setOption({
+                tooltip: {
+                    trigger: 'axis',
+                    backgroundColor: 'rgba(0, 0, 0, 0.8)',
+                    padding: 12,
+                    borderRadius: 8,
+                    textStyle: { color: '#fff' },
+                    axisPointer: { type: 'shadow' },
+                    confine: true,
+                    formatter: function(params) {
+                        if (params[0]) {
+                            return `${params[0].name}<br/>花费: ${params[0].value.toFixed(4)} ¥`;
+                        }
+                        return '';
+                    }
+                },
+                grid: {
+                    left: '3%',
+                    right: needsZoom ? '8%' : '4%',
+                    bottom: '3%',
+                    top: 30,
+                    containLabel: true
+                },
+                dataZoom: needsZoom ? [
+                    {
+                        type: 'slider',
+                        yAxisIndex: 0,
+                        right: 5,
+                        width: 20,
+                        start: 0,
+                        end: displayEnd,
+                        handleSize: '100%',
+                        showDetail: false,
+                        brushSelect: false
+                    },
+                    {
+                        type: 'inside',
+                        yAxisIndex: 0,
+                        zoomOnMouseWheel: false,
+                        moveOnMouseMove: true,
+                        moveOnMouseWheel: true
+                    }
+                ] : [],
+                xAxis: {
+                    type: 'value',
+                    name: '💰 花费 (¥)',
+                    nameTextStyle: { fontSize: 11, fontWeight: 'bold' },
+                    axisLabel: { fontSize: 10 },
+                    splitLine: { lineStyle: { color: 'rgba(0, 0, 0, 0.05)' } }
+                },
+                yAxis: {
+                    type: 'category',
+                    data: modelCostData.labels,
+                    axisLabel: {
+                        fontSize: 9,
+                        formatter: function(value) {
+                            return value.length > 25 ? value.substring(0, 25) + '...' : value;
+                        }
+                    },
+                    axisTick: { show: false },
+                    axisLine: { show: false }
+                },
+                series: [{
+                    type: 'bar',
+                    data: modelCostData.data.map((value, idx) => ({
+                        value: value,
+                        itemStyle: { 
+                            color: extendedColors[idx % extendedColors.length],
+                            borderRadius: [0, 6, 6, 0]
+                        }
+                    })),
+                    barMaxWidth: 20,
+                    emphasis: {
+                        itemStyle: { shadowBlur: 10, shadowColor: 'rgba(0, 0, 0, 0.3)' }
+                    }
+                }],
+                animation: true,
+                animationDuration: 1000,
+                // 大数据优化
+                large: true,
+                largeThreshold: 100
             });
         }
 
         // === 新增图表 ===
         
-        // 1. Token使用对比条形图
-        const tokenCompData = staticChartData[period_id].token_comparison_data;
-        const tokenCompCtx = document.getElementById(`tokenComparisonChart_${period_id}`);
-        if (tokenCompCtx && tokenCompData && tokenCompData.labels && tokenCompData.labels.length > 0) {
-            // 动态计算高度
-            const minHeight = Math.max(270, tokenCompData.labels.length * 30);
-            tokenCompCtx.parentElement.style.minHeight = minHeight + 'px';
+        // 4. Token使用对比条形图
+        const tokenCompData = data[period_id].token_comparison_data;
+        const tokenCompContainer = document.getElementById(`tokenComparisonChart_${period_id}`);
+        if (tokenCompContainer && tokenCompData && tokenCompData.labels && tokenCompData.labels.length > 0) {
+            if (chartInstances[`tokenComparisonChart_${period_id}`]) {
+                chartInstances[`tokenComparisonChart_${period_id}`].dispose();
+            }
             
-            new Chart(tokenCompCtx, {
-                type: 'bar',
-                data: {
-                    labels: tokenCompData.labels,
-                    datasets: [
-                        {
-                            label: '输入Token',
-                            data: tokenCompData.input_tokens,
-                            backgroundColor: '#FF9800',
-                            borderColor: '#F57C00',
-                            borderWidth: 2,
-                            borderRadius: 6
-                        },
-                        {
-                            label: '输出Token',
-                            data: tokenCompData.output_tokens,
-                            backgroundColor: '#4CAF50',
-                            borderColor: '#388E3C',
-                            borderWidth: 2,
-                            borderRadius: 6
-                        }
-                    ]
-                },
-                options: {
-                    responsive: true,
-                    maintainAspectRatio: false,
-                    plugins: {
-                        title: { 
-                            display: false
-                        },
-                        legend: { 
-                            position: 'top',
-                            labels: {
-                                usePointStyle: true,
-                                padding: 10,
-                                font: { size: 11 },
-                                boxWidth: 12,
-                                boxHeight: 12
-                            },
-                            onClick: function(e, legendItem, legend) {
-                                const index = legendItem.datasetIndex;
-                                const chart = legend.chart;
-                                const meta = chart.getDatasetMeta(index);
-                                meta.hidden = meta.hidden === null ? !chart.data.datasets[index].hidden : null;
-                                chart.update();
-                            }
-                        },
-                        tooltip: {
-                            backgroundColor: 'rgba(0, 0, 0, 0.8)',
-                            padding: 12,
-                            cornerRadius: 8,
-                            callbacks: {
-                                label: function(context) {
-                                    const value = context.parsed.y.toLocaleString();
-                                    const total = context.dataset.data.reduce((a, b) => a + b, 0);
-                                    const percentage = ((context.parsed.y / total) * 100).toFixed(1);
-                                    return context.dataset.label + ': ' + value + ' tokens (' + percentage + '%)';
-                                }
-                            }
-                        }
-                    },
-                    scales: {
-                        x: {
-                            grid: { display: false },
-                            ticks: { 
-                                font: { size: 9 },
-                                maxRotation: 45,
-                                minRotation: 0
-                            }
-                        },
-                        y: { 
-                            beginAtZero: true,
-                            title: { 
-                                display: true, 
-                                text: 'Token数量',
-                                font: { size: 11, weight: 'bold' }
-                            },
-                            grid: { color: 'rgba(0, 0, 0, 0.05)' },
-                            ticks: { font: { size: 10 } }
-                        }
-                    },
-                    animation: { duration: 1000, easing: 'easeInOutQuart' },
-                    interaction: {
-                        mode: 'index',
-                        intersect: false
+            const itemCount = tokenCompData.labels.length;
+            const needsZoom = itemCount > 10;
+            const minHeight = needsZoom ? 400 : Math.max(350, itemCount * 30);
+            tokenCompContainer.style.height = minHeight + 'px';
+            
+            const chart = echarts.init(tokenCompContainer);
+            chartInstances[`tokenComparisonChart_${period_id}`] = chart;
+            
+            chart.setOption({
+                tooltip: {
+                    trigger: 'axis',
+                    backgroundColor: 'rgba(0, 0, 0, 0.8)',
+                    padding: 12,
+                    borderRadius: 8,
+                    textStyle: { color: '#fff' },
+                    axisPointer: { type: 'shadow' },
+                    confine: true,
+                    formatter: function(params) {
+                        let result = params[0].name + '<br/>';
+                        params.forEach(p => {
+                            const total = tokenCompData.input_tokens.reduce((a, b) => a + b, 0) + 
+                                         tokenCompData.output_tokens.reduce((a, b) => a + b, 0);
+                            const pct = total > 0 ? ((p.value / total) * 100).toFixed(1) : '0.0';
+                            result += `${p.marker} ${p.seriesName}: ${p.value.toLocaleString()} tokens (${pct}%)<br/>`;
+                        });
+                        return result;
                     }
-                }
+                },
+                legend: {
+                    data: ['输入Token', '输出Token'],
+                    top: 10,
+                    icon: 'circle',
+                    itemWidth: 10,
+                    itemHeight: 10
+                },
+                grid: {
+                    left: '3%',
+                    right: '4%',
+                    bottom: needsZoom ? '15%' : '3%',
+                    top: 50,
+                    containLabel: true
+                },
+                dataZoom: needsZoom ? [
+                    {
+                        type: 'slider',
+                        xAxisIndex: 0,
+                        height: 20,
+                        bottom: 5,
+                        start: 0,
+                        end: Math.min(100, Math.round(10 / itemCount * 100)),
+                        handleSize: '100%',
+                        showDetail: false,
+                        brushSelect: false
+                    },
+                    {
+                        type: 'inside',
+                        xAxisIndex: 0,
+                        zoomOnMouseWheel: 'shift',
+                        moveOnMouseMove: true
+                    }
+                ] : [],
+                xAxis: {
+                    type: 'category',
+                    data: tokenCompData.labels.map(l => l.length > 20 ? l.substring(0, 20) + '...' : l),
+                    axisLabel: { 
+                        fontSize: 9, 
+                        rotate: itemCount > 6 ? 30 : 0,
+                        interval: 0
+                    },
+                    axisTick: { show: false }
+                },
+                yAxis: {
+                    type: 'value',
+                    name: 'Token数量',
+                    nameTextStyle: { fontSize: 11, fontWeight: 'bold' },
+                    axisLabel: { fontSize: 10 },
+                    splitLine: { lineStyle: { color: 'rgba(0, 0, 0, 0.05)' } }
+                },
+                series: [
+                    {
+                        name: '输入Token',
+                        type: 'bar',
+                        data: tokenCompData.input_tokens,
+                        itemStyle: { color: '#FF9800', borderRadius: [6, 6, 0, 0] },
+                        barMaxWidth: 25
+                    },
+                    {
+                        name: '输出Token',
+                        type: 'bar',
+                        data: tokenCompData.output_tokens,
+                        itemStyle: { color: '#4CAF50', borderRadius: [6, 6, 0, 0] },
+                        barMaxWidth: 25
+                    }
+                ],
+                animation: true,
+                animationDuration: 1000,
+                large: true,
+                largeThreshold: 100
             });
         }
 
-        // 2. 供应商请求占比环形图
-        const providerReqData = staticChartData[period_id].provider_requests_data;
-        const providerReqCtx = document.getElementById(`providerRequestsDoughnutChart_${period_id}`);
-        if (providerReqCtx && providerReqData && providerReqData.data && providerReqData.data.length > 0) {
-            new Chart(providerReqCtx, {
-                type: 'doughnut',
-                data: {
-                    labels: providerReqData.labels,
-                    datasets: [{
-                        label: '请求数',
-                        data: providerReqData.data,
-                        backgroundColor: ['#9C27B0', '#E91E63', '#F44336', '#FF9800', '#FFC107', '#FFEB3B', '#CDDC39', '#8BC34A', '#4CAF50', '#009688'],
-                        borderColor: '#FFFFFF',
+        // 5. 供应商请求占比环形图
+        const providerReqData = data[period_id].provider_requests_data;
+        const providerReqContainer = document.getElementById(`providerRequestsDoughnutChart_${period_id}`);
+        if (providerReqContainer && providerReqData && providerReqData.data && providerReqData.data.length > 0) {
+            if (chartInstances[`providerRequestsDoughnutChart_${period_id}`]) {
+                chartInstances[`providerRequestsDoughnutChart_${period_id}`].dispose();
+            }
+            const chart = echarts.init(providerReqContainer);
+            chartInstances[`providerRequestsDoughnutChart_${period_id}`] = chart;
+            
+            const pieData = providerReqData.labels.map((label, idx) => ({
+                name: label,
+                value: providerReqData.data[idx]
+            }));
+            
+            const itemCount = pieData.length;
+            const useBottomLegend = itemCount > 8;
+            const reqColors = ['#9C27B0', '#E91E63', '#F44336', '#FF9800', '#FFC107', '#FFEB3B', '#CDDC39', '#8BC34A', '#4CAF50', '#009688'];
+            
+            chart.setOption({
+                tooltip: {
+                    trigger: 'item',
+                    backgroundColor: 'rgba(0, 0, 0, 0.8)',
+                    padding: 12,
+                    borderRadius: 8,
+                    textStyle: { color: '#fff' },
+                    confine: true,
+                    formatter: function(params) {
+                        return `${params.name}<br/>请求数: ${params.value} 次<br/>占比: ${params.percent.toFixed(2)}%`;
+                    }
+                },
+                legend: {
+                    type: 'scroll',
+                    orient: useBottomLegend ? 'horizontal' : 'vertical',
+                    right: useBottomLegend ? 'center' : 10,
+                    top: useBottomLegend ? 'auto' : 'middle',
+                    bottom: useBottomLegend ? 10 : 'auto',
+                    left: useBottomLegend ? 'center' : 'auto',
+                    width: useBottomLegend ? '90%' : '30%',
+                    height: useBottomLegend ? 'auto' : '80%',
+                    icon: 'circle',
+                    itemWidth: 8,
+                    itemHeight: 8,
+                    itemGap: useBottomLegend ? 12 : 8,
+                    textStyle: { 
+                        fontSize: 10,
+                        width: useBottomLegend ? 70 : 80,
+                        overflow: 'truncate',
+                        ellipsis: '...'
+                    },
+                    pageButtonItemGap: 5,
+                    pageButtonGap: 5,
+                    pageIconColor: '#9C27B0',
+                    pageIconInactiveColor: '#aaa',
+                    pageTextStyle: { fontSize: 10 },
+                    tooltip: { show: true }
+                },
+                series: [{
+                    type: 'pie',
+                    radius: ['35%', '60%'],
+                    center: useBottomLegend ? ['50%', '40%'] : ['35%', '50%'],
+                    avoidLabelOverlap: true,
+                    itemStyle: {
+                        borderColor: '#fff',
                         borderWidth: 2,
-                        hoverOffset: 10
-                    }]
-                },
-                options: {
-                    responsive: true,
-                    maintainAspectRatio: false,
-                    plugins: {
-                        title: { 
-                            display: false
-                        },
-                        legend: { 
-                            position: 'right',
-                            align: 'center',
-                            labels: {
-                                usePointStyle: true,
-                                padding: 8,
-                                font: { size: 10 },
-                                boxWidth: 12,
-                                boxHeight: 12,
-                                generateLabels: function(chart) {
-                                    const data = chart.data;
-                                    if (data.labels.length && data.datasets.length) {
-                                        const dataset = data.datasets[0];
-                                        return data.labels.map((label, i) => {
-                                            const meta = chart.getDatasetMeta(0);
-                                            const style = meta.controller.getStyle(i);
-                                            return {
-                                                text: label.length > 15 ? label.substring(0, 15) + '...' : label,
-                                                fillStyle: style.backgroundColor,
-                                                strokeStyle: style.borderColor,
-                                                lineWidth: style.borderWidth,
-                                                hidden: isNaN(dataset.data[i]) || meta.data[i].hidden,
-                                                index: i
-                                            };
-                                        });
-                                    }
-                                    return [];
-                                }
-                            },
-                            onClick: function(e, legendItem, legend) {
-                                const index = legendItem.index;
-                                const chart = legend.chart;
-                                const meta = chart.getDatasetMeta(0);
-                                
-                                meta.data[index].hidden = !meta.data[index].hidden;
-                                chart.update();
-                            }
-                        },
-                        tooltip: {
-                            backgroundColor: 'rgba(0, 0, 0, 0.8)',
-                            padding: 12,
-                            cornerRadius: 8,
-                            callbacks: {
-                                label: function(context) {
-                                    const total = context.dataset.data.reduce((a, b) => a + b, 0);
-                                    const percentage = ((context.parsed / total) * 100).toFixed(2);
-                                    return context.label + ': ' + context.parsed + ' 次 (' + percentage + '%)';
-                                }
-                            }
-                        }
+                        borderRadius: 4
                     },
-                    animation: { animateRotate: true, animateScale: true, duration: 1000 }
-                }
+                    label: { show: false },
+                    emphasis: {
+                        label: { show: true, fontSize: 12, fontWeight: 'bold' },
+                        itemStyle: { shadowBlur: 10, shadowOffsetX: 0, shadowColor: 'rgba(0, 0, 0, 0.5)' }
+                    },
+                    data: pieData,
+                    color: reqColors
+                }],
+                animation: true,
+                animationDuration: 1000
             });
         }
 
-        // 3. 平均响应时间条形图
-        const avgRespTimeData = staticChartData[period_id].avg_response_time_data;
-        const avgRespTimeCtx = document.getElementById(`avgResponseTimeChart_${period_id}`);
-        if (avgRespTimeCtx && avgRespTimeData && avgRespTimeData.data && avgRespTimeData.data.length > 0) {
-            // 动态计算高度：横向条形图每个条目至少30px
-            const minHeight = Math.max(270, avgRespTimeData.labels.length * 30);
-            avgRespTimeCtx.parentElement.style.minHeight = minHeight + 'px';
+        // 6. 平均响应时间条形图 (横向)
+        const avgRespTimeData = data[period_id].avg_response_time_data;
+        const avgRespTimeContainer = document.getElementById(`avgResponseTimeChart_${period_id}`);
+        if (avgRespTimeContainer && avgRespTimeData && avgRespTimeData.data && avgRespTimeData.data.length > 0) {
+            if (chartInstances[`avgResponseTimeChart_${period_id}`]) {
+                chartInstances[`avgResponseTimeChart_${period_id}`].dispose();
+            }
             
-            // 为每个柱子创建渐变色
-            const barColors = avgRespTimeData.labels.map((_, idx) => {
-                const colorPalette = ['#E91E63', '#9C27B0', '#673AB7', '#3F51B5', '#2196F3', '#00BCD4', '#009688', '#4CAF50'];
-                return colorPalette[idx % colorPalette.length];
-            });
+            const itemCount = avgRespTimeData.labels.length;
+            const needsZoom = itemCount > 12;
+            const minHeight = needsZoom ? 400 : Math.max(350, itemCount * 28);
+            avgRespTimeContainer.style.height = minHeight + 'px';
             
-            // 为每个柱子创建单独的数据集
-            const datasets = avgRespTimeData.labels.map((label, idx) => ({
-                label: label.length > 25 ? label.substring(0, 25) + '...' : label,
-                data: avgRespTimeData.labels.map((_, i) => i === idx ? avgRespTimeData.data[idx] : null),
-                backgroundColor: barColors[idx],
-                borderColor: barColors[idx],
-                borderWidth: 2,
-                borderRadius: 6
-            }));
+            const chart = echarts.init(avgRespTimeContainer);
+            chartInstances[`avgResponseTimeChart_${period_id}`] = chart;
             
-            new Chart(avgRespTimeCtx, {
-                type: 'bar',
-                data: {
-                    labels: avgRespTimeData.labels.map(label => label.length > 25 ? label.substring(0, 25) + '...' : label),
-                    datasets: datasets
-                },
-                options: {
-                    indexAxis: 'y',
-                    responsive: true,
-                    maintainAspectRatio: false,
-                    plugins: {
-                        title: { 
-                            display: false
-                        },
-                        legend: { 
-                            display: true,
-                            position: 'top',
-                            align: 'start',
-                            labels: {
-                                usePointStyle: true,
-                                padding: 6,
-                                font: { size: 9 },
-                                boxWidth: 10,
-                                boxHeight: 10
-                            },
-                            onClick: function(e, legendItem, legend) {
-                                const index = legendItem.datasetIndex;
-                                const chart = legend.chart;
-                                const meta = chart.getDatasetMeta(index);
-                                meta.hidden = meta.hidden === null ? !chart.data.datasets[index].hidden : null;
-                                chart.update();
-                            }
-                        },
-                        tooltip: {
-                            backgroundColor: 'rgba(0, 0, 0, 0.8)',
-                            padding: 12,
-                            cornerRadius: 8,
-                            callbacks: {
-                                label: function(context) {
-                                    if (context.parsed.x !== null) {
-                                        return context.dataset.label + ': ' + context.parsed.x.toFixed(3) + ' 秒';
-                                    }
-                                    return '';
-                                }
-                            },
-                            filter: function(tooltipItem) {
-                                return tooltipItem.parsed.x !== null;
-                            }
-                        }
-                    },
-                    scales: {
-                        x: { 
-                            beginAtZero: true,
-                            title: { 
-                                display: true, 
-                                text: '时间 (秒)',
-                                font: { size: 11, weight: 'bold' }
-                            },
-                            grid: { color: 'rgba(0, 0, 0, 0.05)' },
-                            ticks: { font: { size: 10 } }
-                        },
-                        y: {
-                            grid: { display: false },
-                            ticks: { font: { size: 9 } }
-                        }
-                    },
-                    animation: { duration: 1000, easing: 'easeInOutQuart' }
-                }
-            });
-        }
-
-        // 4. 模型效率雷达图
-        const radarData = staticChartData[period_id].model_efficiency_radar_data;
-        const radarCtx = document.getElementById(`modelEfficiencyRadarChart_${period_id}`);
-        if (radarCtx && radarData && radarData.datasets && radarData.datasets.length > 0) {
-            const radarColors = ['#00BCD4', '#4CAF50', '#FF9800', '#E91E63', '#9C27B0'];
-            const datasets = radarData.datasets.map((dataset, idx) => ({
-                label: dataset.model.length > 20 ? dataset.model.substring(0, 20) + '...' : dataset.model,
-                data: dataset.metrics,
-                backgroundColor: radarColors[idx % radarColors.length] + '40',
-                borderColor: radarColors[idx % radarColors.length],
-                borderWidth: 2,
-                pointBackgroundColor: radarColors[idx % radarColors.length],
-                pointBorderColor: '#fff',
-                pointHoverBackgroundColor: '#fff',
-                pointHoverBorderColor: radarColors[idx % radarColors.length],
-                pointRadius: 4,
-                pointHoverRadius: 6
-            }));
+            const barColors = ['#E91E63', '#9C27B0', '#673AB7', '#3F51B5', '#2196F3', '#00BCD4', '#009688', '#4CAF50'];
+            const displayEnd = needsZoom ? Math.min(100, Math.round(12 / itemCount * 100)) : 100;
             
-            new Chart(radarCtx, {
-                type: 'radar',
-                data: {
-                    labels: radarData.labels,
-                    datasets: datasets
-                },
-                options: {
-                    responsive: true,
-                    maintainAspectRatio: false,
-                    plugins: {
-                        title: { 
-                            display: false
-                        },
-                        legend: { 
-                            position: 'bottom',
-                            labels: {
-                                usePointStyle: true,
-                                padding: 8,
-                                font: { size: 10 },
-                                boxWidth: 12,
-                                boxHeight: 12
-                            },
-                            onClick: function(e, legendItem, legend) {
-                                const index = legendItem.datasetIndex;
-                                const chart = legend.chart;
-                                const meta = chart.getDatasetMeta(index);
-                                meta.hidden = meta.hidden === null ? !chart.data.datasets[index].hidden : null;
-                                chart.update();
-                            }
-                        },
-                        tooltip: {
-                            backgroundColor: 'rgba(0, 0, 0, 0.8)',
-                            padding: 12,
-                            cornerRadius: 8,
-                            callbacks: {
-                                label: function(context) {
-                                    const label = context.dataset.label || '';
-                                    const metric = context.label || '';
-                                    const value = context.parsed.r.toFixed(1);
-                                    return label + ' - ' + metric + ': ' + value + '/100';
-                                }
-                            }
+            chart.setOption({
+                tooltip: {
+                    trigger: 'axis',
+                    backgroundColor: 'rgba(0, 0, 0, 0.8)',
+                    padding: 12,
+                    borderRadius: 8,
+                    textStyle: { color: '#fff' },
+                    axisPointer: { type: 'shadow' },
+                    confine: true,
+                    formatter: function(params) {
+                        if (params[0]) {
+                            return `${params[0].name}<br/>响应时间: ${params[0].value.toFixed(3)} 秒`;
                         }
-                    },
-                    scales: {
-                        r: {
-                            beginAtZero: true,
-                            max: 100,
-                            ticks: {
-                                stepSize: 20,
-                                font: { size: 9 },
-                                backdropColor: 'transparent'
-                            },
-                            pointLabels: {
-                                font: { size: 10, weight: 'bold' }
-                            },
-                            grid: { color: 'rgba(0, 0, 0, 0.1)' },
-                            angleLines: { color: 'rgba(0, 0, 0, 0.1)' }
-                        }
-                    },
-                    animation: { duration: 1200, easing: 'easeInOutQuart' },
-                    interaction: {
-                        mode: 'point',
-                        intersect: true
+                        return '';
                     }
-                }
+                },
+                grid: {
+                    left: '3%',
+                    right: needsZoom ? '8%' : '4%',
+                    bottom: '3%',
+                    top: 30,
+                    containLabel: true
+                },
+                dataZoom: needsZoom ? [
+                    {
+                        type: 'slider',
+                        yAxisIndex: 0,
+                        right: 5,
+                        width: 20,
+                        start: 0,
+                        end: displayEnd,
+                        handleSize: '100%',
+                        showDetail: false,
+                        brushSelect: false
+                    },
+                    {
+                        type: 'inside',
+                        yAxisIndex: 0,
+                        zoomOnMouseWheel: false,
+                        moveOnMouseMove: true,
+                        moveOnMouseWheel: true
+                    }
+                ] : [],
+                xAxis: {
+                    type: 'value',
+                    name: '时间 (秒)',
+                    nameTextStyle: { fontSize: 11, fontWeight: 'bold' },
+                    axisLabel: { fontSize: 10 },
+                    splitLine: { lineStyle: { color: 'rgba(0, 0, 0, 0.05)' } }
+                },
+                yAxis: {
+                    type: 'category',
+                    data: avgRespTimeData.labels.map(l => l.length > 22 ? l.substring(0, 22) + '...' : l),
+                    axisLabel: { fontSize: 9 },
+                    axisTick: { show: false },
+                    axisLine: { show: false }
+                },
+                series: [{
+                    type: 'bar',
+                    data: avgRespTimeData.data.map((value, idx) => ({
+                        value: value,
+                        itemStyle: { 
+                            color: barColors[idx % barColors.length],
+                            borderRadius: [0, 6, 6, 0]
+                        }
+                    })),
+                    barMaxWidth: 18,
+                    emphasis: {
+                        itemStyle: { shadowBlur: 10, shadowColor: 'rgba(0, 0, 0, 0.3)' }
+                    }
+                }],
+                animation: true,
+                animationDuration: 1000,
+                large: true,
+                largeThreshold: 100
             });
         }
 
-        // 5. 响应时间分布散点图
-        const scatterData = staticChartData[period_id].response_time_scatter_data;
-        const scatterCtx = document.getElementById(`responseTimeScatterChart_${period_id}`);
-        if (scatterCtx && scatterData && scatterData.length > 0) {
-            // 按模型分组数据，限制每个模型最多显示100个点
+        // 7. 模型效率雷达图
+        const radarData = data[period_id].model_efficiency_radar_data;
+        const radarContainer = document.getElementById(`modelEfficiencyRadarChart_${period_id}`);
+        if (radarContainer && radarData && radarData.datasets && radarData.datasets.length > 0) {
+            if (chartInstances[`modelEfficiencyRadarChart_${period_id}`]) {
+                chartInstances[`modelEfficiencyRadarChart_${period_id}`].dispose();
+            }
+            const chart = echarts.init(radarContainer);
+            chartInstances[`modelEfficiencyRadarChart_${period_id}`] = chart;
+            
+            const radarColors = ['#00BCD4', '#4CAF50', '#FF9800', '#E91E63', '#9C27B0', '#673AB7', '#2196F3', '#FF5722'];
+            
+            // 限制显示的模型数量，避免图表过于拥挤
+            const maxModels = 5;
+            const limitedDatasets = radarData.datasets.slice(0, maxModels);
+            
+            const indicator = radarData.labels.map(label => ({
+                name: label.length > 12 ? label.substring(0, 12) + '...' : label,
+                max: 100
+            }));
+            
+            const seriesData = limitedDatasets.map((dataset, idx) => ({
+                name: dataset.model.length > 18 ? dataset.model.substring(0, 18) + '...' : dataset.model,
+                value: dataset.metrics,
+                lineStyle: { color: radarColors[idx % radarColors.length], width: 2 },
+                areaStyle: { color: radarColors[idx % radarColors.length] + '30' },
+                itemStyle: { color: radarColors[idx % radarColors.length] }
+            }));
+            
+            const legendCount = seriesData.length;
+            const useSideLegend = legendCount > 3;
+            
+            chart.setOption({
+                tooltip: {
+                    trigger: 'item',
+                    backgroundColor: 'rgba(0, 0, 0, 0.8)',
+                    padding: 12,
+                    borderRadius: 8,
+                    textStyle: { color: '#fff' },
+                    confine: true
+                },
+                legend: {
+                    data: seriesData.map(s => s.name),
+                    type: 'scroll',
+                    orient: useSideLegend ? 'vertical' : 'horizontal',
+                    right: useSideLegend ? 10 : 'center',
+                    top: useSideLegend ? 'middle' : 10,
+                    bottom: useSideLegend ? 'auto' : 'auto',
+                    width: useSideLegend ? '20%' : 'auto',
+                    icon: 'circle',
+                    itemWidth: 8,
+                    itemHeight: 8,
+                    textStyle: { 
+                        fontSize: 10,
+                        width: useSideLegend ? 70 : 'auto',
+                        overflow: 'truncate'
+                    },
+                    pageButtonItemGap: 5,
+                    pageIconColor: '#00BCD4',
+                    pageTextStyle: { fontSize: 9 },
+                    tooltip: { show: true }
+                },
+                radar: {
+                    indicator: indicator,
+                    center: useSideLegend ? ['40%', '50%'] : ['50%', '55%'],
+                    radius: useSideLegend ? '65%' : '55%',
+                    nameGap: 6,
+                    name: {
+                        textStyle: { fontSize: 9, fontWeight: 'bold' }
+                    },
+                    splitLine: { lineStyle: { color: 'rgba(0, 0, 0, 0.1)' } },
+                    splitArea: { show: false },
+                    axisLine: { lineStyle: { color: 'rgba(0, 0, 0, 0.1)' } }
+                },
+                series: [{
+                    type: 'radar',
+                    data: seriesData,
+                    emphasis: {
+                        lineStyle: { width: 3 }
+                    }
+                }],
+                animation: true,
+                animationDuration: 1200
+            });
+        }
+
+        // 8. 响应时间分布散点图 (大数据优化)
+        const scatterData = data[period_id].response_time_scatter_data;
+        const scatterContainer = document.getElementById(`responseTimeScatterChart_${period_id}`);
+        if (scatterContainer && scatterData && scatterData.length > 0) {
+            if (chartInstances[`responseTimeScatterChart_${period_id}`]) {
+                chartInstances[`responseTimeScatterChart_${period_id}`].dispose();
+            }
+            const chart = echarts.init(scatterContainer);
+            chartInstances[`responseTimeScatterChart_${period_id}`] = chart;
+            
+            // 按模型分组数据，使用数据采样优化性能
             const groupedData = {};
+            const maxPointsPerModel = 150; // 每个模型最多150个点
             scatterData.forEach(point => {
                 if (!groupedData[point.model]) {
                     groupedData[point.model] = [];
                 }
-                if (groupedData[point.model].length < 100) {
-                    groupedData[point.model].push({x: point.x, y: point.y});
+                if (groupedData[point.model].length < maxPointsPerModel) {
+                    groupedData[point.model].push([point.x, point.y]);
                 }
             });
             
             const scatterColors = ['#4CAF50', '#2196F3', '#FF9800', '#E91E63', '#9C27B0', '#00BCD4', '#FFC107', '#607D8B'];
-            const datasets = Object.keys(groupedData).slice(0, 8).map((model, idx) => ({
-                label: model.length > 20 ? model.substring(0, 20) + '...' : model,
+            const models = Object.keys(groupedData).slice(0, 6); // 限制最多6个模型
+            const modelCount = models.length;
+            const useSideLegend = modelCount > 4;
+            
+            const series = models.map((model, idx) => ({
+                name: model.length > 18 ? model.substring(0, 18) + '...' : model,
+                type: 'scatter',
                 data: groupedData[model],
-                backgroundColor: scatterColors[idx % scatterColors.length] + '80',
-                borderColor: scatterColors[idx % scatterColors.length],
-                borderWidth: 2,
-                pointRadius: 4,
-                pointHoverRadius: 6,
-                pointStyle: 'circle'
+                symbolSize: 5,
+                itemStyle: {
+                    color: scatterColors[idx % scatterColors.length],
+                    opacity: 0.7
+                },
+                emphasis: {
+                    itemStyle: { opacity: 1, shadowBlur: 10, shadowColor: 'rgba(0, 0, 0, 0.3)' }
+                },
+                // 大数据优化
+                large: true,
+                largeThreshold: 100
             }));
             
-            new Chart(scatterCtx, {
-                type: 'scatter',
-                data: { datasets: datasets },
-                options: {
-                    responsive: true,
-                    maintainAspectRatio: false,
-                    plugins: {
-                        title: { 
-                            display: false
-                        },
-                        legend: { 
-                            position: 'top',
-                            labels: {
-                                usePointStyle: true,
-                                padding: 8,
-                                font: { size: 10 },
-                                boxWidth: 12,
-                                boxHeight: 12
-                            },
-                            onClick: function(e, legendItem, legend) {
-                                // 默认行为：切换数据集的可见性
-                                const index = legendItem.datasetIndex;
-                                const chart = legend.chart;
-                                const meta = chart.getDatasetMeta(index);
-                                
-                                // 切换可见性
-                                meta.hidden = meta.hidden === null ? !chart.data.datasets[index].hidden : null;
-                                
-                                // 更新图表
-                                chart.update();
-                            }
-                        },
-                        tooltip: {
-                            backgroundColor: 'rgba(0, 0, 0, 0.8)',
-                            padding: 12,
-                            cornerRadius: 8,
-                            callbacks: {
-                                label: function(context) {
-                                    return context.dataset.label + ': ' + context.parsed.y.toFixed(3) + ' 秒';
-                                },
-                                afterLabel: function(context) {
-                                    return '请求 #' + context.parsed.x;
-                                }
-                            }
-                        }
-                    },
-                    scales: {
-                        x: {
-                            title: { 
-                                display: true, 
-                                text: '请求序号',
-                                font: { size: 11, weight: 'bold' }
-                            },
-                            grid: { color: 'rgba(0, 0, 0, 0.05)' },
-                            ticks: { font: { size: 10 } }
-                        },
-                        y: { 
-                            beginAtZero: true,
-                            title: { 
-                                display: true, 
-                                text: '响应时间 (秒)',
-                                font: { size: 11, weight: 'bold' }
-                            },
-                            grid: { color: 'rgba(0, 0, 0, 0.05)' },
-                            ticks: { font: { size: 10 } }
-                        }
-                    },
-                    animation: { duration: 1000, easing: 'easeInOutQuart' },
-                    interaction: {
-                        mode: 'point',
-                        intersect: true
+            chart.setOption({
+                tooltip: {
+                    trigger: 'item',
+                    backgroundColor: 'rgba(0, 0, 0, 0.8)',
+                    padding: 12,
+                    borderRadius: 8,
+                    textStyle: { color: '#fff' },
+                    confine: true,
+                    formatter: function(params) {
+                        return `${params.seriesName}<br/>请求 #${params.data[0]}<br/>响应时间: ${params.data[1].toFixed(3)} 秒`;
                     }
-                }
+                },
+                legend: {
+                    data: series.map(s => s.name),
+                    type: 'scroll',
+                    orient: useSideLegend ? 'vertical' : 'horizontal',
+                    right: useSideLegend ? 10 : 'center',
+                    top: useSideLegend ? 50 : 10,
+                    width: useSideLegend ? '18%' : 'auto',
+                    icon: 'circle',
+                    itemWidth: 8,
+                    itemHeight: 8,
+                    textStyle: { 
+                        fontSize: 10,
+                        width: useSideLegend ? 65 : 'auto',
+                        overflow: 'truncate'
+                    },
+                    pageButtonItemGap: 5,
+                    pageIconColor: '#4CAF50',
+                    pageTextStyle: { fontSize: 9 },
+                    tooltip: { show: true }
+                },
+                grid: {
+                    left: '3%',
+                    right: useSideLegend ? '22%' : '4%',
+                    bottom: '15%',
+                    top: useSideLegend ? 50 : 50,
+                    containLabel: true
+                },
+                xAxis: {
+                    type: 'value',
+                    name: '请求序号',
+                    nameTextStyle: { fontSize: 11, fontWeight: 'bold' },
+                    axisLabel: { fontSize: 10 },
+                    splitLine: { lineStyle: { color: 'rgba(0, 0, 0, 0.05)' } }
+                },
+                yAxis: {
+                    type: 'value',
+                    name: '响应时间 (秒)',
+                    nameTextStyle: { fontSize: 11, fontWeight: 'bold' },
+                    axisLabel: { fontSize: 10 },
+                    splitLine: { lineStyle: { color: 'rgba(0, 0, 0, 0.05)' } }
+                },
+                series: series,
+                animation: true,
+                animationDuration: 1000,
+                // 数据缩放支持 - 内置缩放
+                dataZoom: [
+                    {
+                        type: 'inside',
+                        xAxisIndex: 0,
+                        filterMode: 'empty'
+                    },
+                    {
+                        type: 'inside',
+                        yAxisIndex: 0,
+                        filterMode: 'empty'
+                    },
+                    {
+                        type: 'slider',
+                        xAxisIndex: 0,
+                        height: 20,
+                        bottom: 5,
+                        handleSize: '100%',
+                        showDetail: false
+                    }
+                ]
             });
         }
     };
