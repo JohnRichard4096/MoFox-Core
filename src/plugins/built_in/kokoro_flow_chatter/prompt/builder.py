@@ -1,5 +1,5 @@
 """
-Kokoro Flow Chatter V2 - 提示词构建器
+Kokoro Flow Chatter - 提示词构建器
 
 使用项目统一的 Prompt 管理系统构建提示词
 """
@@ -22,7 +22,7 @@ from .prompts import PROMPT_NAMES
 if TYPE_CHECKING:
     from src.chat.message_receive.chat_stream import ChatStream
 
-logger = get_logger("kfc_v2_prompt_builder")
+logger = get_logger("kfc_prompt_builder")
 
 
 class PromptBuilder:

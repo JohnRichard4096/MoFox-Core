@@ -1,5 +1,5 @@
 """
-Kokoro Flow Chatter V2 - 主动思考器
+Kokoro Flow Chatter - 主动思考器
 
 独立组件，负责：
 1. 等待期间的连续思考（更新心理状态）
@@ -27,7 +27,7 @@ from .session import KokoroSession, get_session_manager
 if TYPE_CHECKING:
     from src.chat.message_receive.chat_stream import ChatStream
 
-logger = get_logger("kfc_v2_proactive_thinker")
+logger = get_logger("kfc_proactive_thinker")
 
 
 class ProactiveThinker:
@@ -49,8 +49,8 @@ class ProactiveThinker:
     THINKING_TRIGGERS = [0.3, 0.6, 0.85]
     
     # 任务名称
-    TASK_WAITING_CHECK = "kfc_v2_waiting_check"
-    TASK_PROACTIVE_CHECK = "kfc_v2_proactive_check"
+    TASK_WAITING_CHECK = "kfc_waiting_check"
+    TASK_PROACTIVE_CHECK = "kfc_proactive_check"
     
     def __init__(self):
         self.session_manager = get_session_manager()

@@ -1,5 +1,5 @@
 """
-Kokoro Flow Chatter V2 - 数据模型
+Kokoro Flow Chatter - 数据模型
 
 定义核心数据结构：
 - EventType: 活动流事件类型

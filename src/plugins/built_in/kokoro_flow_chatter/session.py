@@ -1,5 +1,5 @@
 """
-Kokoro Flow Chatter V2 - 会话管理
+Kokoro Flow Chatter - 会话管理
 
 极简的会话状态管理：
 - Session 只有 IDLE 和 WAITING 两种状态
@@ -23,12 +23,12 @@ from .models import (
     WaitingConfig,
 )
 
-logger = get_logger("kfc_v2_session")
+logger = get_logger("kfc_session")
 
 
 class KokoroSession:
     """
-    Kokoro Flow Chatter V2 会话
+    Kokoro Flow Chatter 会话
     
     为每个私聊用户维护一个独立的会话，包含：
     - 基本信息（user_id, stream_id）

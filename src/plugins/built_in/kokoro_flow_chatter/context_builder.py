@@ -1,7 +1,7 @@
 """
-Kokoro Flow Chatter V2 上下文构建器
+Kokoro Flow Chatter 上下文构建器
 
-为 KFC V2 提供完整的情境感知能力。
+为 KFC 提供完整的情境感知能力。
 包含：
 - 关系信息 (relation_info)
 - 记忆块 (memory_block)
@@ -23,7 +23,7 @@ if TYPE_CHECKING:
     from src.chat.message_receive.chat_stream import ChatStream
     from src.common.data_models.message_manager_data_model import StreamContext
 
-logger = get_logger("kfc_v2_context_builder")
+logger = get_logger("kfc_context_builder")
 
 
 def _get_config():

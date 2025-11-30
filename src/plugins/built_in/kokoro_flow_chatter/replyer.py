@@ -1,5 +1,5 @@
 """
-Kokoro Flow Chatter V2 - Replyer
+Kokoro Flow Chatter - Replyer
 
 简化的回复生成模块，使用插件系统的 llm_api
 """
@@ -17,7 +17,7 @@ from .session import KokoroSession
 if TYPE_CHECKING:
     from src.chat.message_receive.chat_stream import ChatStream
 
-logger = get_logger("kfc_v2_replyer")
+logger = get_logger("kfc_replyer")
 
 
 async def generate_response(

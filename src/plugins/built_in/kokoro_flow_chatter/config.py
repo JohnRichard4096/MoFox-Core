@@ -1,5 +1,5 @@
 """
-Kokoro Flow Chatter V2 - 配置
+Kokoro Flow Chatter - 配置
 
 可以通过 TOML 配置文件覆盖默认值
 """
