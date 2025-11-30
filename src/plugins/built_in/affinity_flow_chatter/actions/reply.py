@@ -1,21 +1,23 @@
 """
-回复动作模块
+AFC 回复动作模块
 
-定义了三种回复相关动作：
+定义了两种回复相关动作：
 - reply: 针对单条消息的深度回复（使用 s4u 模板）
 - respond: 对未读消息的统一回应（使用 normal 模板）
-- no_reply: 选择不回复
+
+这些动作是 AffinityFlowChatter 的专属动作。
 """
 
 import asyncio
 from typing import ClassVar
 
+from src.common.data_models.database_data_model import DatabaseMessages
 from src.common.logger import get_logger
 from src.config.config import global_config
 from src.plugin_system import ActionActivationType, BaseAction, ChatMode
-from src.plugin_system.apis import database_api, generator_api, send_api
+from src.plugin_system.apis import generator_api, send_api
 
-logger = get_logger("reply_actions")
+logger = get_logger("afc_reply_actions")
 
 
 class ReplyAction(BaseAction):
@@ -63,8 +65,11 @@ class ReplyAction(BaseAction):
     async def execute(self) -> tuple[bool, str]:
         """执行reply动作 - 完整的回复流程"""
         try:
+            # 确保 action_message 是 DatabaseMessages 类型，否则使用 None
+            reply_message = self.action_message if isinstance(self.action_message, DatabaseMessages) else None
+            
             # 检查目标消息是否为表情包
-            if self.action_message and getattr(self.action_message, "is_emoji", False):
+            if reply_message and getattr(reply_message, "is_emoji", False):
                 if not getattr(global_config.chat, "allow_reply_to_emoji", True):
                     logger.info(f"{self.log_prefix} 目标消息为表情包且配置不允许回复，跳过")
                     return True, ""
@@ -76,9 +81,9 @@ class ReplyAction(BaseAction):
             # 生成回复
             success, response_set, _ = await generator_api.generate_reply(
                 chat_stream=self.chat_stream,
-                reply_message=self.action_message,
+                reply_message=reply_message,
                 action_data=action_data,
-                available_actions={self.action_name: None},
+                available_actions={self.action_name: self.get_action_info()},
                 enable_tool=global_config.tool.enable_tool,
                 request_type="chat.replyer",
                 from_plugin=False,
@@ -90,9 +95,6 @@ class ReplyAction(BaseAction):
             
             # 发送回复
             reply_text = await self._send_response(response_set)
-            
-            # 存储动作信息
-            await self._store_action_info(reply_text)
             
             logger.info(f"{self.log_prefix} reply 动作执行成功")
             return True, reply_text
@@ -112,6 +114,9 @@ class ReplyAction(BaseAction):
         should_quote = self.action_data.get("should_quote_reply", False)
         first_sent = False
         
+        # 确保 action_message 是 DatabaseMessages 类型
+        reply_message = self.action_message if isinstance(self.action_message, DatabaseMessages) else None
+        
         for reply_seg in response_set:
             # 处理元组格式
             if isinstance(reply_seg, tuple) and len(reply_seg) >= 2:
@@ -129,8 +134,8 @@ class ReplyAction(BaseAction):
                 await send_api.text_to_stream(
                     text=data,
                     stream_id=self.chat_stream.stream_id,
-                    reply_to_message=self.action_message,
-                    set_reply=should_quote and bool(self.action_message),
+                    reply_to_message=reply_message,
+                    set_reply=should_quote and bool(reply_message),
                     typing=False,
                 )
                 first_sent = True
@@ -144,33 +149,6 @@ class ReplyAction(BaseAction):
                 )
         
         return reply_text
-    
-    async def _store_action_info(self, reply_text: str):
-        """存储动作信息到数据库"""
-        from src.person_info.person_info import get_person_info_manager
-        
-        person_info_manager = get_person_info_manager()
-        
-        if self.action_message:
-            platform = self.action_message.chat_info.platform
-            user_id = self.action_message.user_info.user_id
-        else:
-            platform = getattr(self.chat_stream, "platform", "unknown")
-            user_id = ""
-        
-        person_id = person_info_manager.get_person_id(platform, user_id)
-        person_name = await person_info_manager.get_value(person_id, "person_name")
-        action_prompt_display = f"你对{person_name}进行了回复：{reply_text}"
-        
-        await database_api.store_action_info(
-            chat_stream=self.chat_stream,
-            action_build_into_prompt=False,
-            action_prompt_display=action_prompt_display,
-            action_done=True,
-            thinking_id=self.thinking_id,
-            action_data={"reply_text": reply_text},
-            action_name="reply",
-        )
 
 
 class RespondAction(BaseAction):
@@ -220,12 +198,15 @@ class RespondAction(BaseAction):
             action_data = self.action_data.copy()
             action_data["prompt_mode"] = "normal"
             
+            # 确保 action_message 是 DatabaseMessages 类型，否则使用 None
+            reply_message = self.action_message if isinstance(self.action_message, DatabaseMessages) else None
+            
             # 生成回复
             success, response_set, _ = await generator_api.generate_reply(
                 chat_stream=self.chat_stream,
-                reply_message=self.action_message,
+                reply_message=reply_message,
                 action_data=action_data,
-                available_actions={self.action_name: None},
+                available_actions={self.action_name: self.get_action_info()},
                 enable_tool=global_config.tool.enable_tool,
                 request_type="chat.replyer",
                 from_plugin=False,
@@ -237,9 +218,6 @@ class RespondAction(BaseAction):
             
             # 发送回复（respond 默认不引用）
             reply_text = await self._send_response(response_set)
-            
-            # 存储动作信息
-            await self._store_action_info(reply_text)
             
             logger.info(f"{self.log_prefix} respond 动作执行成功")
             return True, reply_text
@@ -288,15 +266,3 @@ class RespondAction(BaseAction):
                 )
         
         return reply_text
-    
-    async def _store_action_info(self, reply_text: str):
-        """存储动作信息到数据库"""
-        await database_api.store_action_info(
-            chat_stream=self.chat_stream,
-            action_build_into_prompt=False,
-            action_prompt_display=f"统一回应：{reply_text}",
-            action_done=True,
-            thinking_id=self.thinking_id,
-            action_data={"reply_text": reply_text},
-            action_name="respond",
-        )

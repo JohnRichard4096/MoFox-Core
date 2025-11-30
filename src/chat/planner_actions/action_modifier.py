@@ -187,7 +187,7 @@ class ActionModifier:
                 logger.debug(f"{self.log_prefix}阶段三移除动作: {action_name}，原因: {reason}")
 
         # === 统一日志记录 ===
-        all_removals = chat_type_removals + removals_s1 + removals_s2 + removals_s3
+        all_removals = removals_s0 + removals_s1 + removals_s2 + removals_s3
         removals_summary: str = ""
         if all_removals:
             removals_summary = " | ".join([f"{name}({reason})" for name, reason in all_removals])

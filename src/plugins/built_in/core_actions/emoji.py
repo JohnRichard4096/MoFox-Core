@@ -219,8 +219,7 @@ class EmojiAction(BaseAction):
                             )
                             emoji_base64, emoji_description = random.choice(all_emojis_data)
 
-            assert global_config is not None
-            if global_config.emoji.emoji_selection_mode == "description":
+            elif global_config.emoji.emoji_selection_mode == "description":
                 # --- 详细描述选择模式 ---
                 # 获取最近的5条消息内容用于判断
                 recent_messages = await message_api.get_recent_messages(chat_id=self.chat_id, limit=20)

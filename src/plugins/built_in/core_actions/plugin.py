@@ -1,8 +1,10 @@
 """
 核心动作插件
 
-将系统核心动作（reply、no_reply、emoji）转换为新插件系统格式
+将系统核心动作（emoji）转换为新插件系统格式
 这是系统的内置插件，提供基础的聊天交互功能
+
+注意：reply 和 respond 动作已移至 AffinityFlowChatter 插件
 """
 
 # 导入依赖的系统组件
@@ -16,7 +18,6 @@ from src.plugin_system.base.config_types import ConfigField
 
 # 导入API模块 - 标准Python包方式
 from src.plugins.built_in.core_actions.emoji import EmojiAction
-from src.plugins.built_in.core_actions.reply import ReplyAction, RespondAction
 
 logger = get_logger("core_actions")
 
@@ -26,11 +27,11 @@ class CoreActionsPlugin(BasePlugin):
     """核心动作插件
 
     系统内置插件，提供基础的聊天交互功能：
-    - Reply: 回复动作
-    - NoReply: 不回复动作
     - Emoji: 表情动作
 
-    注意：插件基本信息优先从_manifest.json文件中读取
+    注意：
+    - reply 和 respond 动作已移至 AffinityFlowChatter 插件
+    - 插件基本信息优先从_manifest.json文件中读取
     """
 
     # 插件基本信息
@@ -53,8 +54,6 @@ class CoreActionsPlugin(BasePlugin):
             "config_version": ConfigField(type=str, default="0.6.0", description="配置文件版本"),
         },
         "components": {
-            "enable_reply": ConfigField(type=bool, default=True, description="是否启用 reply 动作（s4u模板）"),
-            "enable_respond": ConfigField(type=bool, default=True, description="是否启用 respond 动作（normal模板）"),
             "enable_emoji": ConfigField(type=bool, default=True, description="是否启用发送表情/图片动作"),
         },
     }
@@ -64,14 +63,6 @@ class CoreActionsPlugin(BasePlugin):
 
         # --- 根据配置注册组件 ---
         components: ClassVar = []
-
-        # 注册 reply 动作
-        if self.get_config("components.enable_reply", True):
-            components.append((ReplyAction.get_action_info(), ReplyAction))
-
-        # 注册 respond 动作
-        if self.get_config("components.enable_respond", True):
-            components.append((RespondAction.get_action_info(), RespondAction))
 
         # 注册 emoji 动作
         if self.get_config("components.enable_emoji", True):

@@ -86,4 +86,20 @@ class AffinityChatterPlugin(BasePlugin):
         except Exception as e:
             logger.error(f"加载 ProactiveThinkingMessageHandler 时出错: {e}")
 
+        try:
+            # 延迟导入 ReplyAction（AFC 专属动作）
+            from .actions.reply import ReplyAction
+
+            components.append((ReplyAction.get_action_info(), ReplyAction))
+        except Exception as e:
+            logger.error(f"加载 ReplyAction 时出错: {e}")
+
+        try:
+            # 延迟导入 RespondAction（AFC 专属动作）
+            from .actions.reply import RespondAction
+
+            components.append((RespondAction.get_action_info(), RespondAction))
+        except Exception as e:
+            logger.error(f"加载 RespondAction 时出错: {e}")
+
         return components

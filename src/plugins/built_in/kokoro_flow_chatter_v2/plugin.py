@@ -9,7 +9,7 @@ from typing import Any, ClassVar
 from src.common.logger import get_logger
 from src.plugin_system.base.base_plugin import BasePlugin
 from src.plugin_system.base.component_types import ChatterInfo
-from src.plugin_system.decorators import register_plugin
+from src.plugin_system import register_plugin
 
 from .chatter import KokoroFlowChatterV2
 from .config import get_config
@@ -84,7 +84,19 @@ class KokoroFlowChatterV2Plugin(BasePlugin):
             ))
             logger.debug("[KFC V2] 成功加载 KokoroFlowChatterV2 组件")
         except Exception as e:
-            logger.error(f"[KFC V2] 加载组件失败: {e}")
+            logger.error(f"[KFC V2] 加载 Chatter 组件失败: {e}")
+        
+        try:
+            # 注册 KFC 专属 Reply 动作
+            from .actions.reply import KFCReplyAction
+            
+            components.append((
+                KFCReplyAction.get_action_info(),
+                KFCReplyAction,
+            ))
+            logger.debug("[KFC V2] 成功加载 KFCReplyAction 组件")
+        except Exception as e:
+            logger.error(f"[KFC V2] 加载 Reply 动作失败: {e}")
         
         return components
     

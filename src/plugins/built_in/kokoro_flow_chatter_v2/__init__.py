@@ -33,6 +33,18 @@ from .config import (
     reload_config,
 )
 from .plugin import KokoroFlowChatterV2Plugin
+from src.plugin_system.base.plugin_metadata import PluginMetadata
+
+__plugin_meta__ = PluginMetadata(
+    name="Kokoro Flow Chatter",
+    description="专为私聊设计的深度情感交互处理器，实现心理状态驱动的对话体验",
+    usage="在私聊场景中自动启用，可通过 [kokoro_flow_chatter].enable 配置开关",
+    version="2.0.0",
+    author="MoFox",
+    keywords=["chatter", "kokoro", "private", "emotional", "narrative"],
+    categories=["Chat", "AI", "Emotional"],
+    extra={"is_built_in": True, "chat_type": "private"},
+)
 
 __all__ = [
     # Models
@@ -61,4 +73,5 @@ __all__ = [
     "reload_config",
     # Plugin
     "KokoroFlowChatterV2Plugin",
+    "__plugin_meta__",
 ]

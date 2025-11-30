@@ -41,7 +41,7 @@ class NapcatAdapter(BaseAdapter):
     adapter_description = "基于 MoFox-Bus 的 Napcat/OneBot 11 适配器"
     platform = "qq"
 
-    run_in_subprocess = True
+    run_in_subprocess = False
 
     def __init__(self, core_sink: CoreSink, plugin: Optional[BasePlugin] = None, **kwargs):
         """初始化 Napcat 适配器"""
