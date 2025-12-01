@@ -527,9 +527,6 @@ def _parse_unified_response(raw_response: str, stream_id: str | None = None) -> 
         if isinstance(action, dict):
             if action.get("type") == "reply":
                 action["type"] = "kfc_reply"
-            # 统一模式下模型已经自己分段了，禁用回复分割器
-            if action.get("type") == "kfc_reply":
-                action["enable_splitter"] = False
     
     response = LLMResponse.from_dict(data)
     
