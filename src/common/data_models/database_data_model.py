@@ -378,7 +378,6 @@ class DatabaseMessages(BaseDataModel):
         "chat_info_create_time", "chat_info_last_active_time",
         "semantic_embedding", "interest_calculated",
         "is_voice", "is_video", "has_emoji", "has_picid",
-        "id",  # 数据库自增主键
     })
 
     @classmethod
