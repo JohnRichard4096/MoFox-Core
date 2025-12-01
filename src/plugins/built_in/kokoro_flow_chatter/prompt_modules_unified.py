@@ -214,9 +214,9 @@ def build_actions_module(available_actions: Optional[dict[str, ActionInfo]] = No
 def _get_default_actions_block() -> str:
     """获取默认的内置动作描述块"""
     return """### `kfc_reply` - 发消息
-发送文字回复。
+发送文字回复。**注意：只能有一个 kfc_reply 动作，把你想说的话都写在一条消息里。**
 ```json
-{"type": "kfc_reply", "content": "你要说的话"}
+{"type": "kfc_reply", "content": "你要说的话，全部写在这里"}
 ```
 
 ### `poke_user` - 戳一戳

@@ -29,6 +29,7 @@ peewee
 pyarrow
 pydantic
 pypinyin
+PyYAML
 python-dateutil
 python-dotenv
 python-igraph
