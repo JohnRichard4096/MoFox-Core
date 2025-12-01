@@ -147,6 +147,12 @@ class EmojiAction(BaseAction):
             emoji_base64, emoji_description = "", ""
             chosen_emotion = "表情包"  # 默认描述，避免变量未定义错误
 
+            # 提取精炼描述和关键词的辅助函数（点睛之笔）
+            # 新格式: [精炼描述] Keywords: [关键词] Desc: [详细描述]
+            # 我们只需要 Desc: 之前的部分
+            def extract_refined_info(full_desc: str) -> str:
+                return full_desc.split(" Desc:")[0].strip()
+
             # 4. 根据配置选择不同的表情选择模式
             assert global_config is not None
             if global_config.emoji.emoji_selection_mode == "emotion":
@@ -232,13 +238,7 @@ class EmojiAction(BaseAction):
                         show_actions=False,
                     )
 
-                # 准备表情描述列表
-                # 提取精炼描述和关键词用于LLM选择
-                def extract_refined_info(full_desc: str) -> str:
-                    # 新格式: [精炼描述] Keywords: [关键词] Desc: [详细描述]
-                    # 我们只需要 Desc: 之前的部分
-                    return full_desc.split(" Desc:")[0].strip()
-
+                # 准备表情描述列表（使用精炼描述）
                 emoji_descriptions = [extract_refined_info(desc) for _, desc in all_emojis_data]
 
                 # 构建prompt让LLM选择描述
@@ -314,11 +314,14 @@ class EmojiAction(BaseAction):
             except Exception as e:
                 logger.error(f"{self.log_prefix} 添加表情到历史记录时出错: {e}")
 
+            # 提取精炼描述用于显示（点睛之笔）
+            refined_description = extract_refined_info(emoji_description)
+
             await self.store_action_info(
-                action_build_into_prompt=True, action_prompt_display="发送了一个表情包", action_done=True
+                action_build_into_prompt=True, action_prompt_display=f"发送了一个表情包: {refined_description}", action_done=True
             )
 
-            return True, f"发送表情包: {emoji_description}"
+            return True, f"发送表情包: {refined_description}"
 
         except Exception as e:
             logger.error(f"{self.log_prefix} 表情动作执行失败: {e}")
