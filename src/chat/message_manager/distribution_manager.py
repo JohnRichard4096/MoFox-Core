@@ -318,6 +318,15 @@ class StreamLoopManager:
                     has_messages = force_dispatch or await self._has_messages_to_process(context)
 
                     if has_messages:
+                        # 🔒 并发保护：如果 Chatter 正在处理中，跳过本轮
+                        # 这可能发生在：1) 打断后重启循环 2) 处理时间超过轮询间隔
+                        if context.is_chatter_processing:
+                            logger.debug(f"🔒 [流工作器] stream={stream_id[:8]}, Chatter正在处理中，跳过本轮")
+                            # 不打印"开始处理"日志，直接进入下一轮等待
+                            # 使用较短的等待时间，等待当前处理完成
+                            await asyncio.sleep(1.0)
+                            continue
+                        
                         if force_dispatch:
                             logger.info(f"⚡ [流工作器] stream={stream_id[:8]}, 任务ID={task_id}, 未读消息 {unread_count} 条，触发强制分发")
                         else:
@@ -477,10 +486,11 @@ class StreamLoopManager:
             logger.warning(f"Chatter管理器未设置: {stream_id}")
             return False
 
-        # 🔒 防止并发处理：如果已经在处理中，直接返回
+        # 🔒 二次并发保护（防御性检查）
+        # 正常情况下不应该触发，如果触发说明有竞态条件
         if context.is_chatter_processing:
-            logger.debug(f"🔒 [并发保护] stream={stream_id[:8]}, Chatter 正在处理中，跳过本次处理请求")
-            return True  # 返回 True，这是正常的保护机制，不是失败
+            logger.warning(f"🔒 [并发保护] stream={stream_id[:8]}, Chatter正在处理中（二次检查触发，可能存在竞态）")
+            return False
 
         # 设置处理状态为正在处理
         self._set_stream_processing_status(stream_id, True)
@@ -720,8 +730,8 @@ class StreamLoopManager:
             chat_manager = get_chat_manager()
             chat_stream = await chat_manager.get_stream(stream_id)
             if chat_stream and not chat_stream.group_info:
-                # 私聊：有消息时几乎立即响应，空转时稍微等待
-                min_interval = 0.1 if has_messages else 3.0
+                # 私聊：有消息时快速响应，空转时稍微等待
+                min_interval = 0.5 if has_messages else 5.0
                 logger.debug(f"流 {stream_id} 私聊模式，使用最小间隔: {min_interval:.2f}s")
                 return min_interval
         except Exception as e:

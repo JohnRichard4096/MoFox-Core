@@ -370,11 +370,17 @@ class MessageManager:
 
             logger.info(f"🚀 打断后重新创建流循环任务: {stream_id}")
 
-            # 等待一小段时间确保当前消息已经添加到未读消息中
-            await asyncio.sleep(0.1)
-
             # 获取当前的stream context
             context = chat_stream.context
+
+            # 🔒 重要：确保 is_chatter_processing 被重置
+            # 被取消的任务的 finally 块可能还没执行完，这里强制重置
+            if context.is_chatter_processing:
+                logger.debug(f"打断后强制重置 is_chatter_processing: {stream_id}")
+                context.is_chatter_processing = False
+
+            # 等待一小段时间确保当前消息已经添加到未读消息中
+            await asyncio.sleep(0.1)
 
             # 确保有未读消息需要处理
             unread_messages = context.get_unread_messages()
