@@ -16,7 +16,7 @@ from src.config.config import global_config, model_config
 from src.llm_models.utils_model import LLMRequest
 from src.person_info.person_info import PersonInfoManager, get_person_info_manager
 from src.common.data_models.database_data_model import DatabaseUserInfo
-from .typo_generator import ChineseTypoGenerator
+from .typo_generator import get_typo_generator
 
 logger = get_logger("chat_utils")
 
@@ -443,7 +443,8 @@ def process_llm_response(text: str, enable_splitter: bool = True, enable_chinese
     #     logger.warning(f"回复过长 ({len(cleaned_text)} 字符)，返回默认回复")
     #     return ["懒得说"]
 
-    typo_generator = ChineseTypoGenerator(
+    # 🔧 内存优化：使用单例工厂函数，避免重复创建拼音字典
+    typo_generator = get_typo_generator(
         error_rate=global_config.chinese_typo.error_rate,
         min_freq=global_config.chinese_typo.min_freq,
         tone_error_rate=global_config.chinese_typo.tone_error_rate,

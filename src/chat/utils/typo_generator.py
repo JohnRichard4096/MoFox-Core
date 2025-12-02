@@ -1,5 +1,7 @@
 """
 错别字生成器 - 基于拼音和字频的中文错别字生成工具
+
+内存优化：使用单例模式，避免重复创建拼音字典（约20992个汉字映射）
 """
 
 import math
@@ -8,6 +10,7 @@ import random
 import time
 from collections import defaultdict
 from pathlib import Path
+from threading import Lock
 
 import orjson
 import rjieba
@@ -16,6 +19,59 @@ from pypinyin import Style, pinyin
 from src.common.logger import get_logger
 
 logger = get_logger("typo_gen")
+
+# 🔧 全局单例和缓存
+_typo_generator_singleton: "ChineseTypoGenerator | None" = None
+_singleton_lock = Lock()
+_shared_pinyin_dict: dict | None = None
+_shared_char_frequency: dict | None = None
+
+
+def get_typo_generator(
+    error_rate: float = 0.3,
+    min_freq: int = 5,
+    tone_error_rate: float = 0.2,
+    word_replace_rate: float = 0.3,
+    max_freq_diff: int = 200,
+) -> "ChineseTypoGenerator":
+    """
+    获取错别字生成器单例（内存优化）
+    
+    如果参数与缓存的单例不同，会更新参数但复用拼音字典和字频数据。
+    
+    参数:
+        error_rate: 单字替换概率
+        min_freq: 最小字频阈值
+        tone_error_rate: 声调错误概率
+        word_replace_rate: 整词替换概率
+        max_freq_diff: 最大允许的频率差异
+        
+    返回:
+        ChineseTypoGenerator 实例
+    """
+    global _typo_generator_singleton
+    
+    with _singleton_lock:
+        if _typo_generator_singleton is None:
+            _typo_generator_singleton = ChineseTypoGenerator(
+                error_rate=error_rate,
+                min_freq=min_freq,
+                tone_error_rate=tone_error_rate,
+                word_replace_rate=word_replace_rate,
+                max_freq_diff=max_freq_diff,
+            )
+            logger.info("ChineseTypoGenerator 单例已创建")
+        else:
+            # 更新参数但复用字典
+            _typo_generator_singleton.set_params(
+                error_rate=error_rate,
+                min_freq=min_freq,
+                tone_error_rate=tone_error_rate,
+                word_replace_rate=word_replace_rate,
+                max_freq_diff=max_freq_diff,
+            )
+    
+    return _typo_generator_singleton
 
 
 class ChineseTypoGenerator:
@@ -30,18 +86,24 @@ class ChineseTypoGenerator:
             word_replace_rate: 整词替换概率
             max_freq_diff: 最大允许的频率差异
         """
+        global _shared_pinyin_dict, _shared_char_frequency
+        
         self.error_rate = error_rate
         self.min_freq = min_freq
         self.tone_error_rate = tone_error_rate
         self.word_replace_rate = word_replace_rate
         self.max_freq_diff = max_freq_diff
 
-        # 加载数据
-        # print("正在加载汉字数据库，请稍候...")
-        # logger.info("正在加载汉字数据库，请稍候...")
-
-        self.pinyin_dict = self._create_pinyin_dict()
-        self.char_frequency = self._load_or_create_char_frequency()
+        # 🔧 内存优化：复用全局缓存的拼音字典和字频数据
+        if _shared_pinyin_dict is None:
+            _shared_pinyin_dict = self._create_pinyin_dict()
+            logger.debug("拼音字典已创建并缓存")
+        self.pinyin_dict = _shared_pinyin_dict
+        
+        if _shared_char_frequency is None:
+            _shared_char_frequency = self._load_or_create_char_frequency()
+            logger.debug("字频数据已加载并缓存")
+        self.char_frequency = _shared_char_frequency
 
     def _load_or_create_char_frequency(self):
         """
@@ -433,7 +495,7 @@ class ChineseTypoGenerator:
 
     def set_params(self, **kwargs):
         """
-        设置参数
+        设置参数（静默模式，供单例复用时调用）
 
         可设置参数:
             error_rate: 单字替换概率
@@ -445,9 +507,6 @@ class ChineseTypoGenerator:
         for key, value in kwargs.items():
             if hasattr(self, key):
                 setattr(self, key, value)
-                print(f"参数 {key} 已设置为 {value}")
-            else:
-                print(f"警告: 参数 {key} 不存在")
 
 
 def main():

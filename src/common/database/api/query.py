@@ -5,8 +5,10 @@
 - 聚合查询
 - 排序和分页
 - 关联查询
+- 流式迭代（内存优化）
 """
 
+from collections.abc import AsyncIterator
 from typing import Any, Generic, TypeVar
 
 from sqlalchemy import and_, asc, desc, func, or_, select
@@ -182,6 +184,84 @@ class QueryBuilder(Generic[T]):
         """
         self._use_cache = False
         return self
+
+    async def iter_batches(
+        self,
+        batch_size: int = 1000,
+        *,
+        as_dict: bool = True,
+    ) -> AsyncIterator[list[T] | list[dict[str, Any]]]:
+        """分批迭代获取结果（内存优化）
+
+        使用 LIMIT/OFFSET 分页策略，避免一次性加载全部数据到内存。
+        适用于大数据量的统计、导出等场景。
+
+        Args:
+            batch_size: 每批获取的记录数，默认1000
+            as_dict: 为True时返回字典格式
+
+        Yields:
+            每批的模型实例列表或字典列表
+
+        Example:
+            async for batch in query_builder.iter_batches(batch_size=500):
+                for record in batch:
+                    process(record)
+        """
+        offset = 0
+
+        while True:
+            # 构建带分页的查询
+            paginated_stmt = self._stmt.offset(offset).limit(batch_size)
+
+            async with get_db_session() as session:
+                result = await session.execute(paginated_stmt)
+                # .all() 已经返回 list，无需再包装
+                instances = result.scalars().all()
+
+                if not instances:
+                    # 没有更多数据
+                    break
+
+                # 在 session 内部转换为字典列表
+                instances_dicts = [_model_to_dict(inst) for inst in instances]
+
+                if as_dict:
+                    yield instances_dicts
+                else:
+                    yield [_dict_to_model(self.model, row) for row in instances_dicts]
+
+                # 如果返回的记录数小于 batch_size，说明已经是最后一批
+                if len(instances) < batch_size:
+                    break
+
+                offset += batch_size
+
+    async def iter_all(
+        self,
+        batch_size: int = 1000,
+        *,
+        as_dict: bool = True,
+    ) -> AsyncIterator[T | dict[str, Any]]:
+        """逐条迭代所有结果（内存优化）
+
+        内部使用分批获取，但对外提供逐条迭代的接口。
+        适用于需要逐条处理但数据量很大的场景。
+
+        Args:
+            batch_size: 内部分批大小，默认1000
+            as_dict: 为True时返回字典格式
+
+        Yields:
+            单个模型实例或字典
+
+        Example:
+            async for record in query_builder.iter_all():
+                process(record)
+        """
+        async for batch in self.iter_batches(batch_size=batch_size, as_dict=as_dict):
+            for item in batch:
+                yield item
 
     async def all(self, *, as_dict: bool = False) -> list[T] | list[dict[str, Any]]:
         """获取所有结果
