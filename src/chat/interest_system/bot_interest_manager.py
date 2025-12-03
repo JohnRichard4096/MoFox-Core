@@ -246,7 +246,11 @@ class BotInterestManager:
             raise
 
     async def _call_llm_for_interest_generation(self, prompt: str) -> str | None:
-        """调用LLM生成兴趣标签"""
+        """调用LLM生成兴趣标签
+        
+        注意：此方法会临时增加 API 超时时间，以确保初始化阶段的人设标签生成
+        不会因用户配置的较短超时而失败。
+        """
         try:
             logger.debug("配置LLM客户端...")
 
@@ -267,14 +271,42 @@ class BotInterestManager:
             # 使用replyer模型配置
             replyer_config = model_config.model_task_config.replyer
 
-            # 调用LLM API
-            success, response, reasoning_content, model_name = await llm_api.generate_with_model(
-                prompt=full_prompt,
-                model_config=replyer_config,
-                request_type="interest_generation",
-                temperature=0.7,
-                max_tokens=2000,
-            )
+            # 🔧 临时增加超时时间，避免初始化阶段因超时失败
+            # 人设标签生成需要较长时间（15-25个标签的JSON），使用更长的超时
+            INIT_TIMEOUT = 180  # 初始化阶段使用 180 秒超时
+            original_timeouts: dict[str, int] = {}
+            
+            try:
+                # 保存并修改所有相关模型的 API provider 超时设置
+                for model_name in replyer_config.model_list:
+                    try:
+                        model_info = model_config.get_model_info(model_name)
+                        provider = model_config.get_provider(model_info.api_provider)
+                        original_timeouts[provider.name] = provider.timeout
+                        if provider.timeout < INIT_TIMEOUT:
+                            logger.debug(f"⏱️ 临时增加 API provider '{provider.name}' 超时: {provider.timeout}s → {INIT_TIMEOUT}s")
+                            provider.timeout = INIT_TIMEOUT
+                    except Exception as e:
+                        logger.warning(f"⚠️ 无法修改模型 '{model_name}' 的超时设置: {e}")
+                
+                # 调用LLM API
+                success, response, reasoning_content, model_name = await llm_api.generate_with_model(
+                    prompt=full_prompt,
+                    model_config=replyer_config,
+                    request_type="interest_generation",
+                    temperature=0.7,
+                    max_tokens=2000,
+                )
+            finally:
+                # 🔧 恢复原始超时设置
+                for provider_name, original_timeout in original_timeouts.items():
+                    try:
+                        provider = model_config.get_provider(provider_name)
+                        if provider.timeout != original_timeout:
+                            logger.debug(f"⏱️ 恢复 API provider '{provider_name}' 超时: {provider.timeout}s → {original_timeout}s")
+                            provider.timeout = original_timeout
+                    except Exception as e:
+                        logger.warning(f"⚠️ 无法恢复 provider '{provider_name}' 的超时设置: {e}")
 
             if success and response:
                 # 直接返回原始响应，后续使用统一的 JSON 解析工具
