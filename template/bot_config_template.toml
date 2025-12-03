@@ -64,8 +64,8 @@ cache_l1_ttl = 300 # L1缓存生存时间（秒）
 cache_l2_max_size = 10000 # L2缓存最大条目数（温数据，内存占用约10-50MB）
 cache_l2_ttl = 1800 # L2缓存生存时间（秒）
 cache_cleanup_interval = 60 # 缓存清理任务执行间隔（秒）
-cache_max_memory_mb = 50 # 缓存最大内存占用（MB），超过此值将触发强制清理
-cache_max_item_size_mb = 5 # 单个缓存条目最大大小（MB），超过此值将不缓存
+cache_max_memory_mb = 10 # 缓存最大内存占用（MB），超过此值将触发强制清理
+cache_max_item_size_mb = 1 # 单个缓存条目最大大小（MB），超过此值将不缓存
 
 [permission] # 权限系统配置
 # Master用户配置（拥有最高权限，无视所有权限节点）
@@ -174,7 +174,7 @@ allow_reply_self = false # 是否允许回复自己说的话
 private_chat_inevitable_reply = false # 私聊必然回复
 
 max_context_size = 25 # 上下文长度
-thinking_timeout = 40 # MoFox-Bot一次回复最长思考规划时间，超过这个时间的思考会放弃（往往是api反应太慢）
+thinking_timeout = 60 # MoFox-Bot一次回复最长思考规划时间，超过这个时间的思考会放弃（往往是api反应太慢）
 
 # 消息缓存系统配置
 enable_message_cache = false # 是否启用消息缓存系统（启用后，处理中收到的消息会被缓存，处理完成后统一刷新到未读列表）
@@ -264,17 +264,16 @@ vector_db_path = "data/memory_graph/chroma_db" # 向量数据库路径 (使用�
 
 # === 记忆检索配置 ===
 search_top_k = 10 # 默认检索返回数量
-search_min_importance = 0.3 # 最小重要性阈值 (0.0-1.0)
+search_min_importance = 0.4 # 最小重要性阈值 (0.0-1.0)
 search_similarity_threshold = 0.6 # 向量相似度阈值
 
 # 智能查询优化
 enable_query_optimization = true # 启用查询优化（使用小模型分析对话历史，生成综合性搜索查询）
 
-# === 路径评分扩展算法配置（实验性功能）===
+# === 路径评分扩展算法配置 ===
 # 这是一种全新的图检索算法，通过路径传播和分数聚合来发现相关记忆
 # 优势：更精确的图结构利用、路径合并机制、动态剪枝优化
-# 注意：这是实验性功能，可能需要调整参数以获得最佳效果
-enable_path_expansion = false # 是否启用路径评分扩展算法（默认false，使用传统图扩展）
+enable_path_expansion = true # 是否启用路径评分扩展算法
 path_expansion_max_hops = 2 # 路径扩展最大跳数（建议1-3）
 path_expansion_damping_factor = 0.85 # 路径分数衰减因子（PageRank风格，0.85推荐）
 path_expansion_max_branches = 10 # 每节点最大分叉数（控制探索广度）
@@ -451,7 +450,7 @@ key_file = "" # SSL密钥文件路径，仅在use_wss=true时有效
 
 [planning_system] # 规划系统配置
 # --- 日程生成 ---
-schedule_enable = true # 是否启用每日日程生成功能
+schedule_enable = false # 是否启用每日日程生成功能
 schedule_guidelines = """
 我希望你每天都能过得充实而有趣。
 请确保你的日程里有学习新知识的时间，这是你成长的关键。
