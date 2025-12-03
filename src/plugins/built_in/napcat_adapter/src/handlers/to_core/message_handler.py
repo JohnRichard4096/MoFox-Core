@@ -60,7 +60,7 @@ class MessageHandler:
         user_id = str(sender_info.get("user_id", ""))
 
         # 检查全局封禁用户列表
-        ban_user_ids = features_config.get("ban_user_id", [])
+        ban_user_ids = [str(item) for item in features_config.get("ban_user_id", [])]
         if user_id in ban_user_ids:
             logger.debug(f"用户 {user_id} 在全局封禁列表中，消息被过滤")
             return False
