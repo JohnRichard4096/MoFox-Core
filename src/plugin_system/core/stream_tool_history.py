@@ -32,15 +32,35 @@ class ToolCallRecord:
         """后处理：生成结果预览"""
         if self.result and not self.result_preview:
             content = self.result.get("content", "")
+            # 联网搜索等重要工具不截断结果
+            no_truncate_tools = {"web_search", "web_surfing", "knowledge_search"}
+            should_truncate = self.tool_name not in no_truncate_tools
+            max_length = 500 if should_truncate else 10000  # 联网搜索给更大的限制
+            
             if isinstance(content, str):
-                self.result_preview = content[:500] + ("..." if len(content) > 500 else "")
+                if len(content) > max_length:
+                    self.result_preview = content[:max_length] + "..."
+                else:
+                    self.result_preview = content
             elif isinstance(content, list | dict):
                 try:
-                    self.result_preview = orjson.dumps(content, option=orjson.OPT_NON_STR_KEYS).decode("utf-8")[:500] + "..."
+                    json_str = orjson.dumps(content, option=orjson.OPT_NON_STR_KEYS).decode("utf-8")
+                    if len(json_str) > max_length:
+                        self.result_preview = json_str[:max_length] + "..."
+                    else:
+                        self.result_preview = json_str
                 except Exception:
-                    self.result_preview = str(content)[:500] + "..."
+                    str_content = str(content)
+                    if len(str_content) > max_length:
+                        self.result_preview = str_content[:max_length] + "..."
+                    else:
+                        self.result_preview = str_content
             else:
-                self.result_preview = str(content)[:500] + "..."
+                str_content = str(content)
+                if len(str_content) > max_length:
+                    self.result_preview = str_content[:max_length] + "..."
+                else:
+                    self.result_preview = str_content
 
 
 class StreamToolHistoryManager:

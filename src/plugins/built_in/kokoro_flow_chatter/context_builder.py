@@ -334,24 +334,52 @@ class KFCContextBuilder:
             
             tool_executor = ToolExecutor(chat_id=self.chat_id)
             
-            # 首先获取当前的历史记录（在执行新工具调用之前）
+            info_parts = []
+            
+            # ========== 1. 主动召回联网搜索缓存 ==========
+            try:
+                from src.common.cache_manager import tool_cache
+                
+                # 使用聊天历史作为语义查询
+                query_text = chat_history if chat_history else target_message
+                recalled_caches = await tool_cache.recall_relevant_cache(
+                    query_text=query_text,
+                    tool_name="web_search",  # 只召回联网搜索的缓存
+                    top_k=2,
+                    similarity_threshold=0.65,  # 相似度阈值
+                )
+                
+                if recalled_caches:
+                    recall_parts = ["### 🔍 相关的历史搜索结果"]
+                    for item in recalled_caches:
+                        original_query = item.get("query", "")
+                        content = item.get("content", "")
+                        similarity = item.get("similarity", 0)
+                        if content:
+                            # 截断过长的内容
+                            if len(content) > 500:
+                                content = content[:500] + "..."
+                            recall_parts.append(f"**搜索「{original_query}」** (相关度:{similarity:.0%})\n{content}")
+                    
+                    info_parts.append("\n\n".join(recall_parts))
+                    logger.info(f"[缓存召回] 召回了 {len(recalled_caches)} 条相关搜索缓存")
+            except Exception as e:
+                logger.debug(f"[缓存召回] 召回失败（非关键）: {e}")
+            
+            # ========== 2. 获取工具调用历史 ==========
             tool_history_str = tool_executor.history_manager.format_for_prompt(
                 max_records=3, include_results=True
             )
+            if tool_history_str:
+                info_parts.append(tool_history_str)
             
-            # 然后执行工具调用
+            # ========== 3. 执行工具调用 ==========
             tool_results, _, _ = await tool_executor.execute_from_chat_message(
                 sender=sender_name,
                 target_message=target_message,
                 chat_history=chat_history,
                 return_details=False,
             )
-            
-            info_parts = []
-            
-            # 显示之前的工具调用历史（不包括当前这次调用）
-            if tool_history_str:
-                info_parts.append(tool_history_str)
             
             # 显示当前工具调用的结果（简要信息）
             if tool_results:

@@ -28,7 +28,12 @@ class WebSurfingTool(BaseTool):
 
     name: str = "web_search"
     description: str = (
-        "用于执行网络搜索。当用户明确要求搜索，或者需要获取关于公司、产品、事件的最新信息、新闻或动态时，必须使用此工具"
+        "联网搜索工具。使用场景：\n"
+        "1. 用户问的问题你不确定答案、需要验证\n"
+        "2. 涉及最新信息（新闻、产品、事件、时效性内容）\n"
+        "3. 需要查找具体数据、事实、定义\n"
+        "4. 用户明确要求搜索\n"
+        "不要担心调用频率，搜索结果会被缓存。"
     )
     available_for_llm: bool = True
     parameters: ClassVar[list] = [
