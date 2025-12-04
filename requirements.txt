@@ -83,5 +83,6 @@ inkfox
 soundfile
 pedalboard
 mofox-wire
+sqlalchemy
 # For local speech-to-text functionality (stt_whisper_plugin)
 openai-whisper
