@@ -424,6 +424,7 @@ class ProactiveThinker:
             # 构建超时上下文信息
             extra_context = {
                 "consecutive_timeout_count": session.consecutive_timeout_count,
+                "followup_count": session.waiting_config.followup_count,  # 真正发消息的追问次数
                 "time_since_user_reply": time_since_user_reply,
                 "time_since_user_reply_str": self._format_duration(time_since_user_reply) if time_since_user_reply else "未知",
             }
@@ -478,6 +479,15 @@ class ProactiveThinker:
                     thinking_id=None,
                     log_prefix="[KFC ProactiveThinker]",
                 )
+            
+            # 🎯 只有真正发送了消息才增加追问计数（do_nothing 不算追问）
+            has_reply_action = any(
+                a.type in ("kfc_reply", "respond", "poke_user", "send_emoji")
+                for a in plan_response.actions
+            )
+            if has_reply_action:
+                session.waiting_config.followup_count += 1
+                logger.debug(f"[ProactiveThinker] 超时追问计数+1: user={session.user_id}, followup_count={session.waiting_config.followup_count}")
             
             # 记录到 mental_log
             session.add_bot_planning(

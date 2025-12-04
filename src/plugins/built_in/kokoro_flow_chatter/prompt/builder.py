@@ -684,10 +684,10 @@ class PromptBuilder:
             # 构建连续超时上下文
             timeout_context_parts = []
             
-            # 添加连续超时次数信息
-            consecutive_count = extra_context.get("consecutive_timeout_count", 0)
-            if consecutive_count > 1:
-                timeout_context_parts.append(f"⚠️ 这已经是你连续第 {consecutive_count} 次等到超时了。")
+            # 添加真正追问次数警告（只有真正发了消息才算追问）
+            followup_count = extra_context.get("followup_count", 0)
+            if followup_count > 0:
+                timeout_context_parts.append(f"⚠️ 你已经连续追问了 {followup_count} 次，对方仍未回复。再追问可能会显得太急躁，请三思。")
             
             # 添加距离用户上次回复的时间
             time_since_user_reply_str = extra_context.get("time_since_user_reply_str")

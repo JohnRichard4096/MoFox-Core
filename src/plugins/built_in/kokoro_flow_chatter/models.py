@@ -69,7 +69,8 @@ class WaitingConfig:
     max_wait_seconds: int = 0        # 最长等待时间（秒），0 表示不等待
     started_at: float = 0.0          # 开始等待的时间戳
     last_thinking_at: float = 0.0    # 上次连续思考的时间戳
-    thinking_count: int = 0          # 连续思考次数
+    thinking_count: int = 0          # 连续思考次数（心理活动）
+    followup_count: int = 0          # 追问次数（真正发送消息的次数）
     
     def is_active(self) -> bool:
         """是否正在等待"""
@@ -104,6 +105,7 @@ class WaitingConfig:
             "started_at": self.started_at,
             "last_thinking_at": self.last_thinking_at,
             "thinking_count": self.thinking_count,
+            "followup_count": self.followup_count,
         }
     
     @classmethod
@@ -114,6 +116,7 @@ class WaitingConfig:
             started_at=data.get("started_at", 0.0),
             last_thinking_at=data.get("last_thinking_at", 0.0),
             thinking_count=data.get("thinking_count", 0),
+            followup_count=data.get("followup_count", 0),
         )
     
     def reset(self) -> None:
@@ -123,6 +126,7 @@ class WaitingConfig:
         self.started_at = 0.0
         self.last_thinking_at = 0.0
         self.thinking_count = 0
+        self.followup_count = 0
 
 
 @dataclass

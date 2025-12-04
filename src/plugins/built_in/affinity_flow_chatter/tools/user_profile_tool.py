@@ -43,7 +43,7 @@ class UserProfileTool(BaseTool):
     """
 
     name = "update_user_profile"
-    description = """记录或更新你对某个人的认识。可以经常调用来保持印象的实时性。
+    description = """记录或更新你对某个人的认识。
 
 使用场景：
 1. TA告诉你个人信息（生日、职业、城市等）→ 填 key_info_type 和 key_info_value
@@ -51,16 +51,23 @@ class UserProfileTool(BaseTool):
 3. 你对TA有了新的认识或感受
 4. 想更新对TA的印象
 
-⚠️ 注意：TA讲的游戏剧情/故事不是TA本人的信息，不要记录虚构内容。
+⚠️ 重要注意：
+- 别名必须是TA自己明确表示想被这样称呼的（如"你叫我xx吧"、"我的昵称是xx"）
+- 短期的撤娇/玩笑称呼不是别名（如"哈哈我是小笨蛋"这种玩笑不算）
+- 关键信息必须是具体值（如"11月23日"），不要填描述性文字
+- 游戏剧情/故事不是TA本人的信息
+
 此工具在后台异步执行，不影响回复速度。"""
     parameters = [
         ("target_user_id", ToolParamType.STRING, "目标用户的ID（必须）", True, None),
         ("target_user_name", ToolParamType.STRING, "目标用户的名字/昵称（必须）", True, None),
-        ("user_aliases", ToolParamType.STRING, "TA的其他昵称或别名（可选）", False, None),
+        ("alias_operation", ToolParamType.STRING, "别名操作：add=新增 / remove=删除 / replace=全部替换（可选）", False, None),
+        ("alias_value", ToolParamType.STRING, "别名内容，多个用、分隔", False, None),
         ("impression_hint", ToolParamType.STRING, "你观察到的关于TA的要点（可选）", False, None),
-        ("preference_keywords", ToolParamType.STRING, "TA的兴趣爱好关键词（可选）", False, None),
+        ("preference_operation", ToolParamType.STRING, "偏好操作：add=新增 / remove=删除 / replace=全部替换（可选）", False, None),
+        ("preference_value", ToolParamType.STRING, "偏好关键词，多个用、分隔（可选）", False, None),
         ("key_info_type", ToolParamType.STRING, "信息类型：birthday/job/location/dream/family/pet（可选）", False, None),
-        ("key_info_value", ToolParamType.STRING, "信息内容，如'11月23日'、'上海'（可选）", False, None),
+        ("key_info_value", ToolParamType.STRING, "具体信息内容（必须是具体值如'11月23日'、'上海'）", False, None),
     ]
     available_for_llm = True
     history_ttl = 1
@@ -88,14 +95,16 @@ class UserProfileTool(BaseTool):
                 }
 
             # 从LLM传入的参数
-            new_aliases = function_args.get("user_aliases", "")
+            alias_operation = function_args.get("alias_operation", "")
+            alias_value = function_args.get("alias_value", "")
             impression_hint = function_args.get("impression_hint", "")
-            new_keywords = function_args.get("preference_keywords", "")
+            preference_operation = function_args.get("preference_operation", "")
+            preference_value = function_args.get("preference_value", "")
             key_info_type = function_args.get("key_info_type", "")
             key_info_value = function_args.get("key_info_value", "")
 
             # 如果LLM没有传入任何有效参数，返回提示
-            if not any([new_aliases, impression_hint, new_keywords, key_info_value]):
+            if not any([alias_value, impression_hint, preference_value, key_info_value]):
                 return {
                     "type": "info",
                     "id": target_user_id,
@@ -106,9 +115,11 @@ class UserProfileTool(BaseTool):
             asyncio.create_task(self._background_update(
                 target_user_id=target_user_id,
                 target_user_name=str(target_user_name) if target_user_name else str(target_user_id),
-                new_aliases=new_aliases,
+                alias_operation=alias_operation,
+                alias_value=alias_value,
                 impression_hint=impression_hint,
-                new_keywords=new_keywords,
+                preference_operation=preference_operation,
+                preference_value=preference_value,
                 key_info_type=key_info_type,
                 key_info_value=key_info_value,
             ))
@@ -132,9 +143,11 @@ class UserProfileTool(BaseTool):
         self,
         target_user_id: str,
         target_user_name: str,
-        new_aliases: str,
+        alias_operation: str,
+        alias_value: str,
         impression_hint: str,
-        new_keywords: str,
+        preference_operation: str,
+        preference_value: str,
         key_info_type: str = "",
         key_info_value: str = "",
     ):
@@ -148,6 +161,20 @@ class UserProfileTool(BaseTool):
                 await self._add_key_fact(target_user_id, key_info_type or "other", key_info_value)
                 logger.info(f"[后台] 已记录关键信息: {target_user_id}, {key_info_type}={key_info_value}")
 
+            # 🎯 处理别名操作
+            final_aliases = self._process_list_operation(
+                existing_value=existing_profile.get("user_aliases", ""),
+                operation=alias_operation,
+                new_value=alias_value,
+            )
+            
+            # 🎯 处理偏好操作
+            final_preferences = self._process_list_operation(
+                existing_value=existing_profile.get("preference_keywords", ""),
+                operation=preference_operation,
+                new_value=preference_value,
+            )
+
             # 获取最近的聊天记录
             chat_history_text = await self._get_recent_chat_history(target_user_id)
 
@@ -160,7 +187,7 @@ class UserProfileTool(BaseTool):
                     target_user_name=target_user_name,
                     impression_hint=impression_hint,
                     existing_impression=str(existing_profile.get("relationship_text", "")),
-                    preference_keywords=str(new_keywords or existing_profile.get("preference_keywords", "")),
+                    preference_keywords=final_preferences,
                     chat_history=chat_history_text,
                     current_score=float(existing_profile.get("relationship_score", _get_base_relationship_score())),
                 )
@@ -174,9 +201,9 @@ class UserProfileTool(BaseTool):
 
             # 构建最终画像
             final_profile = {
-                "user_aliases": new_aliases if new_aliases else existing_profile.get("user_aliases", ""),
+                "user_aliases": final_aliases,
                 "relationship_text": final_impression,
-                "preference_keywords": new_keywords if new_keywords else existing_profile.get("preference_keywords", ""),
+                "preference_keywords": final_preferences,
                 "relationship_score": new_score,
             }
 
@@ -187,6 +214,41 @@ class UserProfileTool(BaseTool):
 
         except Exception as e:
             logger.error(f"[后台] 用户画像更新失败: {e}")
+    
+    def _process_list_operation(self, existing_value: str, operation: str, new_value: str) -> str:
+        """处理列表类型的操作（别名、偏好等）
+        
+        Args:
+            existing_value: 现有值（用、分隔）
+            operation: 操作类型 add/remove/replace
+            new_value: 新值（用、分隔）
+            
+        Returns:
+            str: 处理后的值
+        """
+        if not new_value:
+            return existing_value
+        
+        # 解析现有值和新值
+        existing_set = set(filter(None, [x.strip() for x in (existing_value or "").split("、")]))
+        new_set = set(filter(None, [x.strip() for x in new_value.split("、")]))
+        
+        operation = (operation or "add").lower().strip()
+        
+        if operation == "replace":
+            # 全部替换
+            result_set = new_set
+            logger.info(f"别名/偏好替换: {existing_set} -> {new_set}")
+        elif operation == "remove":
+            # 删除指定项
+            result_set = existing_set - new_set
+            logger.info(f"别名/偏好删除: {new_set} 从 {existing_set}")
+        else:  # add 或默认
+            # 新增（合并）
+            result_set = existing_set | new_set
+            logger.info(f"别名/偏好新增: {new_set} 到 {existing_set}")
+        
+        return "、".join(sorted(result_set))
 
     async def _add_key_fact(self, user_id: str, info_type: str, info_value: str):
         """添加或更新关键信息（生日、职业等）
@@ -203,6 +265,24 @@ class UserProfileTool(BaseTool):
             valid_types = ["birthday", "job", "location", "dream", "family", "pet", "other"]
             if info_type not in valid_types:
                 info_type = "other"
+            
+            # 🎯 信息质量判断：过滤掉模糊的描述性内容
+            low_quality_patterns = [
+                "的生日", "的工作", "的位置", "的梦想", "的家人", "的宠物",
+                "birthday", "job", "location", "unknown", "未知", "不知道",
+                "affectionate", "friendly", "的信息", "某个", "一个"
+            ]
+            info_value_lower = info_value.lower().strip()
+            
+            # 如果值太短或包含低质量模式，跳过
+            if len(info_value_lower) < 2:
+                logger.warning(f"关键信息值太短，跳过: {info_value}")
+                return
+            
+            for pattern in low_quality_patterns:
+                if pattern in info_value_lower:
+                    logger.warning(f"关键信息质量不佳，跳过: {info_type}={info_value}（包含'{pattern}'）")
+                    return
             
             current_time = time.time()
             
@@ -225,6 +305,11 @@ class UserProfileTool(BaseTool):
                     found = False
                     for i, fact in enumerate(facts):
                         if isinstance(fact, dict) and fact.get("type") == info_type:
+                            old_value = fact.get("value", "")
+                            # 🎯 智能判断：如果旧值更具体，不要用模糊值覆盖
+                            if len(old_value) > len(info_value) and not any(p in old_value.lower() for p in low_quality_patterns):
+                                logger.info(f"保留更具体的旧值: {info_type}='{old_value}'，跳过新值: '{info_value}'")
+                                return
                             # 更新现有记录
                             facts[i] = {"type": info_type, "value": info_value}
                             found = True
@@ -405,76 +490,72 @@ class UserProfileTool(BaseTool):
 {current_score:.2f} (范围0-1，0.3=普通认识，0.5=朋友，0.7=好友，0.9=挚友)
 
 ## ⚠️ 重要：区分虚构内容和真实信息
-- 如果{target_user_name}在讲述**游戏剧情、小说情节、动漫故事、角色扮演**等虚构内容，这些是**TA分享的内容**，不是TA本人的特质
-- 印象应该记录的是**{target_user_name}这个人**的特点，比如：
-  - TA喜欢玩什么游戏、看什么动漫（兴趣）
-  - TA讲故事时的语气和热情（性格）
-  - TA和你交流时的方式（互动风格）
-- **不要**把游戏里的角色、剧情、NPC的特点当成{target_user_name}本人的特点
-- 例如：如果TA在讲游戏里的剧情，记录的应该是"TA很喜欢这个游戏/对剧情很有感触"
+- 游戏剧情、小说情节、角色扮演等虚构内容 ≠ TA本人的特质
+- 印象记录的是**这个人本身**：TA的性格、TA喜欢什么、TA和你交流的方式
+- 如果TA在讲游戏剧情，记录的应该是"TA对这类故事很有热情"而非剧情本身
 
 ## 任务
-1. 根据聊天记录判断{target_user_name}的性别（男用"他"，女用"她"，无法判断用名字）
-2. {"写下你对这个人的第一印象" if is_first_impression else "在原有印象基础上，融入新的观察"}
+1. 判断{target_user_name}的性别（男用"他"，女用"她"，无法判断用名字）
+2. {"写下你对这个人的第一印象" if is_first_impression else "在原有印象基础上，融入新的感受和理解"}
 3. 决定好感度是否需要变化（大多数情况不需要）
 
-## 印象写作要求（重要！）
-这是**长期印象**，不是某次聊天的记录！
+## 📝 印象写作指南
 
-**应该写的（泛化、抽象）：**
-- TA是什么样的人（性格特点）
-- TA给你的整体感觉
-- TA的说话风格、互动方式
-- TA的兴趣爱好类型
-- 你们关系的整体状态
+**核心定位：这是你心中对这个人的画像，是你对TA的理解和感受，不是聊天日志。**
 
-**不要写的（太具体、太短期）：**
-- ❌ "今天TA跟我聊了xxx"
-- ❌ "TA刚才说了xxx"
-- ❌ 具体的某一次对话内容
-- ❌ 某个具体事件的细节
-- ❌ 时间词如"刚才"、"今天"、"最近一次"
+### 内容维度（自然融入，不要分点罗列）：
+- **性格气质**：TA给你的整体感觉，是什么类型的人
+- **交流风格**：TA说话的方式、语气特点、互动习惯
+- **情感印记**：让你印象深刻的感受（不是具体事件）
+- **关系状态**：你们现在的关系是怎样的，相处起来什么感觉
 
-**格式要求：**
-- 用第一人称"我"来写
-- 根据判断的性别使用"他/她"
-- {"第一印象50-150字" if is_first_impression else "150-300字，在原有基础上补充"}
-- 写出这个人的**整体特质**，而不是某次聊天的具体内容
+### 写作风格：
+- 散文式叙述，像在心里默默描绘一个人
+- 写感受和印象，不是记录"TA做了什么"
+- 带着你对TA的情感去描述，有温度
+- 可以用比喻、联想，自然流畅
 
-## 好感度变化规则（极其严格！99%的对话好感度不变！）
+### 绝对避免：
+- 时间词："今天"、"刚才"、"上次"、"最近"
+- 具体事件："TA跟我说了xxx"、"我们聊了xxx"
+- 罗列格式："喜欢A、B、C"、"特点：1.xx 2.xx"
+- 流水账式："首先...然后...最后..."
 
-**核心原则：好感度是长期关系的体现，不是单次对话能改变的。**
+### 字数要求：
+- {"初次印象：80-150字，写出第一感觉" if is_first_impression else "深化印象：200-400字，在原有基础上自然融入新的理解"}
 
-- 范围：-0.02 到 +0.02，**但绝大多数情况应该是 0**
-- 好感度会自然波动，即使很高也可能因为疏远、冷淡、误解而下降
+## 好感度变化规则（分阶段，越高越难涨）
 
-**好感度 = 0（不变）的情况（这是默认值！）：**
-- 普通聊天、日常问候、闲聊 → 0
-- 聊得很开心、话题很有趣 → 0（开心≠好感增加）
-- 讨论游戏、分享故事、聊兴趣 → 0
-- 对方表达喜欢你、夸你 → 0（嘴上说的不算数）
-- 简单的关心、问候 → 0
-- 友好的互动 → 0（友好是正常的，不是加分项）
+当前好感度：{current_score:.2f}
 
-**好感度 = +0.01（微涨）的情况（非常罕见）：**
-- 对方在真正困难时向你倾诉，展现了深层信任
-- 经过很长时间的相处，关系有了质的突破
+**关系阶段与增速：**
+| 阶段 | 分数范围 | 单次变化范围 | 说明 |
+|------|----------|--------------|------|
+| 陌生→初识 | 0.0-0.3 | ±0.03~0.05 | 容易建立初步印象 |
+| 初识→熟人 | 0.3-0.5 | ±0.02~0.04 | 逐渐熟悉的阶段 |
+| 熟人→朋友 | 0.5-0.7 | ±0.01~0.03 | 需要更多互动积累 |
+| 朋友→好友 | 0.7-0.85 | ±0.01~0.02 | 关系深化变慢 |
+| 好友→挚友 | 0.85-1.0 | ±0.005~0.01 | 极难变化，需要重大事件 |
 
-**好感度 = +0.02（涨）的情况（极其罕见，几乎不会发生）：**
-- 对方为你做出了实质性的牺牲或帮助
-- 你们之间发生了真正改变关系的重大事件
+**加分情况（根据当前阶段选择合适幅度）：**
+- 愉快的聊天、有来有往的互动 → 小幅+（低阶段更明显）
+- 分享心情、倾诉烦恼 → 中幅+
+- 主动关心、记得之前聊过的事 → 中幅+
+- 深度交流、展现信任 → 较大+
+- 在困难时寻求帮助或给予支持 → 大幅+
 
-**好感度 = -0.01 到 -0.02（下降）的情况：**
-- 对方明显冷淡、敷衍
-- 发生了误解或小冲突
-- 长时间不联系后的疏远感
+**减分情况：**
+- 敷衍、冷淡的回应 → 小幅-
+- 明显的不耐烦或忽视 → 中幅-
+- 冲突、误解 → 较大-
+- 长期不联系（关系会自然冷却）→ 缓慢-
 
-**记住：**
-1. 聊得开心 ≠ 好感增加
-2. 话题友好 ≠ 好感增加  
-3. 对方说喜欢你 ≠ 好感增加
-4. 好感是需要很长时间才能培养的
-5. 如果你不确定，就填 0
+**不变的情况：**
+- 纯粹的信息询问（问时间、问天气等）
+- 机械式的对话
+- 无法判断情感倾向的中性交流
+
+**注意：高好感度（>0.8）时要非常谨慎加分，友好互动在这个阶段是常态，不是加分项。**
 
 请严格按照以下JSON格式输出：
 {{
@@ -508,8 +589,24 @@ class UserProfileTool(BaseTool):
                 change_reason = result.get("change_reason", "")
                 detected_gender = result.get("gender", "unknown")
                 
-                # 限制好感度变化范围（极严格：-0.02 到 +0.02）
-                affection_change = max(-0.02, min(0.02, affection_change))
+                # 🎯 根据当前好感度阶段限制变化范围
+                if current_score < 0.3:
+                    # 陌生→初识：±0.05
+                    max_change = 0.05
+                elif current_score < 0.5:
+                    # 初识→熟人：±0.04
+                    max_change = 0.04
+                elif current_score < 0.7:
+                    # 熟人→朋友：±0.03
+                    max_change = 0.03
+                elif current_score < 0.85:
+                    # 朋友→好友：±0.02
+                    max_change = 0.02
+                else:
+                    # 好友→挚友：±0.01
+                    max_change = 0.01
+                
+                affection_change = max(-max_change, min(max_change, affection_change))
                 
                 # 如果印象为空或太短，回退到hint
                 if not impression or len(impression) < 10:
@@ -619,13 +716,18 @@ class UserProfileTool(BaseTool):
                 stage = self._calculate_relationship_stage(score)
 
                 if existing:
-                    # 更新现有记录
-                    existing.user_aliases = profile.get("user_aliases", "")
+                    # 别名和偏好已经在_background_update中处理好了，直接赋值
+                    existing.user_aliases = profile.get("user_aliases", "") or existing.user_aliases
+                    
                     # 同时更新新旧两个印象字段，保持兼容
                     impression = profile.get("relationship_text", "")
-                    existing.relationship_text = impression
-                    existing.impression_text = impression
-                    existing.preference_keywords = profile.get("preference_keywords", "")
+                    if impression:  # 只有有新印象才更新
+                        existing.relationship_text = impression
+                        existing.impression_text = impression
+                    
+                    # 偏好关键词已经在_background_update中处理好了，直接赋值
+                    existing.preference_keywords = profile.get("preference_keywords", "") or existing.preference_keywords
+                    
                     existing.relationship_score = score
                     existing.relationship_stage = stage
                     existing.last_impression_update = current_time

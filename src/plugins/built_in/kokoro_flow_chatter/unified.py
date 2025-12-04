@@ -147,8 +147,8 @@ class UnifiedPromptGenerator:
         # 计算等待时间
         wait_duration = session.waiting_config.get_elapsed_seconds()
         
-        # 生成连续追问警告（使用 waiting_config.thinking_count 作为追问计数）
-        followup_count = session.waiting_config.thinking_count
+        # 生成连续追问警告（使用 followup_count 作为追问计数，只有真正发消息才算）
+        followup_count = session.waiting_config.followup_count
         max_followups = 3  # 最多追问3次
         
         if followup_count >= max_followups:
