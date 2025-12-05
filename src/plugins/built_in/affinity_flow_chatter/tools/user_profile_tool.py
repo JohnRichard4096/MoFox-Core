@@ -520,7 +520,7 @@ class UserProfileTool(BaseTool):
 
                 # 如果印象为空或太短，回退到hint
                 if not impression or len(impression) < 10:
-                    logger.warning(f"印象生成结果过短，使用原始hint")
+                    logger.warning("印象生成结果过短，使用原始hint")
                     impression = impression_hint or existing_impression
 
                 logger.info(f"印象更新: 用户性别判断={detected_gender}, 好感度变化={affection_change:+.3f}")
