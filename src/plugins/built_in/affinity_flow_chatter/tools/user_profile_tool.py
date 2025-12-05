@@ -180,9 +180,8 @@ class UserProfileTool(BaseTool):
             final_profile = {
                 "user_aliases": new_aliases if new_aliases else existing_profile.get("user_aliases", ""),
                 "relationship_text": final_impression,
-                "preference_keywords": new_keywords
-                if new_keywords
-                else existing_profile.get("preference_keywords", ""),
+                "preference_keywords": new_keywords or existing_profile.get("preference_keywords", ""),
+
                 "relationship_score": new_score,
             }
 
