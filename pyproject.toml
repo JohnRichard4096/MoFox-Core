@@ -43,6 +43,7 @@ dependencies = [
     "pillow>=12.0.0",
     "pip-check-reqs>=2.5.5",
     "psutil>=7.0.0",
+    "pympler>=1.1",
     "pyarrow>=21.0.0",
     "pydantic>=2.12.3",
     "pygments>=2.19.2",
