@@ -1,4 +1,6 @@
-import os   
+from __future__ import annotations
+
+import os
 import shutil
 import sys
 from datetime import datetime
@@ -27,8 +29,8 @@ from src.config.official_configs import (
     ExpressionConfig,
     KokoroFlowChatterConfig,
     LPMMKnowledgeConfig,
-    MessageBusConfig,
     MemoryConfig,
+    MessageBusConfig,
     MessageReceiveConfig,
     MoodConfig,
     NoticeConfig,
@@ -69,8 +71,8 @@ MMC_VERSION = "0.13.0"
 
 # 全局配置变量
 _CONFIG_INITIALIZED = False
-global_config: "Config | None" = None
-model_config: "APIAdapterConfig | None" = None
+global_config: Config | None = None
+model_config: APIAdapterConfig | None = None
 
 
 def get_key_comment(toml_table, key):

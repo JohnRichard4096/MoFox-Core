@@ -1,3 +1,5 @@
+import os
+import sys
 from abc import abstractmethod
 
 from src.common.logger import get_logger
@@ -34,6 +36,17 @@ class BasePlugin(PluginBase):
     - Command组件：处理命令请求
     - 未来可扩展：Scheduler、Listener等
     """
+
+    @property
+    def __file__(self) -> str:
+        """返回插件文件的实际路径"""
+
+        # 使用 sys.modules 获取模块的真实文件路径
+        module = sys.modules[self.__class__.__module__]
+        if hasattr(module, "__file__") and module.__file__:
+            return os.path.abspath(module.__file__)
+        # fallback to __file__
+        return __file__
 
     @classmethod
     def _get_component_info_from_class(cls, component_class: type, component_type: ComponentType):
@@ -94,7 +107,7 @@ class BasePlugin(PluginBase):
             if hasattr(component_class, "get_adapter_info"):
                 return component_class.get_adapter_info()
             else:
-                logger.warning(f"Adapter�� {component_class.__name__} ȱ�� get_adapter_info ����")
+                logger.warning(f"Adapter组件 {component_class.__name__} 缺少 get_adapter_info 方法")
                 return None
 
         else:
@@ -145,7 +158,7 @@ class BasePlugin(PluginBase):
         registered_components = []
         for component_info, component_class in components:
             component_info.plugin_name = self.plugin_name
-            if component_registry.register_component(component_info, component_class):
+            if component_registry.register_component(component_info, component_class): # type: ignore
                 registered_components.append(component_info)
             else:
                 logger.warning(f"{self.log_prefix} 组件 {component_info.name} 注册失败")

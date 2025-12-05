@@ -90,6 +90,7 @@ class PlusCommand(ABC):
         plain_text = self.message.processed_plain_text.strip()
 
         # 获取配置的命令前缀
+        assert global_config
         prefixes = global_config.command.command_prefixes
 
         # 检查是否以任何前缀开头
@@ -167,6 +168,7 @@ class PlusCommand(ABC):
         plain_text = self.message.processed_plain_text.strip()
 
         # 获取配置的命令前缀
+        assert global_config
         prefixes = global_config.command.command_prefixes
 
         # 检查每个前缀

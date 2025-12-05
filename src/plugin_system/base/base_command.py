@@ -1,5 +1,5 @@
 from abc import abstractmethod
-from typing import TYPE_CHECKING, ClassVar
+from typing import TYPE_CHECKING
 
 from src.common.data_models.database_data_model import DatabaseMessages
 from src.common.logger import get_logger
@@ -33,7 +33,7 @@ class BaseCommand(PlusCommand):
     """命令匹配的正则表达式"""
 
     # 用于存储正则匹配组
-    matched_groups: ClassVar[dict[str, str]] = {}
+    matched_groups: dict[str, str]
 
     def __init__(self, message: DatabaseMessages, plugin_config: dict | None = None):
         """初始化Command组件"""
@@ -49,7 +49,7 @@ class BaseCommand(PlusCommand):
         self.matched_groups = groups
 
     @abstractmethod
-    async def execute(self) -> tuple[bool, str | None, bool]:
+    async def execute(self) -> tuple[bool, str | None, bool]:  # type: ignore
         """执行Command的抽象方法，子类必须实现
 
         Returns:

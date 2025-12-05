@@ -82,7 +82,8 @@ dependencies = [
     "mofox-wire",
     "jinja2>=3.1.0",
     "psycopg2-binary",
-    "PyMySQL"
+    "PyMySQL",
+    "typing-extensions>=4.15.0",
 ]
 
 [[tool.uv.index]]

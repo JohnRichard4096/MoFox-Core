@@ -5,7 +5,7 @@ MoFox-Bot 插件系统
 """
 
 # 导出主要的公共接口
-from .apis import (
+from .apis import (  # noqa: I001
     chat_api,
     component_manage_api,
     config_api,
@@ -44,8 +44,8 @@ from .base import (
     AdapterInfo,
     # 新增的增强命令系统
     PlusCommand,
-    BaseRouterComponent,
-    PythonDependency,
+    BaseRouterComponent,  # noqa: F401
+    PythonDependency,  # noqa: F401
     ToolInfo,
     ToolParamType,
     create_plus_command_adapter,
@@ -73,6 +73,7 @@ __all__ = [  # noqa: RUF022
     "CommandInfo",
     "ComponentInfo",
     # 类型定义
+    "AdapterInfo",
     "ComponentType",
     "ConfigField",
     "EventHandlerInfo",

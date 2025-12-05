@@ -3,7 +3,7 @@ import asyncio
 import random
 import time
 from abc import ABC, abstractmethod
-from typing import TYPE_CHECKING, ClassVar
+from typing import TYPE_CHECKING, Any
 
 from src.chat.message_receive.chat_stream import ChatStream
 from src.common.data_models.database_data_model import DatabaseMessages
@@ -80,7 +80,7 @@ class BaseAction(ABC):
     """是否为二步Action。如果为True，Action将分两步执行：第一步选择操作，第二步执行具体操作"""
     step_one_description: str = ""
     """第一步的描述，用于向LLM展示Action的基本功能"""
-    sub_actions: ClassVar[list[tuple[str, str, dict[str, str]]] ] = []
+    sub_actions: list[tuple[str, str, dict[str, str]]]
     """子Action列表，格式为[(子Action名, 子Action描述, 子Action参数)]。仅在二步Action中使用"""
 
     def __init__(
@@ -110,15 +110,13 @@ class BaseAction(ABC):
             **kwargs: 其他参数
         """
         if plugin_config is None:
-            plugin_config = {}
+            plugin_config = getattr(self.__class__, "plugin_config", {})
         self.action_data = action_data
         self.reasoning = reasoning
         self.cycle_timers = cycle_timers
         self.thinking_id = thinking_id
         self.log_prefix = log_prefix
-
-        if plugin_config is None:
-            plugin_config = getattr(self.__class__, "plugin_config", {})
+        self.sub_actions = []  # 修改说明：你又没用dataclass给啥默认值（，这会导致全局共享一个可变对象。
 
         self.plugin_config = plugin_config or {}
         """对应的插件配置"""
@@ -209,8 +207,8 @@ class BaseAction(ABC):
                     self.is_group = True
                     self.target_id = self.group_id
                 else:
-                    self.user_id = self.chat_stream.user_info.user_id
-                    self.user_nickname = self.chat_stream.user_info.user_nickname
+                    self.user_id = self.chat_stream.user_info.user_id if self.chat_stream.user_info else ""
+                    self.user_nickname = self.chat_stream.user_info.user_nickname if self.chat_stream.user_info else ""
                     self.is_group = False
                     self.target_id = self.user_id
 
@@ -492,7 +490,7 @@ class BaseAction(ABC):
 
             plugin_config = component_registry.get_plugin_config(component_info.plugin_name)
             # 3. 实例化被调用的Action
-            action_params: ClassVar = {
+            action_params: dict[str, Any] = {
                 "action_data": called_action_data,
                 "reasoning": f"Called by {self.action_name}",
                 "cycle_timers": self.cycle_timers,
@@ -506,7 +504,8 @@ class BaseAction(ABC):
 
             # 4. 执行Action
             logger.debug(f"{log_prefix} 开始执行...")
-            execute_result = await action_instance.execute()  # Todo: 修复类型错误
+            # Todo: 修复类型错误
+            execute_result = await action_instance.execute()  # type: ignore
             # 确保返回类型符合 (bool, str) 格式
             is_success = execute_result[0] if isinstance(execute_result, tuple) and len(execute_result) > 0 else False
             message = execute_result[1] if isinstance(execute_result, tuple) and len(execute_result) > 1 else ""
@@ -803,6 +802,8 @@ class BaseAction(ABC):
             if llm_judge_model is None:
                 from src.config.config import model_config
                 from src.llm_models.utils_model import LLMRequest
+
+                assert model_config is not None
 
                 llm_judge_model = LLMRequest(
                     model_set=model_config.model_task_config.utils_small,

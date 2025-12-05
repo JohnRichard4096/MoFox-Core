@@ -177,7 +177,7 @@ class BaseEvent:
             handler_name = (
                 subscriber.handler_name if hasattr(subscriber, "handler_name") else subscriber.__class__.__name__
             )
-            if isinstance(result, Exception):
+            if isinstance(result, BaseException):
                 logger.error(f"事件处理器 {handler_name} 执行失败: {result}")
                 processed_results.append(HandlerResult(False, True, str(result), handler_name))
             else:

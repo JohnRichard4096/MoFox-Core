@@ -547,6 +547,7 @@ class ComponentRegistry:
             注册成功返回 True，出错返回 False
         """
         # 检查总开关是否开启
+        assert bot_config
         if not bot_config.plugin_http_system.enable_plugin_http_endpoints:
             logger.info("插件HTTP端点功能已禁用，跳过路由注册")
             return True

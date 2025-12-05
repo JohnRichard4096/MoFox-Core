@@ -10,12 +10,13 @@ from __future__ import annotations
 import asyncio
 from abc import ABC, abstractmethod
 from pathlib import Path
-from typing import TYPE_CHECKING, Any, Dict, Optional
+from typing import TYPE_CHECKING, Any
 
-from mofox_wire import AdapterBase as MoFoxAdapterBase, CoreSink, MessageEnvelope, ProcessCoreSink
+from mofox_wire import AdapterBase as MoFoxAdapterBase
+from mofox_wire import CoreSink, MessageEnvelope, ProcessCoreSink
 
 if TYPE_CHECKING:
-    from src.plugin_system import BasePlugin, AdapterInfo
+    from src.plugin_system import AdapterInfo, BasePlugin
 
 from src.common.logger import get_logger
 
@@ -25,7 +26,7 @@ logger = get_logger("plugin.adapter")
 class BaseAdapter(MoFoxAdapterBase, ABC):
     """
     插件系统的 Adapter 基类
-    
+
     相比 mofox_wire.AdapterBase，增加了以下特性：
     1. 插件生命周期管理 (on_adapter_loaded, on_adapter_unloaded)
     2. 配置管理集成
@@ -38,19 +39,14 @@ class BaseAdapter(MoFoxAdapterBase, ABC):
     adapter_version: str = "0.0.1"
     adapter_author: str = "Unknown"
     adapter_description: str = "No description"
-    
+
     # 是否在子进程中运行
     run_in_subprocess: bool = True
-    
-    # 子进程启动脚本路径（相对于插件目录）
-    subprocess_entry: Optional[str] = None
 
-    def __init__(
-        self,
-        core_sink: CoreSink,
-        plugin: Optional[BasePlugin] = None,
-        **kwargs
-    ):
+    # 子进程启动脚本路径（相对于插件目录）
+    subprocess_entry: str | None = None
+
+    def __init__(self, core_sink: CoreSink, plugin: BasePlugin | None = None, **kwargs):
         """
         Args:
             core_sink: 核心消息接收器
@@ -59,8 +55,8 @@ class BaseAdapter(MoFoxAdapterBase, ABC):
         """
         super().__init__(core_sink, **kwargs)
         self.plugin = plugin
-        self._config: Dict[str, Any] = {}
-        self._health_check_task: Optional[asyncio.Task] = None
+        self._config: dict[str, Any] = {}
+        self._health_check_task: asyncio.Task | None = None
         self._running = False
         # 标记是否在子进程中运行
         self._is_subprocess = False
@@ -70,7 +66,7 @@ class BaseAdapter(MoFoxAdapterBase, ABC):
         cls,
         to_core_queue,
         from_core_queue,
-        plugin: Optional["BasePlugin"] = None,
+        plugin: BasePlugin | None = None,
         **kwargs: Any,
     ) -> "BaseAdapter":
         """
@@ -86,14 +82,14 @@ class BaseAdapter(MoFoxAdapterBase, ABC):
         return cls(core_sink=sink, plugin=plugin, **kwargs)
 
     @property
-    def config(self) -> Dict[str, Any]:
+    def config(self) -> dict[str, Any]:
         """获取适配器配置"""
         if self.plugin and hasattr(self.plugin, "config"):
             return self.plugin.config
         return self._config
 
     @config.setter
-    def config(self, value: Dict[str, Any]) -> None:
+    def config(self, value: dict[str, Any]) -> None:
         """设置适配器配置"""
         self._config = value
 
@@ -107,30 +103,29 @@ class BaseAdapter(MoFoxAdapterBase, ABC):
                 return default
         return current
 
-
     async def start(self) -> None:
         """启动适配器"""
         logger.info(f"启动适配器: {self.adapter_name} v{self.adapter_version}")
-        
+
         # 调用生命周期钩子
         await self.on_adapter_loaded()
-        
+
         # 调用父类启动
         await super().start()
-        
+
         # 启动健康检查
         if self.config.get("enable_health_check", False):
             self._health_check_task = asyncio.create_task(self._health_check_loop())
-        
+
         self._running = True
         logger.info(f"适配器 {self.adapter_name} 启动成功")
 
     async def stop(self) -> None:
         """停止适配器"""
         logger.info(f"停止适配器: {self.adapter_name}")
-        
+
         self._running = False
-        
+
         # 停止健康检查
         if self._health_check_task and not self._health_check_task.done():
             self._health_check_task.cancel()
@@ -138,13 +133,13 @@ class BaseAdapter(MoFoxAdapterBase, ABC):
                 await self._health_check_task
             except asyncio.CancelledError:
                 pass
-        
+
         # 调用父类停止
         await super().stop()
-        
+
         # 调用生命周期钩子
         await self.on_adapter_unloaded()
-        
+
         logger.info(f"适配器 {self.adapter_name} 已停止")
 
     async def on_adapter_loaded(self) -> None:
@@ -164,18 +159,18 @@ class BaseAdapter(MoFoxAdapterBase, ABC):
     async def _health_check_loop(self) -> None:
         """健康检查循环"""
         interval = self.config.get("health_check_interval", 30)
-        
+
         while self._running:
             try:
                 await asyncio.sleep(interval)
-                
+
                 # 执行健康检查
                 is_healthy = await self.health_check()
-                
+
                 if not is_healthy:
                     logger.warning(f"适配器 {self.adapter_name} 健康检查失败，尝试重连...")
                     await self.reconnect()
-                    
+
             except asyncio.CancelledError:
                 break
             except Exception as e:
@@ -185,7 +180,7 @@ class BaseAdapter(MoFoxAdapterBase, ABC):
         """
         健康检查
         子类可重写以实现自定义检查逻辑
-        
+
         Returns:
             bool: 是否健康
         """
@@ -206,38 +201,38 @@ class BaseAdapter(MoFoxAdapterBase, ABC):
         except Exception as e:
             logger.error(f"适配器 {self.adapter_name} 重连失败: {e}")
 
-    def get_subprocess_entry_path(self) -> Optional[Path]:
+    def get_subprocess_entry_path(self) -> Path | None:
         """
         获取子进程启动脚本的完整路径
-        
+
         Returns:
             Path | None: 脚本路径，如果不存在则返回 None
         """
         if not self.subprocess_entry:
             return None
-        
+
         if not self.plugin:
             return None
-        
+
         # 获取插件目录
         plugin_dir = Path(self.plugin.__file__).parent
         entry_path = plugin_dir / self.subprocess_entry
-        
+
         if entry_path.exists():
             return entry_path
-        
+
         logger.warning(f"子进程入口脚本不存在: {entry_path}")
         return None
 
     @classmethod
     def get_adapter_info(cls) -> "AdapterInfo":
         """获取适配器的信息
-        
+
         Returns:
             AdapterInfo: 适配器组件信息
         """
         from src.plugin_system.base.component_types import AdapterInfo
-        
+
         return AdapterInfo(
             name=getattr(cls, "adapter_name", cls.__name__.lower().replace("adapter", "")),
             version=getattr(cls, "adapter_version", "1.0.0"),
@@ -252,12 +247,12 @@ class BaseAdapter(MoFoxAdapterBase, ABC):
     async def from_platform_message(self, raw: Any) -> MessageEnvelope:
         """
         将平台原始消息转换为 MessageEnvelope
-        
+
         子类必须实现此方法
-        
+
         Args:
             raw: 平台原始消息
-            
+
         Returns:
             MessageEnvelope: 统一的消息信封
         """
@@ -266,10 +261,10 @@ class BaseAdapter(MoFoxAdapterBase, ABC):
     async def _send_platform_message(self, envelope: MessageEnvelope) -> None:
         """
         发送消息到平台
-        
+
         如果使用了 WebSocketAdapterOptions 或 HttpAdapterOptions，
         此方法会自动处理。否则子类需要重写此方法。
-        
+
         Args:
             envelope: 要发送的消息信封
         """

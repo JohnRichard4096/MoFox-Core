@@ -10,7 +10,7 @@
 """
 
 import time
-from typing import Any
+from typing import Any, ClassVar
 
 from sqlalchemy import select
 
@@ -53,13 +53,19 @@ class UserProfileTool(BaseTool):
 
 ⚠️ 注意：TA讲的游戏剧情/故事不是TA本人的信息，不要记录虚构内容。
 此工具在后台异步执行，不影响回复速度。"""
-    parameters = [
+    parameters:ClassVar = [
         ("target_user_id", ToolParamType.STRING, "目标用户的ID（必须）", True, None),
         ("target_user_name", ToolParamType.STRING, "目标用户的名字/昵称（必须）", True, None),
         ("user_aliases", ToolParamType.STRING, "TA的其他昵称或别名（可选）", False, None),
         ("impression_hint", ToolParamType.STRING, "你观察到的关于TA的要点（可选）", False, None),
         ("preference_keywords", ToolParamType.STRING, "TA的兴趣爱好关键词（可选）", False, None),
-        ("key_info_type", ToolParamType.STRING, "信息类型：birthday/job/location/dream/family/pet（可选）", False, None),
+        (
+            "key_info_type",
+            ToolParamType.STRING,
+            "信息类型：birthday/job/location/dream/family/pet（可选）",
+            False,
+            None,
+        ),
         ("key_info_value", ToolParamType.STRING, "信息内容，如'11月23日'、'上海'（可选）", False, None),
     ]
     available_for_llm = True
@@ -75,17 +81,13 @@ class UserProfileTool(BaseTool):
             dict: 执行结果
         """
         import asyncio
-        
+
         try:
             # 提取参数
             target_user_id = function_args.get("target_user_id")
             target_user_name = function_args.get("target_user_name", target_user_id)
             if not target_user_id:
-                return {
-                    "type": "error",
-                    "id": "user_profile_update",
-                    "content": "错误：必须提供目标用户ID"
-                }
+                return {"type": "error", "id": "user_profile_update", "content": "错误：必须提供目标用户ID"}
 
             # 从LLM传入的参数
             new_aliases = function_args.get("user_aliases", "")
@@ -99,25 +101,27 @@ class UserProfileTool(BaseTool):
                 return {
                     "type": "info",
                     "id": target_user_id,
-                    "content": "提示：需要提供至少一项更新内容（别名、印象描述、偏好关键词或重要信息）"
+                    "content": "提示：需要提供至少一项更新内容（别名、印象描述、偏好关键词或重要信息）",
                 }
 
             # 🎯 异步后台执行，不阻塞回复
-            asyncio.create_task(self._background_update(
-                target_user_id=target_user_id,
-                target_user_name=str(target_user_name) if target_user_name else str(target_user_id),
-                new_aliases=new_aliases,
-                impression_hint=impression_hint,
-                new_keywords=new_keywords,
-                key_info_type=key_info_type,
-                key_info_value=key_info_value,
-            ))
+            asyncio.create_task(  # noqa: RUF006
+                self._background_update(
+                    target_user_id=target_user_id,
+                    target_user_name=str(target_user_name) if target_user_name else str(target_user_id),
+                    new_aliases=new_aliases,
+                    impression_hint=impression_hint,
+                    new_keywords=new_keywords,
+                    key_info_type=key_info_type,
+                    key_info_value=key_info_value,
+                )
+            )
 
             # 立即返回，让回复继续
             return {
                 "type": "user_profile_update",
                 "id": target_user_id,
-                "content": f"正在后台更新对 {target_user_name} 的印象..."
+                "content": f"正在后台更新对 {target_user_name} 的印象...",
             }
 
         except Exception as e:
@@ -125,7 +129,7 @@ class UserProfileTool(BaseTool):
             return {
                 "type": "error",
                 "id": function_args.get("target_user_id", "unknown"),
-                "content": f"用户画像更新失败: {e!s}"
+                "content": f"用户画像更新失败: {e!s}",
             }
 
     async def _background_update(
@@ -154,7 +158,7 @@ class UserProfileTool(BaseTool):
             # 🎯 核心：使用relationship_tracker模型生成印象并决定好感度变化
             final_impression = existing_profile.get("relationship_text", "")
             affection_change = 0.0  # 好感度变化量
-            
+
             if impression_hint or chat_history_text:
                 impression_result = await self._generate_impression_with_affection(
                     target_user_name=target_user_name,
@@ -176,7 +180,9 @@ class UserProfileTool(BaseTool):
             final_profile = {
                 "user_aliases": new_aliases if new_aliases else existing_profile.get("user_aliases", ""),
                 "relationship_text": final_impression,
-                "preference_keywords": new_keywords if new_keywords else existing_profile.get("preference_keywords", ""),
+                "preference_keywords": new_keywords
+                if new_keywords
+                else existing_profile.get("preference_keywords", ""),
                 "relationship_score": new_score,
             }
 
@@ -190,37 +196,37 @@ class UserProfileTool(BaseTool):
 
     async def _add_key_fact(self, user_id: str, info_type: str, info_value: str):
         """添加或更新关键信息（生日、职业等）
-        
+
         Args:
             user_id: 用户ID
             info_type: 信息类型（birthday/job/location/dream/family/pet/other）
             info_value: 信息内容
         """
         import orjson
-        
+
         try:
             # 验证 info_type
             valid_types = ["birthday", "job", "location", "dream", "family", "pet", "other"]
             if info_type not in valid_types:
                 info_type = "other"
-            
+
             current_time = time.time()
-            
+
             async with get_db_session() as session:
                 stmt = select(UserRelationships).where(UserRelationships.user_id == user_id)
                 result = await session.execute(stmt)
                 existing = result.scalar_one_or_none()
-                
+
                 if existing:
                     # 解析现有的 key_facts
                     try:
                         facts = orjson.loads(existing.key_facts) if existing.key_facts else []
                     except Exception:
                         facts = []
-                    
+
                     if not isinstance(facts, list):
                         facts = []
-                    
+
                     # 查找是否已有相同类型的信息
                     found = False
                     for i, fact in enumerate(facts):
@@ -229,11 +235,11 @@ class UserProfileTool(BaseTool):
                             facts[i] = {"type": info_type, "value": info_value}
                             found = True
                             break
-                    
+
                     if not found:
                         # 添加新记录
                         facts.append({"type": info_type, "value": info_value})
-                    
+
                     # 更新数据库
                     existing.key_facts = orjson.dumps(facts).decode("utf-8")
                     existing.last_updated = current_time
@@ -245,35 +251,36 @@ class UserProfileTool(BaseTool):
                         user_name=user_id,
                         key_facts=orjson.dumps(facts).decode("utf-8"),
                         first_met_time=current_time,
-                        last_updated=current_time
+                        last_updated=current_time,
                     )
                     session.add(new_profile)
-                
+
                 await session.commit()
-                
+
                 # 清除缓存，确保下次查询获取最新数据
                 try:
                     from src.common.database.optimization.cache_manager import get_cache
+
                     cache = await get_cache()
                     cache_key = f"user_relationships:filter:[('user_id', '{user_id}')]"
                     await cache.delete(cache_key)
                     logger.debug(f"已清除用户关系缓存: {user_id}")
                 except Exception as cache_err:
                     logger.warning(f"清除缓存失败（不影响数据保存）: {cache_err}")
-                
+
                 logger.info(f"关键信息已保存: {user_id}, {info_type}={info_value}")
-                
+
         except Exception as e:
             logger.error(f"保存关键信息失败: {e}")
             # 不抛出异常，因为这是后台任务
 
     async def _get_recent_chat_history(self, target_user_id: str, max_messages: int = 50) -> str:
         """获取最近的聊天记录
-        
+
         Args:
             target_user_id: 目标用户ID
             max_messages: 最大消息数量
-            
+
         Returns:
             str: 格式化的聊天记录文本
         """
@@ -282,24 +289,24 @@ class UserProfileTool(BaseTool):
             if not self.chat_stream:
                 logger.warning("chat_stream 未初始化，无法获取聊天记录")
                 return ""
-            
+
             context = getattr(self.chat_stream, "context", None)
             if not context:
                 logger.warning("chat_stream.context 不存在，无法获取聊天记录")
                 return ""
-            
+
             # 获取最近的消息 - 使用正确的方法名 get_messages
             messages = context.get_messages(limit=max_messages, include_unread=True)
             if not messages:
                 return ""
-            
+
             # 将 DatabaseMessages 对象转换为字典列表
             messages_dict = []
             for msg in messages:
                 try:
-                    if hasattr(msg, 'to_dict'):
+                    if hasattr(msg, "to_dict"):
                         messages_dict.append(msg.to_dict())
-                    elif hasattr(msg, '__dict__'):
+                    elif hasattr(msg, "__dict__"):
                         # 手动构建字典
                         msg_dict = {
                             "time": getattr(msg, "time", 0),
@@ -323,20 +330,17 @@ class UserProfileTool(BaseTool):
                 except Exception as e:
                     logger.warning(f"转换消息失败: {e}")
                     continue
-            
+
             if not messages_dict:
                 return ""
-            
+
             # 构建可读的消息文本
             readable_messages = await build_readable_messages(
-                messages=messages_dict,
-                replace_bot_name=True,
-                timestamp_mode="normal_no_YMD",
-                truncate=True
+                messages=messages_dict, replace_bot_name=True, timestamp_mode="normal_no_YMD", truncate=True
             )
-            
+
             return readable_messages or ""
-            
+
         except Exception as e:
             logger.error(f"获取聊天记录失败: {e}")
             return ""
@@ -351,7 +355,7 @@ class UserProfileTool(BaseTool):
         current_score: float,
     ) -> dict[str, Any]:
         """使用relationship_tracker模型生成印象并决定好感度变化
-        
+
         Args:
             target_user_name: 目标用户的名字
             impression_hint: 工具调用模型传入的简要观察
@@ -359,7 +363,7 @@ class UserProfileTool(BaseTool):
             preference_keywords: 用户的兴趣偏好
             chat_history: 最近的聊天记录
             current_score: 当前好感度分数
-            
+
         Returns:
             dict: {"impression": str, "affection_change": float}
         """
@@ -367,17 +371,21 @@ class UserProfileTool(BaseTool):
             import orjson
             from json_repair import repair_json
             from src.llm_models.utils_model import LLMRequest
-            
+
             # 获取人设信息（添加空值保护）
             bot_name = global_config.bot.nickname if global_config and global_config.bot else "Bot"
-            personality_core = global_config.personality.personality_core if global_config and global_config.personality else ""
-            personality_side = global_config.personality.personality_side if global_config and global_config.personality else ""
+            personality_core = (
+                global_config.personality.personality_core if global_config and global_config.personality else ""
+            )
+            personality_side = (
+                global_config.personality.personality_side if global_config and global_config.personality else ""
+            )
             reply_style = global_config.personality.reply_style if global_config and global_config.personality else ""
-            
+
             # 构建提示词
             # 根据是否有旧印象决定任务类型
             is_first_impression = not existing_impression or len(existing_impression) < 20
-            
+
             prompt = f"""你是{bot_name}，现在要记录你对"{target_user_name}"的印象。
 
 ## 你的核心人格
@@ -487,18 +495,18 @@ class UserProfileTool(BaseTool):
             # 使用relationship_tracker模型（添加空值保护）
             if not model_config or not model_config.model_task_config:
                 raise ValueError("model_config 未初始化")
-            
+
             llm = LLMRequest(
                 model_set=model_config.model_task_config.relationship_tracker,
-                request_type="user_profile.impression_and_affection"
+                request_type="user_profile.impression_and_affection",
             )
-            
+
             response, _ = await llm.generate_response_async(
                 prompt=prompt,
                 temperature=0.7,
                 max_tokens=600,
             )
-            
+
             # 解析响应
             response = response.strip()
             try:
@@ -507,39 +515,33 @@ class UserProfileTool(BaseTool):
                 affection_change = float(result.get("affection_change", 0))
                 change_reason = result.get("change_reason", "")
                 detected_gender = result.get("gender", "unknown")
-                
+
                 # 限制好感度变化范围（极严格：-0.02 到 +0.02）
                 affection_change = max(-0.02, min(0.02, affection_change))
-                
+
                 # 如果印象为空或太短，回退到hint
                 if not impression or len(impression) < 10:
                     logger.warning(f"印象生成结果过短，使用原始hint")
                     impression = impression_hint or existing_impression
-                
+
                 logger.info(f"印象更新: 用户性别判断={detected_gender}, 好感度变化={affection_change:+.3f}")
                 if change_reason:
                     logger.info(f"好感度变化原因: {change_reason}")
-                
-                return {
-                    "impression": impression,
-                    "affection_change": affection_change
-                }
-                
+
+                return {"impression": impression, "affection_change": affection_change}
+
             except Exception as parse_error:
                 logger.warning(f"解析JSON失败: {parse_error}，尝试提取文本")
                 # 如果JSON解析失败，尝试直接使用响应作为印象
                 return {
                     "impression": response if len(response) > 10 else (impression_hint or existing_impression),
-                    "affection_change": 0.0
+                    "affection_change": 0.0,
                 }
-            
+
         except Exception as e:
             logger.error(f"生成印象和好感度失败: {e}")
             # 失败时回退
-            return {
-                "impression": impression_hint or existing_impression,
-                "affection_change": 0.0
-            }
+            return {"impression": impression_hint or existing_impression, "affection_change": 0.0}
 
     async def _get_user_profile(self, user_id: str) -> dict[str, Any]:
         """从数据库获取用户现有画像
@@ -566,7 +568,9 @@ class UserProfileTool(BaseTool):
                         "impression_text": impression,
                         "preference_keywords": profile.preference_keywords or "",
                         "key_facts": profile.key_facts or "[]",
-                        "relationship_score": float(profile.relationship_score) if profile.relationship_score is not None else _get_base_relationship_score(),
+                        "relationship_score": float(profile.relationship_score)
+                        if profile.relationship_score is not None
+                        else _get_base_relationship_score(),
                         "relationship_stage": profile.relationship_stage or "stranger",
                         "first_met_time": profile.first_met_time,
                     }
@@ -596,8 +600,6 @@ class UserProfileTool(BaseTool):
                 "relationship_stage": "stranger",
                 "first_met_time": None,
             }
-
-
 
     async def _update_user_profile_in_db(self, user_id: str, profile: dict[str, Any]):
         """更新数据库中的用户画像
@@ -647,22 +649,23 @@ class UserProfileTool(BaseTool):
                         relationship_stage=stage,
                         first_met_time=current_time,
                         last_impression_update=current_time,
-                        last_updated=current_time
+                        last_updated=current_time,
                     )
                     session.add(new_profile)
 
                 await session.commit()
-                
+
                 # 清除缓存，确保下次查询获取最新数据
                 try:
                     from src.common.database.optimization.cache_manager import get_cache
+
                     cache = await get_cache()
                     cache_key = f"user_relationships:filter:[('user_id', '{user_id}')]"
                     await cache.delete(cache_key)
                     logger.debug(f"已清除用户关系缓存: {user_id}")
                 except Exception as cache_err:
                     logger.warning(f"清除缓存失败（不影响数据保存）: {cache_err}")
-                
+
                 logger.info(f"用户画像已更新到数据库: {user_id}, 阶段: {stage}")
 
         except Exception as e:
@@ -671,10 +674,10 @@ class UserProfileTool(BaseTool):
 
     def _calculate_relationship_stage(self, score: float) -> str:
         """根据好感度分数计算关系阶段
-        
+
         Args:
             score: 好感度分数(0-1)
-            
+
         Returns:
             str: 关系阶段
         """
@@ -690,5 +693,3 @@ class UserProfileTool(BaseTool):
             return "acquaintance"  # 初识
         else:
             return "stranger"  # 陌生人
-
-

@@ -11,6 +11,8 @@ install(extra_lines=3)
 logger = get_logger("base_tool")
 
 
+
+
 class BaseTool(ABC):
     """所有工具的基类"""
 
@@ -18,7 +20,7 @@ class BaseTool(ABC):
     """工具的名称"""
     description: str = ""
     """工具的描述"""
-    parameters: ClassVar[list[tuple[str, ToolParamType, str, bool, list[str] | None]] ] = []
+    parameters: ClassVar[list[tuple[str, ToolParamType, str, bool, list[str] | None]]] = []
     """工具的参数定义，为[("param_name", param_type, "description", required, enum_values)]格式
        param_name: 参数名称
        param_type: 参数类型

@@ -2,9 +2,12 @@
 事件管理器 - 实现Event和EventHandler的单例管理
 提供统一的事件注册、管理和触发接口
 """
+
 import asyncio
 from threading import Lock
-from typing import Any, Optional
+from typing import Any
+
+from typing_extensions import Self
 
 from src.common.logger import get_logger
 from src.config.config import global_config
@@ -22,7 +25,7 @@ class EventManager:
     使用单例模式确保全局只有一个事件管理实例
     """
 
-    _instance: Optional["EventManager"] = None
+    _instance: Self | None = None
     _lock = Lock()
 
     def __new__(cls) -> "EventManager":
@@ -242,13 +245,12 @@ class EventManager:
         for event in self._events.values():
             # 创建订阅者列表的副本进行迭代，以安全地修改原始列表
             for subscriber in list(event.subscribers):
-                if getattr(subscriber, 'handler_name', None) == handler_name:
+                if getattr(subscriber, "handler_name", None) == handler_name:
                     event.subscribers.remove(subscriber)
                     logger.debug(f"事件处理器 {handler_name} 已从事件 {event.name} 取消订阅。")
 
         logger.info(f"事件处理器 {handler_name} 已被完全移除。")
         return True
-
 
     def subscribe_handler_to_event(self, handler_name: str, event_name: EventType | str) -> bool:
         """订阅事件处理器到指定事件
@@ -370,9 +372,9 @@ class EventManager:
         if hasattr(self, "_scheduler_callback") and self._scheduler_callback:
             try:
                 # 使用 create_task 异步执行，避免死锁
-                asyncio.create_task(self._scheduler_callback(event_name, params))
+                asyncio.create_task(self._scheduler_callback(event_name, params))  # noqa: RUF006
             except Exception as e:
-                logger.error(f"调用 scheduler 回调时出错: {e}")
+                logger.error(f"创建 scheduler 回调时出错: {e}")
 
         timeout = handler_timeout if handler_timeout is not None else self._default_handler_timeout
         concurrency = max_concurrency if max_concurrency is not None else self._default_handler_concurrency
@@ -433,7 +435,7 @@ class EventManager:
             EventType.AFTER_LLM,
             EventType.POST_SEND,
             EventType.AFTER_SEND,
-            EventType.ON_NOTICE_RECEIVED
+            EventType.ON_NOTICE_RECEIVED,
         ]
 
         for event_name in default_events:
@@ -515,7 +517,6 @@ class EventManager:
 
         return processed_count
 
-
     def _track_background_task(self, task: asyncio.Task[Any]) -> None:
         """跟踪后台事件任务，避免被 GC 清理"""
         self._background_tasks.add(task)
@@ -528,6 +529,7 @@ class EventManager:
     def get_background_task_count(self) -> int:
         """返回当前仍在运行的后台事件任务数量"""
         return len(self._background_tasks)
+
 
 # 创建全局事件管理器实例
 event_manager = EventManager()
