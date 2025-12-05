@@ -32,6 +32,7 @@ dependencies = [
     "lxml>=6.0.0",
     "matplotlib>=3.10.3",
     "networkx>=3.4.2",
+    "objgraph>=3.6.2",
     "orjson>=3.10",
     "numpy>=2.2.6",
     "openai>=2.5.0",
